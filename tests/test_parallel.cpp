@@ -259,6 +259,98 @@ static void test_settings() {
   CHECK(has("ports.0.pv2", "invalid") || has("ports.0.parallel", "invalid"));
 }
 
+// ---- what the unit says about itself: QID, QVFW, QPIRI, QET ----------------------------------------------------------------------------------
+
+static const char* kQpiri = "230.0 21.7 230.0 50.0 21.7 5000 5000 48.0 46.0 42.0 56.4 54.0 0 60 060 0 1 2 1 01 0 0 54.0 0 1";
+
+static void test_identity_parsers() {
+  std::string text;
+  CHECK(voltronic::parse_qid("92931701100510", text) && text == "92931701100510");
+  CHECK(!voltronic::parse_qid("123", text) && !voltronic::parse_qid("", text) && !voltronic::parse_qid("NAK", text) && !voltronic::parse_qid("12345678901234567890123", text) && !voltronic::parse_qid("9293170110 510", text));
+  CHECK(voltronic::parse_qvfw("VERFW:00041.54", text) && text == "00041.54");
+  CHECK(!voltronic::parse_qvfw("00041.54", text) && !voltronic::parse_qvfw("VERFW:", text) && !voltronic::parse_qvfw("NAK", text) && !voltronic::parse_qvfw("VERFW:00041 54", text));
+  double wh = 0;
+  CHECK(voltronic::parse_qet("00012345", wh) && wh == 12345);
+  CHECK(voltronic::parse_qet("0", wh) && wh == 0);
+  CHECK(!voltronic::parse_qet("", wh) && !voltronic::parse_qet("12a", wh) && !voltronic::parse_qet("NAK", wh) && !voltronic::parse_qet("1234567890123", wh) && !voltronic::parse_qet("-5", wh));
+  CHECK(std::string(voltronic::battery_type_name(0)) == "agm" && std::string(voltronic::battery_type_name(1)) == "flooded" && std::string(voltronic::battery_type_name(2)) == "user" && *voltronic::battery_type_name(7) == 0);
+  CHECK(std::string(voltronic::output_priority_name(2)) == "sbu" && std::string(voltronic::charger_priority_name(3)) == "solar_only" && std::string(voltronic::input_range_name(1)) == "ups" && *voltronic::charger_priority_name(9) == 0);
+}
+
+static void test_identity_in_the_message() {
+  Bench b("pi30", false, 0);
+  b.poller.set_identity(true);
+  b.standard();
+  b.answers["QID"] = reply("92931701100510");
+  b.answers["QVFW"] = reply("VERFW:00041.54");
+  b.answers["QPIRI"] = reply(kQpiri);
+  b.answers["QET"] = reply("00012345");
+  b.run(20000);
+  // asked after the three readings, in this order, and the first message already carries them
+  CHECK(b.asked.size() >= 8 && b.asked[0] == "QPIGS" && b.asked[1] == "QMOD" && b.asked[2] == "QPIWS" && b.asked[3] == "QID" && b.asked[4] == "QVFW" && b.asked[5] == "QPIRI" && b.asked[6] == "QET" && b.asked[7] == "QPIGS");
+  CHECK(!b.messages.empty());
+  const json::Value doc = parse(b.messages[0]);
+  CHECK(doc.get("serial") != nullptr && doc.get("serial")->text == "92931701100510" && doc.get("firmware")->text == "00041.54" && doc.get("pv_energy_total_wh")->number == 12345);
+  const json::Value* ratings = doc.get("ratings");
+  CHECK(ratings != nullptr && ratings->get("out_rating_va")->number == 5000 && ratings->get("out_rating_w")->number == 5000 && ratings->get("battery_rating_v")->number == 48.0);
+  CHECK(ratings->get("battery_bulk_v")->number == 56.4 && ratings->get("battery_float_v")->number == 54.0 && ratings->get("battery_under_v")->number == 42.0 && ratings->get("battery_recharge_v")->number == 46.0);
+  CHECK(ratings->get("max_charge_a")->number == 60 && ratings->get("max_ac_charge_a")->number == 60 && ratings->get("battery_type")->text == "agm" && ratings->get("input_range")->text == "appliance");
+  CHECK(ratings->get("output_priority")->text == "solar_first" && ratings->get("charger_priority")->text == "solar_and_utility");
+  // the serial and the firmware are asked once; the ratings and the energy again only when their time has come (10 and 5 minutes)
+  CHECK(b.count("QID") == 1 && b.count("QVFW") == 1 && b.count("QPIRI") == 1 && b.count("QET") == 1);
+  b.run(5 * 60 * 1000 + 30000);
+  CHECK(b.count("QID") == 1 && b.count("QPIRI") == 1 && b.count("QET") == 2);
+  b.run(10 * 60 * 1000 + 60000);
+  CHECK(b.count("QPIRI") == 2 && b.count("QID") == 1 && b.count("QVFW") == 1);
+  // off by default: nothing is asked and nothing is added
+  Bench plain("pi30", false, 0);
+  plain.standard();
+  plain.answers["QID"] = reply("92931701100510");
+  plain.run(12000);
+  CHECK(plain.count("QID") == 0 && plain.count("QPIRI") == 0 && parse(plain.messages[0]).get("serial") == nullptr && parse(plain.messages[0]).get("ratings") == nullptr);
+}
+
+static void test_a_unit_that_does_not_know_them() {
+  // NAK to every one of them: each is asked twice, then left alone, and no reading is lost
+  Bench b("pi30", false, 0);
+  b.poller.set_identity(true);
+  b.standard();
+  for (const char* q : {"QID", "QVFW", "QPIRI", "QET"}) b.answers[q] = reply("NAK");
+  b.run(60000);
+  CHECK(b.count("QID") == 2 && b.count("QVFW") == 2 && b.count("QPIRI") == 2 && b.count("QET") == 2);
+  CHECK(b.messages.size() >= 8);
+  for (const std::string& m : b.messages) { const json::Value doc = parse(m); CHECK(doc.get("serial") == nullptr && doc.get("firmware") == nullptr && doc.get("ratings") == nullptr && doc.get("pv_energy_total_wh") == nullptr && doc.get("pv_w")->number == 856); }
+  // one that says nothing at all costs its timeout and no reading
+  Bench silent("pi30", false, 0);
+  silent.poller.set_identity(true);
+  silent.standard();
+  silent.run(60000);
+  CHECK(silent.count("QID") == 2 && silent.messages.size() >= 5);
+  // a garbled answer is a miss; a good one afterwards still counts
+  Bench garbled("pi30", false, 0);
+  garbled.poller.set_identity(true);
+  garbled.standard();
+  garbled.answers["QID"] = bad_crc_reply("92931701100510");
+  garbled.run(30000);
+  CHECK(garbled.count("QID") == 2 && parse(garbled.messages[0]).get("serial") == nullptr);
+  // a ratings answer that is cut short is not taken for one
+  Bench cut("pi30", false, 0);
+  cut.poller.set_identity(true);
+  cut.standard();
+  cut.answers["QPIRI"] = reply("230.0 21.7 230.0");
+  cut.run(30000);
+  CHECK(cut.count("QPIRI") == 2 && parse(cut.messages[0]).get("ratings") == nullptr);
+}
+
+static void test_identity_only_in_the_standard_dialect() {
+  Bench revo("revo", false, 0);
+  revo.poller.set_identity(true);
+  revo.answers["QPIGS"] = reply(kQpigs);
+  revo.answers["QMOD"] = reply("L");
+  revo.run(12000);
+  CHECK(revo.count("QID") == 0 && revo.count("QPIRI") == 0);
+}
+
 int main() {
   test_qpigs2();
   test_qpgs();
@@ -268,6 +360,10 @@ int main() {
   test_parallel_units();
   test_only_the_standard_dialect();
   test_settings();
+  test_identity_parsers();
+  test_identity_in_the_message();
+  test_a_unit_that_does_not_know_them();
+  test_identity_only_in_the_standard_dialect();
   std::printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

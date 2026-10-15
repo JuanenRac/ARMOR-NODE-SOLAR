@@ -91,6 +91,9 @@ class Poller {
   static constexpr std::uint64_t kConsoleExtraTimeoutMs = 3000;
   static constexpr std::uint64_t kAntTimeoutMs = 2000;
   static constexpr std::uint64_t kExtrasRefreshMs = 30ULL * 60ULL * 1000ULL;   // how long the identity and the history of a module are kept
+  static constexpr std::uint64_t kRatingsEveryMs = 10ULL * 60ULL * 1000ULL;    // an inverter's ratings and settings (QPIRI) are asked again this often: they can be changed at the unit
+  static constexpr std::uint64_t kEnergyEveryMs = 5ULL * 60ULL * 1000ULL;      // and the energy the panels have made in all (QET)
+  static constexpr int kIdentityTries = 2;                                    // an inverter that does not know QID, QVFW, QPIRI or QET is asked twice and then left alone
 
   // `cells_per_cycle`: a Pylontech stack of several modules takes long to read cell by cell on a line that other ports share; with a number here (1 to 8) each cycle reads the
   // cells of that many modules, in rotation, and the others keep the cells of their last turn. 0 (the default): every module every cycle.
@@ -125,6 +128,8 @@ class Poller {
   // Optional readings of an inverter in the standard dialect, asked after the three that make the message and never at the cost of them: the second PV input (QPIGS2; an
   // inverter that has only one answers NAK, and after two misses it is not asked again) and the units of a parallel system (QPGS0 to QPGS<n-1>; a unit that is not there is skipped).
   void set_optional(bool pv2, int parallel_units) { pv2_wanted_ = pv2; parallel_ = parallel_units < 0 ? 0 : parallel_units > 10 ? 10 : parallel_units; }
+  // Whether the unit is asked what it says about itself (its serial number, firmware, ratings and settings, and the energy the panels have made in all): off until the firmware turns it on.
+  void set_identity(bool wanted) { identity_wanted_ = wanted; }
   // Whether the second PV input has answered (in the last cycle), and what it said.
   bool has_pv2() const { return has_pv2_; }
 
@@ -152,7 +157,7 @@ class Poller {
     ready_ = false;
     topic = solar::topic(node_id_, device_);
     if (topic.empty()) return false;
-    if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
+    if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
     else payload = battery_json(node_id_, device_, wall_ms, modules_);   // a Pylontech stack or an ANT-BMS (one module)
     last_payload_ = payload;
     ++stats_.readings;
@@ -190,7 +195,7 @@ class Poller {
   std::uint64_t last_rx_ms() const { return last_rx_ms_; }
 
  private:
-  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kGs, kMod, kFws, kPwr, kBat, kInfo, kStat, kAnt };
+  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kMod, kFws, kPwr, kBat, kInfo, kStat, kAnt };
   enum class Dialect { kPi30, kRevo, kPi18 };
 
   void send(std::string_view text, std::uint64_t now_ms, std::uint64_t timeout_ms) {
@@ -284,6 +289,7 @@ class Poller {
       return;
     }
     if (step_ == Step::kQpigs2 || step_ == Step::kQpgs) { on_optional(crc_ok, text, now_ms); return; }
+    if (is_identity_step()) { on_identity(crc_ok, text, now_ms); return; }
     if (!crc_ok) {
       // only the REVO dialect ends a reply with the checksum: a reply that fits it (and no CRC) makes the port REVO
       if ((dialect_ == Dialect::kRevo || looking) && voltronic::parse_reply_revo(frame.data(), frame.size(), text)) { learn(Dialect::kRevo); }
@@ -321,12 +327,44 @@ class Poller {
   void begin_units(std::uint64_t now_ms) {
     unit_at_ = 0;
     if (parallel_ > 0 && dialect_ == Dialect::kPi30 && known_) { ask_unit(now_ms); return; }
-    finish(now_ms);
+    next_identity(now_ms);
   }
   void ask_unit(std::uint64_t now_ms) {
-    if (unit_at_ >= parallel_) { finish(now_ms); return; }
+    if (unit_at_ >= parallel_) { next_identity(now_ms); return; }
     step_ = Step::kQpgs;
     send_query(("QPGS" + std::to_string(unit_at_)).c_str(), now_ms);
+  }
+  // What the unit says about itself, asked after the readings and never at the cost of them (standard dialect only): its serial number and firmware once, its ratings and settings every
+  // ten minutes (QPIRI), and the energy the panels have made in all every five (QET). A question that gets no good answer twice in a row is dropped, and the reading goes out either way.
+  bool is_identity_step() const { return step_ == Step::kQid || step_ == Step::kQvfw || step_ == Step::kQpiri || step_ == Step::kQet; }
+  void next_identity(std::uint64_t now_ms) {
+    if (!identity_wanted_ || dialect_ != Dialect::kPi30 || !known_) { finish(now_ms); return; }
+    if (serial_.empty() && qid_tries_ < kIdentityTries) { step_ = Step::kQid; send_query("QID", now_ms); return; }
+    if (firmware_.empty() && qvfw_tries_ < kIdentityTries) { step_ = Step::kQvfw; send_query("QVFW", now_ms); return; }
+    if (qpiri_tries_ < kIdentityTries && (!have_ratings_ || now_ms - ratings_at_ms_ >= kRatingsEveryMs)) { step_ = Step::kQpiri; send_query("QPIRI", now_ms); return; }
+    if (qet_tries_ < kIdentityTries && (!have_energy_ || now_ms - energy_at_ms_ >= kEnergyEveryMs)) { step_ = Step::kQet; send_query("QET", now_ms); return; }
+    finish(now_ms);
+  }
+  void identity_missed() {
+    if (step_ == Step::kQid) ++qid_tries_;
+    else if (step_ == Step::kQvfw) ++qvfw_tries_;
+    else if (step_ == Step::kQpiri) ++qpiri_tries_;
+    else if (step_ == Step::kQet) ++qet_tries_;
+  }
+  void on_identity(bool crc_ok, const std::string& text, std::uint64_t now_ms) {
+    bool good = crc_ok && text != "NAK";
+    if (good) {
+      if (step_ == Step::kQid) { good = voltronic::parse_qid(text, serial_); }
+      else if (step_ == Step::kQvfw) { good = voltronic::parse_qvfw(text, firmware_); }
+      else if (step_ == Step::kQpiri) { good = voltronic::parse_qpiri(text, ratings_); if (good) { have_ratings_ = true; ratings_at_ms_ = now_ms; qpiri_tries_ = 0; } }
+      else if (step_ == Step::kQet) { good = voltronic::parse_qet(text, energy_wh_); if (good) { have_energy_ = true; energy_at_ms_ = now_ms; qet_tries_ = 0; } }
+    }
+    if (good) ++stats_.replies_ok;
+    else identity_missed();
+    // a refresh that failed is tried again at the next due time, not at every cycle
+    if (!good && step_ == Step::kQpiri && have_ratings_) ratings_at_ms_ = now_ms;
+    if (!good && step_ == Step::kQet && have_energy_) energy_at_ms_ = now_ms;
+    next_identity(now_ms);
   }
   void miss_pv2(std::uint64_t now_ms) {
     has_pv2_ = false;
@@ -542,6 +580,7 @@ class Poller {
     }
     if (step_ == Step::kQpigs2) { miss_pv2(now_ms); return; }
     if (step_ == Step::kQpgs) { ++unit_at_; ask_unit(now_ms); return; }
+    if (is_identity_step()) { identity_missed(); if (step_ == Step::kQpiri && have_ratings_) ratings_at_ms_ = now_ms; if (step_ == Step::kQet && have_energy_) energy_at_ms_ = now_ms; next_identity(now_ms); return; }
     if (step_ == Step::kInfo) { ask_stat(now_ms); return; }
     if (step_ == Step::kStat) { end_extras(now_ms); return; }
     stats_.last_error = "timeout";
@@ -587,6 +626,13 @@ class Poller {
   voltronic::Pv2 pv2_;
   int parallel_ = 0, unit_at_ = 0;
   std::vector<voltronic::ParallelUnit> units_;
+  std::string serial_, firmware_;                       // QID and QVFW
+  voltronic::Ratings ratings_;                          // QPIRI
+  bool have_ratings_ = false, have_energy_ = false;
+  double energy_wh_ = 0;                                // QET
+  std::uint64_t ratings_at_ms_ = 0, energy_at_ms_ = 0;
+  bool identity_wanted_ = false;
+  int qid_tries_ = 0, qvfw_tries_ = 0, qpiri_tries_ = 0, qet_tries_ = 0;
   char mode_ = 0;
   std::vector<std::string> warnings_;
   std::vector<pylontech::Module> modules_;

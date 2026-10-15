@@ -34,6 +34,11 @@ struct InverterExtras {
   bool has_pv2 = false;
   voltronic::Pv2 pv2;
   std::vector<voltronic::ParallelUnit> units;
+  std::string serial, firmware;        // QID and QVFW, once the inverter has said them
+  bool has_ratings = false;            // QPIRI: what the unit is rated for and how it is set
+  voltronic::Ratings ratings;
+  bool has_energy = false;             // QET: the energy the panels have made in all, in Wh
+  double energy_total_wh = 0;
 };
 
 inline std::string inverter_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, char mode, const voltronic::Status& s,
@@ -63,6 +68,25 @@ inline std::string inverter_json(const std::string& node_id, const std::string& 
       w.key("battery_v").number(u.battery_v, 1).key("battery_percent").number(u.battery_percent, 0).key("pv_v").number(u.pv_v, 1).key("charging_a").number(u.charging_a, 0).end_object();
     }
     w.end_array();
+  }
+  if (extras != nullptr) {
+    if (!extras->serial.empty()) w.field("serial", extras->serial);
+    if (!extras->firmware.empty()) w.field("firmware", extras->firmware);
+    if (extras->has_energy) w.key("pv_energy_total_wh").number(extras->energy_total_wh, 0);
+    if (extras->has_ratings) {
+      const voltronic::Ratings& r = extras->ratings;
+      w.key("ratings").begin_object();
+      w.key("grid_rating_v").number(r.grid_rating_v, 1).key("out_rating_v").number(r.out_rating_v, 1).key("out_rating_hz").number(r.out_rating_hz, 1);
+      w.key("out_rating_va").number(r.out_rating_va, 0).key("out_rating_w").number(r.out_rating_w, 0);
+      w.key("battery_rating_v").number(r.battery_rating_v, 1).key("battery_recharge_v").number(r.battery_recharge_v, 1).key("battery_under_v").number(r.battery_under_v, 1);
+      w.key("battery_bulk_v").number(r.battery_bulk_v, 1).key("battery_float_v").number(r.battery_float_v, 1);
+      w.key("max_charge_a").number(r.max_charge_a, 0).key("max_ac_charge_a").number(r.max_ac_charge_a, 0);
+      if (*voltronic::battery_type_name(r.battery_type) != 0) w.field("battery_type", voltronic::battery_type_name(r.battery_type));
+      if (*voltronic::input_range_name(r.input_range) != 0) w.field("input_range", voltronic::input_range_name(r.input_range));
+      if (*voltronic::output_priority_name(r.output_priority) != 0) w.field("output_priority", voltronic::output_priority_name(r.output_priority));
+      if (*voltronic::charger_priority_name(r.charger_priority) != 0) w.field("charger_priority", voltronic::charger_priority_name(r.charger_priority));
+      w.end_object();
+    }
   }
   w.end_object();
   return w.str();

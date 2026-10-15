@@ -20,6 +20,7 @@ extern "C" {
 #include "core/json.hpp"
 #include "mqtt_link.hpp"
 #include "network.hpp"
+#include "task_health.hpp"
 #include "node_store.hpp"
 #include "solar_manager.hpp"
 #include "web_server.hpp"
@@ -138,6 +139,8 @@ std::string status_json() {
       .field("dropped", static_cast<long long>(m.dropped)).end_object();
   const web::TlsStatus tls = web::tls_status();
   w.key("web").begin_object().field("mode", tls.mode).field("https", tls.running).field("cert_sha256", tls.fingerprint).end_object();
+  w.key("tasks").raw(taskhealth::json());
+  taskhealth::warn_if_low();
   w.key("ports").begin_array();
   for (std::size_t i = 0; i < config::kPortCount; ++i) write_port(w, i);
   w.end_array().end_object();

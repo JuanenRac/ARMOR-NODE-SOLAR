@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.3] - What the inverter says about itself, and the shared improvements
+
+- **The inverter's serial number, firmware, ratings and settings, and the energy its panels have made in all** are asked after the readings (standard dialect only, never at their cost): `QID` and `QVFW` once, `QPIRI` (rated output, the battery's voltages and currents, the type of battery, the priority of the output source and of the charger, the input range) every ten minutes, because it can be changed at the unit, and `QET` every five. A question that gets no good answer twice in a row is dropped and the reading goes out either way. The message carries them (`serial`, `firmware`, `pv_energy_total_wh`, `ratings`) as optional fields of the shared contract. `QET` is read in Wh, as the protocol gives it; that has not been confirmed on a real inverter.
+- **Waits that grow between tries.** A Wi-Fi network that does not answer is tried again after 1 s, then 2, 4, 8... up to 30 s (a little scatter on every wait, so that many nodes that lost the same router do not all knock together), and the broker after 1 s growing to 60 s; a try that works starts the schedule over. Before, every retry was a fixed 3 s (Wi-Fi) or the client's fixed 10 s (broker).
+- **Improv Wi-Fi over the USB cable.** A web page that speaks the Improv standard (ESP Web Tools) can give the node its Wi-Fi network through the same USB socket the log comes out of: the node answers its state, identifies itself, describes the device and takes the SSID and password (checked and stored through the same settings document the panel and the Bluetooth set-up use), then restarts to join. A packet is only acted upon whole and with a right checksum. The packets are tested on a computer; the USB side has never run on a board.
+- **The stack each task has left**, in the status (`tasks`: the least room ever left, smallest first, with a `low` flag under 512 bytes) and as a warning in the log, once per task, before a near overflow becomes a crash.
+- **Tests:** the parsers, the order and the schedule of the questions, a unit that answers NAK, says nothing or garbles to each of them, and the other dialects, which are not asked; the schedule of retries, the Improv packets and the stack report.
+
 ## [0.3.2] - A warning for a pair that mixes hardware
 
 - **The ports page warns when the two ports of a pair ask for different hardware** (mux profile, ports 1-2, 3-4, 5-6 and 7-8): each MAX3232 of the base board serves one pair, which is fitted either as RS232 (Pylontech, inverter) or as TTL (ANT-BMS), not both. With both ports of a pair switched on, one on an ANT-BMS and the other on a Pylontech or an inverter, each card says so; a port with the raw kind does not count. It is a hint, not an error: the settings are still saved. In the seven languages.

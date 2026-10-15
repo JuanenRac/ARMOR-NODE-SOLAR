@@ -314,4 +314,40 @@ inline bool parse_qpiri(const std::string& text, Ratings& out) {
   return true;
 }
 
+// ---- QID, QVFW, QET: the serial number, the firmware and the energy the panels have made in all -------------------------------------------
+
+// QID answers the serial number: 8 to 20 digits (some units use letters too).
+inline bool parse_qid(const std::string& text, std::string& serial) {
+  if (text.size() < 8 || text.size() > 20) return false;
+  for (const char c : text) if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) return false;
+  serial = text;
+  return true;
+}
+
+// QVFW answers "VERFW:00041.54": the firmware is what follows the colon.
+inline bool parse_qvfw(const std::string& text, std::string& firmware) {
+  const std::size_t colon = text.find(':');
+  if (colon == std::string::npos) return false;
+  const std::string value = text.substr(colon + 1);
+  if (value.empty() || value.size() > 24) return false;
+  for (const char c : value) if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' || c == '-' || c == '_')) return false;
+  firmware = value;
+  return true;
+}
+
+// QET answers the energy the panels have made since the unit was new: up to 12 digits, in Wh (the protocol's own unit; not confirmed on a real inverter).
+inline bool parse_qet(const std::string& text, double& watt_hours) {
+  if (text.empty() || text.size() > 12) return false;
+  double value = 0;
+  for (const char c : text) { if (c < '0' || c > '9') return false; value = value * 10 + (c - '0'); }
+  watt_hours = value;
+  return true;
+}
+
+// The names the ratings' numbers stand for (empty for a number that is not one of them).
+inline const char* battery_type_name(int v) { return v == 0 ? "agm" : v == 1 ? "flooded" : v == 2 ? "user" : ""; }
+inline const char* input_range_name(int v) { return v == 0 ? "appliance" : v == 1 ? "ups" : ""; }
+inline const char* output_priority_name(int v) { return v == 0 ? "utility_first" : v == 1 ? "solar_first" : v == 2 ? "sbu" : ""; }
+inline const char* charger_priority_name(int v) { return v == 0 ? "utility_first" : v == 1 ? "solar_first" : v == 2 ? "solar_and_utility" : v == 3 ? "solar_only" : ""; }
+
 }  // namespace armor::solar::voltronic
