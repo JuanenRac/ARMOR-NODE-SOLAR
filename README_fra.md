@@ -25,7 +25,7 @@
 
 ---
 
-**Vérification d'honnêteté - ce qui fonctionne aujourd'hui:** **Maturité : scaffolding.** Le firmware se compile dans le conteneur ESP-IDF 5.4.2, son cœur (les réglages, l'échange avec chaque type d'équipement, l'arithmétique de l'UART émulé : 2 718 contrôles) est testé sur ordinateur avec des équipements simulés, les messages qu'il produit sont acceptés par ARMOR-COMMON et le panneau a été essayé dans un navigateur face à un nœud simulé. **Il n'a jamais tourné sur une carte et aucun onduleur ni batterie n'a été connecté** : le Wi-Fi, le panneau en TLS, la mise à jour, les UART matériels et émulés et les formats des protocoles (écrits d'après des documents publics et de mémoire) sont inessayés. Les trames ANT-BMS des tests ont été capturées par d'autres sur leurs propres appareils : ce projet n'en a lu aucune lui-même.
+**Vérification d'honnêteté - ce qui fonctionne aujourd'hui:** **Maturité : scaffolding.** Le firmware se compile dans le conteneur ESP-IDF 5.4.2, son cœur (les réglages, l'échange avec chaque type d'équipement, l'arithmétique de l'UART émulé : 2,548 contrôles) est testé sur ordinateur avec des équipements simulés, les messages qu'il produit sont acceptés par ARMOR-COMMON et le panneau a été essayé dans un navigateur face à un nœud simulé. **Il n'a jamais tourné sur une carte et aucun onduleur ni batterie n'a été connecté** : le Wi-Fi, le panneau en TLS, la mise à jour, les UART matériels et émulés et les formats des protocoles (écrits d'après des documents publics et de mémoire) sont inessayés. Les trames ANT-BMS des tests ont été capturées par d'autres sur leurs propres appareils : ce projet n'en a lu aucune lui-même.
 
 ---
 
@@ -39,9 +39,8 @@
 * **Les messages du nœud** (`armor/solar/<nœud>/<appareil>/state`, un par onduleur ou pile de batteries), définis dans ARMOR-COMMON avec schémas et vecteurs de conformité ; ce que produisent les ports est vérifié contre eux.
 * **Batteries ANT-BMS** (les cartes noires des packs faits maison, 7S à 32S), UART 3,3 V à 19200 bauds : les deux protocoles de son firmware (le nœud demande dans l'un puis dans l'autre et garde celui qui répond), avec les cellules, les températures, l'état de charge, le courant, les capacités et les états des MOSFET et de l'équilibreur, vérifiés sur des trames capturées sur quatre modèles réels. Lecture seule : ses commandes d'écriture peuvent déconnecter une batterie en charge. Un bouton de la page des ports lit aussi le modèle, la version et les 56 réglages de protection et d'équilibrage du BMS (protocole récent), en lecture seule.
 * **Configuration depuis le téléphone en Bluetooth,** le même canal que celui du nœud radar : l'app ARMOR trouve le nœud sous le nom `ARMOR-XXXXXX` et règle son nom, son Wi-Fi, son adresse, son broker et son mode Bluetooth avec les utilisateurs et le code de mise en service du panneau ([le protocole](docs/BLE_PROVISIONING.md)). Il n'écoute que tant que le nœud n'a pas d'utilisateur, sauf réglage contraire. La partie radio n'a jamais tourné sur une carte.
-* **La carte de base avec multiplexeurs (le profil *mux*) :** trois UART matériels, chacun derrière un 74HC4052, desservent jusqu'à dix ports en groupes de 4, 4 et 2 qui se relaient sur leur ligne, chaque port avec sa propre vitesse et sa propre polarité, et une LED par port (huit via un 74HC595, les deux ports d'onduleur sur un GPIO propre ; le panneau avertit quand les deux ports d'une paire, qui partagent un MAX3232, demandent un matériel différent, RS232 ou TTL) ; les cellules d'une grande pile Pylontech peuvent être lues à tour de rôle. Pour un onduleur en dialecte standard, la **seconde entrée photovoltaïque** (`QPIGS2`) et les **unités d'un système en parallèle** (`QPGS`) sont des lectures facultatives. Rien de tout cela n'a tourné sur une carte.
+* **La carte de base avec multiplexeurs (le profil *mux*) :** trois UART matériels, chacun derrière un 74HC4052, desservent jusqu'à huit ports en groupes de 4, 2 et 2 qui se relaient sur leur ligne, chaque port avec sa propre vitesse et sa propre polarité, et une LED par port via un 74HC595 ; les cellules d'une grande pile Pylontech peuvent être lues à tour de rôle. Pour un onduleur en dialecte standard, la **seconde entrée photovoltaïque** (`QPIGS2`) et les **unités d'un système en parallèle** (`QPGS`) sont des lectures facultatives. Rien de tout cela n'a tourné sur une carte.
 * **Pas encore :** la liaison Bluetooth de l'ANT-BMS (le nœud utilise le câble, le plus stable des deux) et un essai sur une vraie carte avec de vrais équipements.
-* **Pas d'interblocage entre le nœud et le broker :** les messages passent par une file gérée par une tâche propre, de sorte qu'aucune tâche ne garde un verrou en attendant le client du broker.
 
 ## 📂 Structure du dépôt
 
@@ -59,7 +58,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2 718 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2,548 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin
@@ -76,14 +75,12 @@ Voir le [guide du firmware](docs/NODE_FIRMWARE.md) (la carte, les ports, le prem
 * **[ARMOR-RADAR](https://github.com/JuanenRac/ARMOR-RADAR)** - Firmware du nœud de terrain pour ESP32-S3 avec trois radars et son propre panneau web
 * **ARMOR-SOLAR** (ce dépôt) - Protocoles des onduleurs et batteries solaires et messages d'un nœud passerelle
 * **[ARMOR-ELECTRICAL](https://github.com/JuanenRac/ARMOR-ELECTRICAL)** - Nœud électrique : compteurs, le message des mesures du réseau et les règles de commutation
-* **[ARMOR-ALARM](https://github.com/JuanenRac/ARMOR-ALARM)** - Nœud et centrale d'alarme : zones, armement, temporisations, sirène et PIN, avec ou sans le serveur
 * **[ARMOR-HMI](https://github.com/JuanenRac/ARMOR-HMI)** - Panneau tactile : l'état du système sur un écran mural, armer et acquitter, et la maison de l'assistant vocal
 * **[ARMOR-NETWORK](https://github.com/JuanenRac/ARMOR-NETWORK)** - Le réseau local : ses appareils, internet et ce qui change
 * **[ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)** - Coordinateur central : télémétrie, alarmes, appareils, relevés solaires et caméras
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Console web : caméras, radar, alarmes, énergie solaire et concepteur de site 2D/3D
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Client Android de l'opérateur avec radar 2D/3D en direct
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Politique d'inférence visuelle qui explique ses décisions et n'agit jamais
-* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Zones de caméra, masques et règles de détection pour la Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Intentions vocales hors ligne avec une confirmation impossible à falsifier
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Boîtiers, électronique et matrice d'acceptation sur banc
 * **[ARMOR-DEVOPS](https://github.com/JuanenRac/ARMOR-DEVOPS)** - Déploiement, banc d'essai CM5, sauvegarde et TLS

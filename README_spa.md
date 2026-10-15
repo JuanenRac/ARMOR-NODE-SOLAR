@@ -25,7 +25,7 @@
 
 ---
 
-**Comprobación de honestidad - qué funciona hoy:** **Madurez: scaffolding.** El firmware se compila en el contenedor ESP-IDF 5.4.2, su núcleo (los ajustes, el intercambio con cada tipo de equipo, la aritmética de la UART emulada: 2.718 comprobaciones) está probado en un ordenador con equipos simulados, los mensajes que produce los acepta ARMOR-COMMON y el panel se probó en un navegador contra un nodo simulado. **Nunca ha funcionado en una placa y no se ha conectado ningún inversor ni batería**: el Wi-Fi, el panel con TLS, la actualización, las UART de hardware y emuladas y los formatos de los protocolos (escritos de documentos públicos y de memoria) están sin probar. Las tramas de ANT-BMS de sus pruebas las capturaron otras personas en sus propios equipos: este proyecto no ha leído ninguno.
+**Comprobación de honestidad - qué funciona hoy:** **Madurez: scaffolding.** El firmware se compila en el contenedor ESP-IDF 5.4.2, su núcleo (los ajustes, el intercambio con cada tipo de equipo, la aritmética de la UART emulada: 2,548 comprobaciones) está probado en un ordenador con equipos simulados, los mensajes que produce los acepta ARMOR-COMMON y el panel se probó en un navegador contra un nodo simulado. **Nunca ha funcionado en una placa y no se ha conectado ningún inversor ni batería**: el Wi-Fi, el panel con TLS, la actualización, las UART de hardware y emuladas y los formatos de los protocolos (escritos de documentos públicos y de memoria) están sin probar. Las tramas de ANT-BMS de sus pruebas las capturaron otras personas en sus propios equipos: este proyecto no ha leído ninguno.
 
 ---
 
@@ -39,9 +39,8 @@
 * **Los mensajes del nodo** (`armor/solar/<nodo>/<dispositivo>/state`, uno por inversor o pila de baterías), definidos en ARMOR-COMMON con esquemas y vectores de conformidad; lo que producen los puertos se comprueba contra ellos.
 * **Baterías con ANT-BMS** (las placas negras de los packs caseros, de 7S a 32S), UART de 3,3 V a 19200 baudios: los dos protocolos de su firmware (el nodo pregunta en uno y luego en el otro y se queda con el que responde), con las celdas, temperaturas, estado de carga, corriente, capacidades y los estados de los MOSFET y del equilibrador, comprobados con tramas capturadas en cuatro modelos reales. Solo lectura: sus comandos de escritura pueden desconectar una batería en carga. Un botón de la página de puertos lee además el modelo, la versión y los 56 ajustes de protección y equilibrado de la BMS (protocolo nuevo), solo lectura.
 * **Configuración desde el móvil por Bluetooth,** el mismo canal que el del nodo radar: la app ARMOR encuentra el nodo como `ARMOR-XXXXXX` y ajusta su nombre, Wi-Fi, dirección, broker y modo de Bluetooth con los usuarios y el código de puesta en marcha del panel ([el protocolo](docs/BLE_PROVISIONING.md)). Solo escucha mientras el nodo no tiene usuarios, salvo que se indique otra cosa. La parte de radio nunca ha corrido en una placa.
-* **La placa base con multiplexores (perfil *mux*):** tres UART de hardware, cada una detrás de un 74HC4052, atienden hasta diez puertos en grupos de 4, 4 y 2 que se turnan en su línea, cada puerto con su propia velocidad y polaridad, y un LED por puerto (ocho a través de un 74HC595, los dos puertos de inversor en un GPIO propio; el panel avisa cuando los dos puertos de una pareja, que comparten un MAX3232, piden hardware distinto, RS232 o TTL); las celdas de una pila Pylontech alta pueden leerse por turnos. Para un inversor en el dialecto estándar, la **segunda entrada fotovoltaica** (`QPIGS2`) y las **unidades de un sistema en paralelo** (`QPGS`) son lecturas opcionales. Nada de esto ha corrido en una placa.
+* **La placa base con multiplexores (perfil *mux*):** tres UART de hardware, cada una detrás de un 74HC4052, atienden hasta ocho puertos en grupos de 4, 2 y 2 que se turnan en su línea, cada puerto con su propia velocidad y polaridad, y un LED por puerto a través de un 74HC595; las celdas de una pila Pylontech alta pueden leerse por turnos. Para un inversor en el dialecto estándar, la **segunda entrada fotovoltaica** (`QPIGS2`) y las **unidades de un sistema en paralelo** (`QPGS`) son lecturas opcionales. Nada de esto ha corrido en una placa.
 * **Todavía no:** el enlace Bluetooth del ANT-BMS (el nodo usa el cable, el más estable de los dos) y una prueba en una placa real con equipos reales.
-* **Sin bloqueo mutuo entre el nodo y el broker:** los mensajes pasan por una cola atendida por una tarea propia, de modo que ninguna tarea retiene un bloqueo mientras espera al cliente del broker.
 
 ## 📂 Estructura del repositorio
 
@@ -59,7 +58,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2.718 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2,548 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin
@@ -76,14 +75,12 @@ Véase la [guía del firmware](docs/NODE_FIRMWARE.md) (la placa, los puertos, el
 * **[ARMOR-RADAR](https://github.com/JuanenRac/ARMOR-RADAR)** - Firmware del nodo de campo para ESP32-S3 con tres radares y su propio panel web
 * **ARMOR-SOLAR** (este repositorio) - Protocolos de inversores y baterías solares y los mensajes de un nodo pasarela
 * **[ARMOR-ELECTRICAL](https://github.com/JuanenRac/ARMOR-ELECTRICAL)** - Nodo eléctrico: contadores, el mensaje de las lecturas de la red y las reglas para maniobrar
-* **[ARMOR-ALARM](https://github.com/JuanenRac/ARMOR-ALARM)** - Nodo y central de alarma: zonas, armado, retardos, sirena y PIN, con el servidor o sin él
 * **[ARMOR-HMI](https://github.com/JuanenRac/ARMOR-HMI)** - Panel táctil: el estado del sistema en una pantalla de pared, armar y reconocer alarmas, y el hogar del asistente de voz
 * **[ARMOR-NETWORK](https://github.com/JuanenRac/ARMOR-NETWORK)** - La red local: sus dispositivos, internet y lo que cambia
 * **[ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)** - Coordinador central: telemetría, alarmas, dispositivos, lecturas solares y cámaras
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Consola web: cámaras, radar, alarmas, energía solar y el diseñador de sitio 2D/3D
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Cliente Android del operador con radar 2D/3D en vivo
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Política de inferencia visual que explica sus decisiones y nunca actúa
-* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Zonas de cámara, máscaras y reglas de detección para la Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Intenciones de voz sin conexión con una confirmación imposible de falsificar
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Cajas, electrónica y la matriz de aceptación en banco
 * **[ARMOR-DEVOPS](https://github.com/JuanenRac/ARMOR-DEVOPS)** - Despliegue, el banco de pruebas de la CM5, copias de seguridad y TLS

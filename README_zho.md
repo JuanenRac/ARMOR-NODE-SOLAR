@@ -25,7 +25,7 @@
 
 ---
 
-**诚实性检查 - 今天真正能运行的部分:** **成熟度：scaffolding。** 固件能在 ESP-IDF 5.4.2 容器中构建，其核心（设置、与各类设备的交互、模拟 UART 的运算：2,718 项检查）已在电脑上用替身设备测试，它生成的消息被 ARMOR-COMMON 接受，网页面板已在浏览器中对着替身节点试用。**它从未在开发板上运行过，也没有连接过任何逆变器或电池**：Wi-Fi、TLS 面板、更新、硬件和模拟 UART 以及协议格式（根据公开文档和记忆编写）都未经尝试。测试中的 ANT-BMS 帧是他人在自己的设备上抓取的，本项目自己还没有读过任何一台。
+**诚实性检查 - 今天真正能运行的部分:** **成熟度：scaffolding。** 固件能在 ESP-IDF 5.4.2 容器中构建，其核心（设置、与各类设备的交互、模拟 UART 的运算：2,548 项检查）已在电脑上用替身设备测试，它生成的消息被 ARMOR-COMMON 接受，网页面板已在浏览器中对着替身节点试用。**它从未在开发板上运行过，也没有连接过任何逆变器或电池**：Wi-Fi、TLS 面板、更新、硬件和模拟 UART 以及协议格式（根据公开文档和记忆编写）都未经尝试。测试中的 ANT-BMS 帧是他人在自己的设备上抓取的，本项目自己还没有读过任何一台。
 
 ---
 
@@ -39,9 +39,8 @@
 * **节点的消息**（`armor/solar/<节点>/<设备>/state`，每台逆变器或电池组一条），在 ARMOR-COMMON 中以模式和一致性向量定义；各端口生成的内容会对照它们检查。
 * **ANT-BMS 电池**（自制电池组上的黑色板，7S 至 32S），3.3 V UART，19200 波特：支持其固件的两种协议（节点先用一种询问，无应答再用另一种，并保持在有应答的那种），读取电芯、温度、荷电状态、电流、容量以及 MOSFET 和均衡器状态，并用在四种真实型号上抓取的帧做了验证。只读：其写入命令可能在带载时断开电池。端口页面上的按钮还可读取 BMS 的型号、版本以及 56 项保护和均衡设置（新协议，只读）。
 * **通过蓝牙用手机配置：** 与雷达节点相同的通道。ARMOR 应用会以 `ARMOR-XXXXXX` 找到节点，并使用面板的用户和设置码来设置其名称、Wi-Fi、地址、代理和蓝牙模式（[协议](docs/BLE_PROVISIONING.md)）。除非另行设置，它只在节点还没有用户时监听。无线部分从未在电路板上运行过。
-* **带多路复用器的底板（*mux* 配置）：** 三个硬件 UART，每个前面有一个 74HC4052，为最多十个端口（分为 4、4、2 三组）轮流使用各自的线路；每个端口有自己的速度和极性，并为每个端口提供一个指示灯（八个通过 74HC595，两个逆变器端口各用一个独立的 GPIO；共用一个 MAX3232 的一对端口要求不同硬件（RS232 或 TTL）时，面板会发出警告）；较高的 Pylontech 电池堆的电芯可以轮流读取。对标准方言的逆变器，**第二路光伏输入**（`QPIGS2`）和**并联系统的单元**（`QPGS`）是可选的读数。以上均未在电路板上运行过。
+* **带多路复用器的底板（*mux* 配置）：** 三个硬件 UART，每个前面有一个 74HC4052，为最多八个端口（分为 4、2、2 三组）轮流使用各自的线路；每个端口有自己的速度和极性，并通过 74HC595 为每个端口提供一个指示灯；较高的 Pylontech 电池堆的电芯可以轮流读取。对标准方言的逆变器，**第二路光伏输入**（`QPIGS2`）和**并联系统的单元**（`QPGS`）是可选的读数。以上均未在电路板上运行过。
 * **尚未完成：** ANT-BMS 的蓝牙连接（节点使用更稳定的线缆）、Android 标签页，以及在真实开发板上用真实设备的运行。
-* **节点与代理之间不会死锁：** 消息经由专用任务处理的队列发送，因此没有任务会在等待代理客户端时持有锁。
 
 ## 📂 仓库结构
 
@@ -59,7 +58,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2,718 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2,548 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin
@@ -76,14 +75,12 @@ node tools/panel_mock.mjs --user admin:adminpass123   # the panel without a boar
 * **[ARMOR-RADAR](https://github.com/JuanenRac/ARMOR-RADAR)** - 适用于 ESP32-S3 的现场节点固件，带三个雷达和自带网页面板
 * **ARMOR-SOLAR** (本仓库) - 太阳能逆变器与电池的协议，以及网关节点的消息
 * **[ARMOR-ELECTRICAL](https://github.com/JuanenRac/ARMOR-ELECTRICAL)** - 电气节点：电表、电网读数消息和开关规则
-* **[ARMOR-ALARM](https://github.com/JuanenRac/ARMOR-ALARM)** - 报警节点与报警主机：防区、布防、延时、警笛和 PIN，有无服务器均可
 * **[ARMOR-HMI](https://github.com/JuanenRac/ARMOR-HMI)** - 触摸面板：墙面屏幕上的系统状态、布防与确认，以及语音助手的所在
 * **[ARMOR-NETWORK](https://github.com/JuanenRac/ARMOR-NETWORK)** - 本地网络：其设备、互联网以及变化
 * **[ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)** - 中央协调器：遥测、报警、设备、太阳能读数和摄像头
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - 网页控制台：摄像头、雷达、报警、太阳能和 2D/3D 场地设计器
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - 带实时 2D/3D 雷达的 Android 操作员客户端
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - 会解释决策且从不执行动作的视觉推理策略
-* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Jetson Orin NX 上的摄像头区域、遮罩与检测规则
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - 带无法伪造确认的离线语音意图
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - 外壳、电子器件和台架验收矩阵
 * **[ARMOR-DEVOPS](https://github.com/JuanenRac/ARMOR-DEVOPS)** - 部署、CM5 测试台、备份与 TLS

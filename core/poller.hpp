@@ -261,6 +261,7 @@ class Poller {
   void rx_voltronic(const std::uint8_t* data, std::size_t length, std::uint64_t now_ms) {
     for (std::size_t i = 0; i < length && step_ != Step::kIdle; ++i) {
       std::vector<std::uint8_t> frame;
+      framer_.set_revo(dialect_ == Dialect::kRevo);
       if (framer_.feed(data[i], frame)) on_pi30_frame(frame, now_ms);
       else if (framer18_.feed(data[i], frame)) on_pi18_frame(frame, now_ms);
     }

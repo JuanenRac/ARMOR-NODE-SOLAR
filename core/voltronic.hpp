@@ -87,12 +87,25 @@ class ReplyFramer {
     if (buffer_.size() >= kMaxReply) { buffer_.clear(); return false; }
     buffer_.push_back(byte);
     if (byte != '\r') return false;
+    // The REVO checksum is a plain byte and may itself be 0x0D: the frame is not over at that byte. A frame with a good CRC ends here; otherwise, when the sum of what has come so far
+    // (plus one) is 0x0D, this CR is the checksum and the real one is still to come (about two replies in 256 were lost before).
+    if (revo_ && buffer_.size() >= 3) {
+      std::string ignored;
+      if (!parse_reply(buffer_.data(), buffer_.size(), ignored)) {
+        unsigned sum = 1;
+        for (std::size_t i = 0; i + 1 < buffer_.size(); ++i) sum += buffer_[i];
+        if ((sum & 0xFF) == 0x0D) return false;
+      }
+    }
     frame = buffer_;
     buffer_.clear();
     return true;
   }
+  // The REVO dialect puts a one-byte checksum before the CR; with it on, a CR that is the checksum does not end the frame.
+  void set_revo(bool revo) { revo_ = revo; }
  private:
   static constexpr std::size_t kMaxReply = 256;
+  bool revo_ = false;
   std::vector<std::uint8_t> buffer_;
 };
 
@@ -153,6 +166,17 @@ struct Status {
   double battery_a() const { return battery_charge_a - battery_discharge_a; }
 };
 
+// The server throws a whole message away when one number is beyond what is possible (an overload above 200 %, a sensor that sends 255 for "no reading"), and the inverter then went
+// quiet exactly when it was failing. A number that is read but absurd is held at the limit the server accepts, so the message still arrives with the warnings and the fault.
+inline double hold(double value, double low, double high) { return value < low ? low : (value > high ? high : value); }
+inline void hold_limits(Status& s) {
+  s.grid_v = hold(s.grid_v, 0, 600); s.out_v = hold(s.out_v, 0, 600); s.grid_hz = hold(s.grid_hz, 0, 100); s.out_hz = hold(s.out_hz, 0, 100);
+  s.out_va = hold(s.out_va, 0, 100000); s.out_w = hold(s.out_w, 0, 100000); s.load_percent = hold(s.load_percent, 0, 200); s.battery_v = hold(s.battery_v, 0, 1000);
+  s.battery_percent = hold(s.battery_percent, 0, 100); s.pv_v = hold(s.pv_v, 0, 1500); s.pv_a = hold(s.pv_a, 0, 500); s.pv_w = hold(s.pv_w, 0, 100000);
+  s.heatsink_c = hold(s.heatsink_c, -50, 200);
+  s.battery_charge_a = hold(s.battery_charge_a, 0, 1000); s.battery_discharge_a = hold(s.battery_discharge_a, 0, 1000);
+}
+
 inline bool parse_qpigs(const std::string& text, Status& out) {
   const std::vector<std::string> f = split_fields(text);
   if (f.size() < 17) return false;
@@ -166,6 +190,7 @@ inline bool parse_qpigs(const std::string& text, Status& out) {
   s.battery_steady = bits & 0x08; s.charging = bits & 0x04; s.scc_charging = bits & 0x02; s.ac_charging = bits & 0x01;
   if (f.size() >= 20 && detail::number(f[19], s.pv_w)) s.has_pv_w = true;
   else s.pv_w = s.pv_v * s.pv_a;
+  hold_limits(s);
   out = s;
   return true;
 }
@@ -186,6 +211,7 @@ inline bool parse_qpigs_revo(const std::string& text, Status& out) {
   s.battery_steady = bits & 0x08; s.charging = bits & 0x04; s.scc_charging = bits & 0x02; s.ac_charging = bits & 0x01;
   s.has_pv_w = true;
   s.pv_a = s.pv_v > 1.0 ? s.pv_w / s.pv_v : 0.0;
+  hold_limits(s);
   out = s;
   return true;
 }

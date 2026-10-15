@@ -25,7 +25,7 @@
 
 ---
 
-**Ehrlichkeitsprüfung - was heute läuft:** **Reifegrad: Scaffolding.** Die Firmware baut im ESP-IDF-5.4.2-Container, ihr Kern (die Einstellungen, der Austausch mit jeder Geräteart, die Arithmetik des emulierten UART: 2.718 Prüfungen) ist am Rechner mit Stellvertreter-Geräten getestet, die Nachrichten, die sie erzeugt, akzeptiert ARMOR-COMMON, und das Panel wurde in einem Browser gegen einen Stellvertreter-Knoten ausprobiert. **Sie lief nie auf einer Platine, und es wurde kein Wechselrichter und keine Batterie angeschlossen**: das WLAN, das Panel mit TLS, das Update, die Hardware- und emulierten UARTs und die Formate der Protokolle (aus öffentlichen Dokumenten und aus dem Gedächtnis geschrieben) sind unerprobt. Die ANT-BMS-Frames in den Tests wurden von anderen an deren eigenen Geräten aufgezeichnet: dieses Projekt hat selbst noch keines gelesen.
+**Ehrlichkeitsprüfung - was heute läuft:** **Reifegrad: Scaffolding.** Die Firmware baut im ESP-IDF-5.4.2-Container, ihr Kern (die Einstellungen, der Austausch mit jeder Geräteart, die Arithmetik des emulierten UART: 2,548 Prüfungen) ist am Rechner mit Stellvertreter-Geräten getestet, die Nachrichten, die sie erzeugt, akzeptiert ARMOR-COMMON, und das Panel wurde in einem Browser gegen einen Stellvertreter-Knoten ausprobiert. **Sie lief nie auf einer Platine, und es wurde kein Wechselrichter und keine Batterie angeschlossen**: das WLAN, das Panel mit TLS, das Update, die Hardware- und emulierten UARTs und die Formate der Protokolle (aus öffentlichen Dokumenten und aus dem Gedächtnis geschrieben) sind unerprobt. Die ANT-BMS-Frames in den Tests wurden von anderen an deren eigenen Geräten aufgezeichnet: dieses Projekt hat selbst noch keines gelesen.
 
 ---
 
@@ -39,9 +39,8 @@
 * **Die Nachrichten des Knotens** (`armor/solar/<Knoten>/<Gerät>/state`, eine je Wechselrichter oder Batteriestapel), in ARMOR-COMMON mit Schemas und Konformitätsvektoren definiert; was die Ports erzeugen, wird dagegen geprüft.
 * **ANT-BMS-Batterien** (die schwarzen Platinen selbstgebauter Akkus, 7S bis 32S), 3,3-V-UART mit 19200 Baud: beide Protokolle seiner Firmware (der Knoten fragt im einen und dann im anderen und bleibt bei dem, das antwortet), mit Zellen, Temperaturen, Ladezustand, Strom, Kapazitäten sowie den Zuständen der MOSFETs und des Balancers, geprüft an Frames, die an vier echten Modellen aufgezeichnet wurden. Nur Lesen: seine Schreibbefehle können eine Batterie unter Last trennen. Eine Schaltfläche auf der Port-Seite liest außerdem Modell, Version und 56 Schutz- und Balancing-Einstellungen des BMS (neueres Protokoll), nur lesend.
 * **Konfiguration vom Handy über Bluetooth,** derselbe Kanal wie beim Radarknoten: Die ARMOR-App findet den Knoten als `ARMOR-XXXXXX` und stellt Name, WLAN, Adresse, Broker und Bluetooth-Modus mit den Benutzern und dem Einrichtungscode des Panels ein ([das Protokoll](docs/BLE_PROVISIONING.md)). Er lauscht nur, solange der Knoten keinen Benutzer hat, sofern nichts anderes eingestellt ist. Der Funkteil lief noch nie auf einer Platine.
-* **Die Basisplatine mit Multiplexern (das *mux*-Profil):** drei Hardware-UARTs, je eines hinter einem 74HC4052, bedienen bis zu zehn Ports in Gruppen zu 4, 4 und 2, die sich auf ihrer Leitung abwechseln, jeder Port mit eigener Geschwindigkeit und Polarität, und eine LED pro Port (acht über ein 74HC595, die beiden Wechselrichter-Ports an je einem eigenen GPIO; das Panel warnt, wenn die beiden Ports eines Paars, die sich einen MAX3232 teilen, unterschiedliche Hardware verlangen, RS232 oder TTL); die Zellen eines hohen Pylontech-Stapels lassen sich im Wechsel lesen. Für einen Wechselrichter im Standarddialekt sind der **zweite PV-Eingang** (`QPIGS2`) und die **Einheiten eines Parallelsystems** (`QPGS`) optionale Messungen. Nichts davon lief bisher auf einer Platine.
+* **Die Basisplatine mit Multiplexern (das *mux*-Profil):** drei Hardware-UARTs, je eines hinter einem 74HC4052, bedienen bis zu acht Ports in Gruppen zu 4, 2 und 2, die sich auf ihrer Leitung abwechseln, jeder Port mit eigener Geschwindigkeit und Polarität, und eine LED pro Port über ein 74HC595; die Zellen eines hohen Pylontech-Stapels lassen sich im Wechsel lesen. Für einen Wechselrichter im Standarddialekt sind der **zweite PV-Eingang** (`QPIGS2`) und die **Einheiten eines Parallelsystems** (`QPGS`) optionale Messungen. Nichts davon lief bisher auf einer Platine.
 * **Noch nicht:** die Bluetooth-Verbindung des ANT-BMS (der Knoten nutzt das Kabel, das stabilere von beiden) und ein Lauf auf einer echten Platine mit echten Geräten.
-* **Kein Deadlock zwischen dem Knoten und dem Broker:** Nachrichten laufen über eine Warteschlange mit eigener Aufgabe, sodass keine Aufgabe eine Sperre hält, während sie auf den Client des Brokers wartet.
 
 ## 📂 Struktur des Repositorys
 
@@ -59,7 +58,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2.718 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2,548 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin
@@ -76,14 +75,12 @@ Siehe die [Firmware-Anleitung](docs/NODE_FIRMWARE.md) (die Platine, die Ports, d
 * **[ARMOR-RADAR](https://github.com/JuanenRac/ARMOR-RADAR)** - Feldknoten-Firmware für ESP32-S3 mit drei Radaren und eigenem Web-Panel
 * **ARMOR-SOLAR** (dieses Repository) - Protokolle für Solar-Wechselrichter und -Batterien und die Nachrichten eines Gateway-Knotens
 * **[ARMOR-ELECTRICAL](https://github.com/JuanenRac/ARMOR-ELECTRICAL)** - Elektroknoten: Zähler, die Nachricht der Netzmesswerte und die Regeln fürs Schalten
-* **[ARMOR-ALARM](https://github.com/JuanenRac/ARMOR-ALARM)** - Alarmknoten und Alarmzentrale: Zonen, Scharfschalten, Verzögerungen, Sirene und PIN, mit dem Server oder ohne ihn
 * **[ARMOR-HMI](https://github.com/JuanenRac/ARMOR-HMI)** - Touch-Panel: der Systemzustand auf einem Wandbildschirm, Scharf- und Quittieren sowie das Zuhause des Sprachassistenten
 * **[ARMOR-NETWORK](https://github.com/JuanenRac/ARMOR-NETWORK)** - Das lokale Netzwerk: seine Geräte, das Internet und was sich ändert
 * **[ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)** - Zentraler Koordinator: Telemetrie, Alarme, Geräte, Solarmesswerte und Kameras
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Web-Konsole: Kameras, Radar, Alarme, Solarenergie und 2D/3D-Standortdesigner
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Android-Bedienclient mit Live-Radar in 2D/3D
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Visuelle Inferenzrichtlinie, die ihre Entscheidungen erklärt und nie handelt
-* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Kamerazonen, Masken und Erkennungsregeln für den Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Offline-Sprachabsichten mit einer nicht fälschbaren Bestätigung
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Gehäuse, Elektronik und die Abnahmematrix am Prüfstand
 * **[ARMOR-DEVOPS](https://github.com/JuanenRac/ARMOR-DEVOPS)** - Bereitstellung, CM5-Prüfstand, Backup und TLS

@@ -421,6 +421,10 @@ static void test_revo_and_warning_bits() {
   CHECK(voltronic::parse_qpigs_revo(kRevoQpigs, s) && s.pv_w == 856 && s.has_pv_w && s.pv_v > 103.7 && s.pv_v < 103.9 && s.pv_a > 8.2 && s.pv_a < 8.3 && s.battery_v_scc > 57.4 && s.battery_v_scc < 57.5);
   CHECK(s.grid_v == 232.0 && s.out_w == 119 && s.battery_percent == 100 && s.charging && s.scc_charging && !s.ac_charging);
   CHECK(!voltronic::parse_qpigs_revo("232.0 50.0", s));
+  // an overload and a sensor that sends 255: the numbers are held at the limits the server accepts, the message is not lost
+  voltronic::Status absurd;
+  CHECK(voltronic::parse_qpigs("232.0 50.0 230.0 50.0 0161 0119 250 460 57.50 012 100 0255 0014 103.8 57.45 00000 00110110 00 00 00856", absurd));
+  CHECK(absurd.load_percent == 200 && absurd.heatsink_c == 200 && absurd.out_w == 119 && absurd.battery_percent == 100);
   // the checksum reply
   std::vector<std::uint8_t> chk = reply_chk(kRevoQpigs);
   std::string text;
@@ -430,6 +434,31 @@ static void test_revo_and_warning_bits() {
   CHECK(!voltronic::parse_reply_revo(chk.data(), chk.size(), text));
   std::vector<std::uint8_t> crc = reply(kRevoQpigs);
   CHECK(voltronic::parse_reply_revo(crc.data(), crc.size(), text) && text == kRevoQpigs);   // a CRC reply is accepted too
+  // a REVO checksum that is 0x0D does not end the frame at that byte
+  {
+    std::vector<std::uint8_t> reply{'(', 'N', 'A'};
+    unsigned sum = 1;
+    for (std::uint8_t b : reply) sum += b;
+    // search a one-letter tail that makes the checksum 0x0D
+    for (int letter = 'A'; letter <= 'z'; ++letter) {
+      std::vector<std::uint8_t> candidate = reply;
+      candidate.push_back(static_cast<std::uint8_t>(letter));
+      unsigned total = 1;
+      for (std::uint8_t b : candidate) total += b;
+      if ((total & 0xFF) != 0x0D) continue;
+      candidate.push_back(0x0D);   // the checksum
+      candidate.push_back('\r');
+      voltronic::ReplyFramer framer;
+      framer.set_revo(true);
+      std::vector<std::uint8_t> out;
+      int frames = 0;
+      for (std::uint8_t b : candidate) if (framer.feed(b, out)) ++frames;
+      CHECK(frames == 1 && out == candidate);
+      std::string body;
+      CHECK(voltronic::parse_reply_revo(out.data(), out.size(), body));
+      break;
+    }
+  }
   // 36 warning flags: the three "battery weak" bits give one name; the ones past bit 31 are read
   std::vector<std::string> warnings;
   std::string bits(36, '0');

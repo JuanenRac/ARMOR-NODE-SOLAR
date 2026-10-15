@@ -2,7 +2,13 @@
 
 All notable changes to this project are documented here.
 
-## [0.3.5] - Audit round two: hardening of the web server, the broker link and the sessions
+## [0.3.6] - Absurd numbers and the REVO frame
+
+- A number the inverter sends beyond what is possible (an overload above 200 %, a sensor that sends 255 for no reading) is held at the limit the server accepts, so the message is no longer thrown away just when the inverter is failing.
+- In the REVO dialect, a checksum byte that happens to be a carriage return no longer cuts the reply short (about two replies in 256 were lost); tests for both.
+- Looking for a new version on GitHub no longer fails with connect_failed when the node was short of internal memory (a browser on the HTTPS panel at the same moment): the TLS buffers now live in the external memory, and the search and the download try three times.
+
+## [0.3.5] - Hardening of the web server, the broker link and the sessions
 
 - The web server gives up a request that announces a body and sends nothing (or an upload that stalls) after fifteen seconds, instead of keeping its only thread for ever.
 - The restart after an installation from GitHub no longer depends on a browser asking how far it is: a timer of the node watches the installation and restarts it when it is done.
