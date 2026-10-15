@@ -25,7 +25,7 @@
 
 ---
 
-**正直さのチェック - 今日動いているもの:** **成熟度：scaffolding。** ファームウェアは ESP-IDF 5.4.2 コンテナーでビルドでき、そのコア（設定、各種機器とのやり取り、エミュレート UART の計算：2,550 件のチェック）は代役の機器を使ってコンピューターでテスト済みで、生成するメッセージは ARMOR-COMMON に受理され、パネルは代役ノードに対してブラウザーで試しました。**ボード上で動いたことはなく、インバーターもバッテリーも接続されたことはありません**：Wi-Fi、TLS のパネル、更新、ハードウェアとエミュレートの UART、そしてプロトコルの書式（公開文書と記憶から書いたもの）は未試験です。テストにある ANT-BMS のフレームは他の人が自分の機器で採取したもので、このプロジェクト自身はまだ 1 台も読み取っていません。
+**正直さのチェック - 今日動いているもの:** **成熟度：scaffolding。** ファームウェアは ESP-IDF 5.4.2 コンテナーでビルドでき、そのコア（設定、各種機器とのやり取り、エミュレート UART の計算：2,718 件のチェック）は代役の機器を使ってコンピューターでテスト済みで、生成するメッセージは ARMOR-COMMON に受理され、パネルは代役ノードに対してブラウザーで試しました。**ボード上で動いたことはなく、インバーターもバッテリーも接続されたことはありません**：Wi-Fi、TLS のパネル、更新、ハードウェアとエミュレートの UART、そしてプロトコルの書式（公開文書と記憶から書いたもの）は未試験です。テストにある ANT-BMS のフレームは他の人が自分の機器で採取したもので、このプロジェクト自身はまだ 1 台も読み取っていません。
 
 ---
 
@@ -41,6 +41,7 @@
 * **スマートフォンから Bluetooth で設定：** レーダーノードと同じチャンネルです。ARMOR アプリがノードを `ARMOR-XXXXXX` として見つけ、パネルのユーザーとセットアップコードを使って、名前、Wi-Fi、アドレス、ブローカー、Bluetooth モードを設定します（[プロトコル](docs/BLE_PROVISIONING.md)）。設定を変えない限り、ノードにユーザーがいない間だけ待ち受けます。無線部分は基板ではまだ動作していません。
 * **マルチプレクサ付きベース基板（*mux* プロファイル）：** 3 つのハードウェア UART が、それぞれ 74HC4052 を介して、最大 10 ポート（4・4・2 のグループ）を回線ごとに順番に受け持ちます。各ポートは独自の速度と極性を持ち、ポートごとに LED が 1 つ付きます（8 個は 74HC595 経由、インバーターの 2 ポートはそれぞれ専用の GPIO。1 つの MAX3232 を共有するペアの 2 ポートが異なるハードウェア（RS232 か TTL）を求めると、パネルが警告します）。背の高い Pylontech スタックのセルは順番に読めます。標準方言のインバーターでは、**2 つ目の PV 入力**（`QPIGS2`）と**並列システムのユニット**（`QPGS`）が任意の読み取りです。いずれも基板ではまだ動作していません。
 * **まだ：** ANT-BMS の Bluetooth 接続（ノードは、より安定なケーブルを使います）、そして実機と実際の機器での動作確認。
+* **ノードとブローカーのデッドロックなし：** メッセージは専用タスクが処理するキューを通るため、ブローカーのクライアントを待つ間にロックを保持するタスクはありません。
 
 ## 📂 リポジトリの構成
 
@@ -58,7 +59,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2,550 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2,718 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin
@@ -82,6 +83,7 @@ node tools/panel_mock.mjs --user admin:adminpass123   # the panel without a boar
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Web コンソール：カメラ、レーダー、アラーム、太陽光発電、2D/3D サイト設計
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - リアルタイム 2D/3D レーダー付きの Android オペレータークライアント
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - 判断を説明し、決して動作しない視覚推論ポリシー
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Jetson Orin NX 向けのカメラのゾーン、マスク、検知ルール
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - 偽造できない確認を備えたオフライン音声インテント
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - 筐体、電子部品、ベンチ受け入れマトリクス
 * **[ARMOR-DEVOPS](https://github.com/JuanenRac/ARMOR-DEVOPS)** - デプロイ、CM5 テストベンチ、バックアップ、TLS

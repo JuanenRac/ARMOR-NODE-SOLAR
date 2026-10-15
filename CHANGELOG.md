@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.4] - No deadlock between the node and the broker
+
+- **A message is never published while a lock of the node is held:** `mqtt_link::publish()` puts the message in a short queue (48, the oldest dropped first) and a task of its own hands it to the client. Before, a task that held a lock of its module and published could wait for the client's own lock while the client, running the handler of an incoming command, waited for that module lock: both for ever, with nothing to restart the board.
+- **The task watchdog restarts the board:** it panics after 10 s (it only printed before).
+
 ## [0.3.3] - What the inverter says about itself, and the shared improvements
 
 - **The inverter's serial number, firmware, ratings and settings, and the energy its panels have made in all** are asked after the readings (standard dialect only, never at their cost): `QID` and `QVFW` once, `QPIRI` (rated output, the battery's voltages and currents, the type of battery, the priority of the output source and of the charger, the input range) every ten minutes, because it can be changed at the unit, and `QET` every five. A question that gets no good answer twice in a row is dropped and the reading goes out either way. The message carries them (`serial`, `firmware`, `pv_energy_total_wh`, `ratings`) as optional fields of the shared contract. `QET` is read in Wh, as the protocol gives it; that has not been confirmed on a real inverter.

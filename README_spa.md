@@ -25,7 +25,7 @@
 
 ---
 
-**Comprobación de honestidad - qué funciona hoy:** **Madurez: scaffolding.** El firmware se compila en el contenedor ESP-IDF 5.4.2, su núcleo (los ajustes, el intercambio con cada tipo de equipo, la aritmética de la UART emulada: 2,550 comprobaciones) está probado en un ordenador con equipos simulados, los mensajes que produce los acepta ARMOR-COMMON y el panel se probó en un navegador contra un nodo simulado. **Nunca ha funcionado en una placa y no se ha conectado ningún inversor ni batería**: el Wi-Fi, el panel con TLS, la actualización, las UART de hardware y emuladas y los formatos de los protocolos (escritos de documentos públicos y de memoria) están sin probar. Las tramas de ANT-BMS de sus pruebas las capturaron otras personas en sus propios equipos: este proyecto no ha leído ninguno.
+**Comprobación de honestidad - qué funciona hoy:** **Madurez: scaffolding.** El firmware se compila en el contenedor ESP-IDF 5.4.2, su núcleo (los ajustes, el intercambio con cada tipo de equipo, la aritmética de la UART emulada: 2.718 comprobaciones) está probado en un ordenador con equipos simulados, los mensajes que produce los acepta ARMOR-COMMON y el panel se probó en un navegador contra un nodo simulado. **Nunca ha funcionado en una placa y no se ha conectado ningún inversor ni batería**: el Wi-Fi, el panel con TLS, la actualización, las UART de hardware y emuladas y los formatos de los protocolos (escritos de documentos públicos y de memoria) están sin probar. Las tramas de ANT-BMS de sus pruebas las capturaron otras personas en sus propios equipos: este proyecto no ha leído ninguno.
 
 ---
 
@@ -41,6 +41,7 @@
 * **Configuración desde el móvil por Bluetooth,** el mismo canal que el del nodo radar: la app ARMOR encuentra el nodo como `ARMOR-XXXXXX` y ajusta su nombre, Wi-Fi, dirección, broker y modo de Bluetooth con los usuarios y el código de puesta en marcha del panel ([el protocolo](docs/BLE_PROVISIONING.md)). Solo escucha mientras el nodo no tiene usuarios, salvo que se indique otra cosa. La parte de radio nunca ha corrido en una placa.
 * **La placa base con multiplexores (perfil *mux*):** tres UART de hardware, cada una detrás de un 74HC4052, atienden hasta diez puertos en grupos de 4, 4 y 2 que se turnan en su línea, cada puerto con su propia velocidad y polaridad, y un LED por puerto (ocho a través de un 74HC595, los dos puertos de inversor en un GPIO propio; el panel avisa cuando los dos puertos de una pareja, que comparten un MAX3232, piden hardware distinto, RS232 o TTL); las celdas de una pila Pylontech alta pueden leerse por turnos. Para un inversor en el dialecto estándar, la **segunda entrada fotovoltaica** (`QPIGS2`) y las **unidades de un sistema en paralelo** (`QPGS`) son lecturas opcionales. Nada de esto ha corrido en una placa.
 * **Todavía no:** el enlace Bluetooth del ANT-BMS (el nodo usa el cable, el más estable de los dos) y una prueba en una placa real con equipos reales.
+* **Sin bloqueo mutuo entre el nodo y el broker:** los mensajes pasan por una cola atendida por una tarea propia, de modo que ninguna tarea retiene un bloqueo mientras espera al cliente del broker.
 
 ## 📂 Estructura del repositorio
 
@@ -58,7 +59,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2,550 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console      # 2.718 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin
@@ -82,6 +83,7 @@ Véase la [guía del firmware](docs/NODE_FIRMWARE.md) (la placa, los puertos, el
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Consola web: cámaras, radar, alarmas, energía solar y el diseñador de sitio 2D/3D
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Cliente Android del operador con radar 2D/3D en vivo
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Política de inferencia visual que explica sus decisiones y nunca actúa
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Zonas de cámara, máscaras y reglas de detección para la Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Intenciones de voz sin conexión con una confirmación imposible de falsificar
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Cajas, electrónica y la matriz de aceptación en banco
 * **[ARMOR-DEVOPS](https://github.com/JuanenRac/ARMOR-DEVOPS)** - Despliegue, el banco de pruebas de la CM5, copias de seguridad y TLS
