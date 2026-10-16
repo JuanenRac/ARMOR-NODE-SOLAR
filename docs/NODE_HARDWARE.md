@@ -90,3 +90,7 @@ Each output drives **one resistor and one LED in series, to ground**: output, th
 
 Every 5 to 10 seconds it asks the inverter `QPIGS` and `QMOD`, and less often `QPIWS` (and `QPIRI` once, at start); every 10 to 30 seconds it types `pwr` at the
 battery console. It publishes one message per device (see SOLAR_MESSAGES.md), and stays silent about a device that does not answer, so the server can say so.
+
+## The emulated ports and their limit
+
+Seven of the ten ports are serial lines made in software (a timer and the pins, no UART of the chip). At 19200 baud a bit lasts 52 microseconds, and with Wi-Fi on, an interrupt can be late by 10 to 50 microseconds; on the Ethernet board the interrupt service of the pins is not kept in the chip's fast memory (the W5500 driver needs the normal one), so while the flash is being written the edges can be delayed. The effect is a frame with an error now and then: the checks of the frame (CRC or checksum) catch it, and the reading is lost, not wrong. A port that matters (a battery bank that must be read every time) should be one of the three hardware ones; the statistics of each port in the panel (frames with errors, answers that did not come) tell how a cable and a port behave. This has not been measured on a board with equipment connected.

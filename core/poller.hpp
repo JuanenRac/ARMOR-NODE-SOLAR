@@ -293,8 +293,15 @@ class Poller {
     if (is_identity_step()) { on_identity(crc_ok, text, now_ms); return; }
     if (!crc_ok) {
       // only the REVO dialect ends a reply with the checksum: a reply that fits it (and no CRC) makes the port REVO
-      if ((dialect_ == Dialect::kRevo || looking) && voltronic::parse_reply_revo(frame.data(), frame.size(), text)) { learn(Dialect::kRevo); }
-      else { fail("crc", now_ms); return; }
+      std::string revo_text;
+      if ((dialect_ == Dialect::kRevo || looking) && voltronic::parse_reply_revo(frame.data(), frame.size(), revo_text)) {
+        // While the dialect is being looked for, a reply with no CRC that only fits the one-byte checksum counts as REVO if it also reads as the reading of a REVO inverter: one corrupted standard
+        // reply in 256 fits the checksum by chance, and must not make the port a REVO one.
+        decltype(status_) probe{};
+        if (dialect_ != Dialect::kRevo && step_ == Step::kQpigs && !voltronic::parse_qpigs_revo(revo_text, probe)) { fail("crc", now_ms); return; }
+        text = revo_text;
+        learn(Dialect::kRevo);
+      } else { fail("crc", now_ms); return; }
     }
     if (text == "NAK") { learn(dialect_); fail("nak", now_ms); return; }
     const bool revo = dialect_ == Dialect::kRevo;
