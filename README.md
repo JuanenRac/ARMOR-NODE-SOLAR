@@ -56,6 +56,15 @@
 * **Bluetooth pairing with a PIN:** the six-digit PIN is derived from the set-up code, printed on the USB console and shown to an administrator in the panel; the phone has to enter it before it may write the node's settings.
 * **Not yet:** the ANT-BMS's Bluetooth link (the node uses the cable, the more stable of the two) and a run on a real board with real equipment.
 
+## 🖼️ Screenshots
+
+Captured at 1920×1080 on a test bench, with sample data and no real installation behind them.
+
+<table>
+<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="Overview: the state of the node at a glance - network, broker, firmware and what it reports." width="100%"><br><sub>Overview: the state of the node at a glance - network, broker, firmware and what it reports.</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="Ports: the serial ports of the node and the equipment on each of them." width="100%"><br><sub>Ports: the serial ports of the node and the equipment on each of them.</sub></td></tr>
+<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="Readings: what the node is reading right now, with the age of each value." width="100%"><br><sub>Readings: what the node is reading right now, with the age of each value.</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="Network: Ethernet or Wi-Fi addressing of the node, set from its own web panel." width="100%"><br><sub>Network: Ethernet or Wi-Fi addressing of the node, set from its own web panel.</sub></td></tr>
+</table>
+
 ## 🧩 Role in A.R.M.O.R.
 
 ARMOR-SOLAR is the gateway between the house's solar equipment and the family. It reads inverters and batteries through up to ten serial ports and publishes what it reads for [ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER), which keeps the history, the sums and the alarms; the *Inverters* and *Batteries* menus of [ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO) and the Solar screen of [ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL) show it. It only reads: it never writes a setting to any equipment.

@@ -56,6 +56,15 @@
 * **Bluetooth-Kopplung mit PIN:** die sechsstellige PIN wird aus dem Einrichtungscode abgeleitet, auf der USB-Konsole ausgegeben und einem Administrator im Panel angezeigt; das Telefon muss sie eingeben, bevor es die Einstellungen des Knotens schreiben darf.
 * **Noch nicht:** die Bluetooth-Verbindung des ANT-BMS (der Knoten nutzt das Kabel, das stabilere von beiden) und ein Lauf auf einer echten Platine mit echten Geräten.
 
+## 🖼️ Screenshots
+
+Aufgenommen mit 1920×1080 auf einem Prüfstand, mit Beispieldaten und ohne eine echte Anlage dahinter.
+
+<table>
+<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="Übersicht: der Zustand des Knotens auf einen Blick - Netzwerk, Broker, Firmware und was er meldet." width="100%"><br><sub>Übersicht: der Zustand des Knotens auf einen Blick - Netzwerk, Broker, Firmware und was er meldet.</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="Anschlüsse: die seriellen Anschlüsse des Knotens und das Gerät an jedem." width="100%"><br><sub>Anschlüsse: die seriellen Anschlüsse des Knotens und das Gerät an jedem.</sub></td></tr>
+<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="Messwerte: was der Knoten gerade liest, mit dem Alter jedes Wertes." width="100%"><br><sub>Messwerte: was der Knoten gerade liest, mit dem Alter jedes Wertes.</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="Netzwerk: Ethernet- oder WLAN-Adressierung des Knotens, im eigenen Web-Panel eingestellt." width="100%"><br><sub>Netzwerk: Ethernet- oder WLAN-Adressierung des Knotens, im eigenen Web-Panel eingestellt.</sub></td></tr>
+</table>
+
 ## 🧩 Rolle in A.R.M.O.R.
 
 ARMOR-SOLAR ist das Gateway zwischen den Solargeräten des Hauses und der Familie. Es liest Wechselrichter und Batterien über bis zu zehn serielle Ports und veröffentlicht, was es liest, für [ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER), der Verlauf, Summen und Alarme führt; die Menüs *Wechselrichter* und *Batterien* von [ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO) und der Solar-Bildschirm von [ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL) zeigen es. Es liest nur: Es schreibt nie eine Einstellung in ein Gerät.

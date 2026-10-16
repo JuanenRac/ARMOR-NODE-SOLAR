@@ -56,6 +56,15 @@
 * **PIN 付きの Bluetooth ペアリング：**6 桁の PIN は設定コードから導出され、USB コンソールに表示され、管理者にはパネルにも表示されます。スマートフォンはこれを入力して初めてノードの設定を書き込めます。
 * **まだ：** ANT-BMS の Bluetooth 接続（ノードは、より安定なケーブルを使います）、そして実機と実際の機器での動作確認。
 
+## 🖼️ スクリーンショット
+
+テストベンチで 1920×1080 で撮影。サンプルデータを使用しており、実際の設備は接続されていません。
+
+<table>
+<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="概要：ネットワーク、ブローカー、ファームウェア、報告内容など、ノードの状態をひと目で確認できます。" width="100%"><br><sub>概要：ネットワーク、ブローカー、ファームウェア、報告内容など、ノードの状態をひと目で確認できます。</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="ポート：ノードのシリアルポートと、それぞれに接続された機器。" width="100%"><br><sub>ポート：ノードのシリアルポートと、それぞれに接続された機器。</sub></td></tr>
+<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="測定値：ノードがいま読み取っている値と、各値の経過時間。" width="100%"><br><sub>測定値：ノードがいま読み取っている値と、各値の経過時間。</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="ネットワーク：ノードの Ethernet または Wi-Fi のアドレス設定を、専用の Web パネルから行います。" width="100%"><br><sub>ネットワーク：ノードの Ethernet または Wi-Fi のアドレス設定を、専用の Web パネルから行います。</sub></td></tr>
+</table>
+
 ## 🧩 A.R.M.O.R. での役割
 
 ARMOR-SOLAR は家のソーラー機器とファミリーをつなぐゲートウェイです。最大 10 本のシリアルポートでインバーターとバッテリーを読み取り、読み取った内容を [ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER) に送ります。サーバーが履歴、合計、警報を保持し、[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO) の*インバーター*と*バッテリー*メニュー、[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL) のソーラー画面が表示します。読み取るだけで、どの機器にも設定を書き込みません。
