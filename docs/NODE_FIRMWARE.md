@@ -157,7 +157,7 @@ if the equipment shares its ground with a battery bank, with a common ground on 
 
 `main/` is the ESP-IDF component (`app_main.cpp`, `solar_manager.cpp` one task per port, `uart_ports.cpp` the hardware and emulated ports, `network.cpp`,
 `web_server.cpp`, `api_shared.cpp`, `mqtt_link.cpp`, `node_store.cpp`, `tls_cert.cpp`, and for the Waveshare board `board_ethernet.cpp`, the W5500 driver); `core/` is the part with no hardware in it (`solar_config.hpp` the settings,
-`poller.hpp` the exchange with each kind of equipment, `ant_bms.hpp` the ANT-BMS's two protocols, `soft_uart.hpp`, `netplan.hpp`, `auth.hpp` and the protocol library); `panel/` the web panel (seven languages).
+`poller.hpp` the exchange with each kind of equipment, `ant_bms.hpp` the ANT-BMS's two protocols, `soft_uart.hpp`, `netplan.hpp`, `auth.hpp` and the protocol library); `panel/` the web panel (eight languages).
 `tools/panel_mock.mjs` is a stand-in node for working on the panel without a board.
 
 **Firmware slots.** The panel's *Update* page also lists the two application slots with the version each one holds and boots the other one at the next restart (`POST /api/v1/ota/switch`, an administrator only): the way back to the version that ran before an update, or forward to the one just installed. An empty slot or a firmware of another project is refused.
