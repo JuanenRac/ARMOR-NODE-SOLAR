@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 ## [0.4.4] - An inverter without a warning query says that its warnings are unknown
 
-A REVO inverter has no warning query: its message now carries warnings_known: false, so the empty list is read as unknown and not as no warnings.
+- A REVO inverter has no warning query: its message now carries warnings_known: false, so the empty list is read as unknown and not as no warnings.
 
 ## [0.4.3] - Only the house may use the panel, wrong passwords counted per person, and a panel that works behind the server's proxy
 
