@@ -38,3 +38,5 @@ energy at the mean voltage) and `cycles` (the highest of its modules). A field t
 
 With no module present the message has `modules: 0` and the empty `stack`, and no other reading: the node says the battery does not answer instead of inventing numbers.
 `current_a` is the sum of the modules (negative discharging), `voltage_v` their mean, `soc_percent` the mean state of charge (left out when unknown: the contract has no nulls).
+
+- `pv_energy_total_wh` (from the inverter's `QET` answer) is **provisional**: the unit of that answer has not been confirmed on a real inverter, so treat the figure as indicative until it is.

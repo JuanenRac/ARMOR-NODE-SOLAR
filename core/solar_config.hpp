@@ -29,7 +29,7 @@ namespace armor::config {
 constexpr int kVersion = 1;
 constexpr std::size_t kMaxPasswordText = 64;
 constexpr std::size_t kPortCount = static_cast<std::size_t>(board::kPortCount);
-// The "mux" profile: a base board with 74HC4052 multiplexers in front of the UARTs, so that up to three hardware UARTs serve up to eight ports (4, 2 and 2 in the default wiring).
+// The "mux" profile: a base board with 74HC4052 multiplexers in front of the UARTs, so that up to three hardware UARTs serve up to ten ports (4, 4 and 2 in the default wiring).
 constexpr std::size_t kMuxGroups = 3;
 constexpr std::size_t kMuxPorts = 10;
 
@@ -404,7 +404,7 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
       read_int(item, "tx", port.tx, -1, board::kLastGpio, base + "tx", problems);
       read_int(item, "de", port.de, -1, board::kLastGpio, base + "de", problems);
       read_int(item, "poll_s", port.poll_s, 0, 3600, base + "poll_s", problems);
-      read_int(item, "modules", port.modules, 0, 8, base + "modules", problems);
+      read_int(item, "modules", port.modules, 0, 16, base + "modules", problems);
       read_text(item, "dialect", port.dialect, 8, base + "dialect", problems);
       read_bool(item, "invert", port.invert, base + "invert", problems);
       read_int(item, "cells_per_cycle", port.cells_per_cycle, 0, 8, base + "cells_per_cycle", problems);

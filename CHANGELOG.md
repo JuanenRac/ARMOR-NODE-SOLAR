@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.2] - The emulated serial ports out of reach of the flash, two panel functions that answered an error and winter temperatures
+
+- **The emulated serial ports no longer crash the node during a flash write.** The ring of edges of an emulated port is 16 KB, and on this board a plain allocation of that size is served from the external RAM, which the chip cannot read while the cache is off for a write to flash (the settings, a certificate, an update): the interrupt of an edge that arrived then stopped the node. The ring and the bits being sent now live in the chip's own memory.
+- **Reading the settings of a BMS and asking the Pylontech console work from the panel:** the node answered *accepted* with a status line that did not exist and the panel read it as an error; 202 and the other codes the node uses (408, 423) now have their lines.
+- **PI18 inverters below zero:** the temperatures of the status may be negative; a status with one was refused as a whole and the inverter disappeared in the cold.
+- **ANT-BMS settings:** the capacities of the new BMS were shown in the wrong unit (280000000 Ah); they are read as micro-ampere-hours, and the total of the cycles as milli-ampere-hours.
+- **A group of ports behind a multiplexer** sets the speed and channel again after the settings of a BMS or the console were read on its line (the next port ran at the BMS's speed and failed once), and a port that loses the line in the middle of an exchange starts its next turn clean.
+- A Pylontech stack of up to sixteen modules can be read cell by cell (the setting stopped at eight); the invert switch of a port is shown as it is in the direct profile.
+- A user change that could not be written is told as a storage error, the panel tells every error the node can answer with in the eight languages (a test fails when a new code has no text), the comments say eight languages, ten ports and both boards, and `secrets/node.conf.example` no longer carries a usable set-up code.
+- A build option turns off the reset by the BOOT button for a node in a place anyone can reach.
+- The documents say what the node does today: the Bluetooth pairing has a passkey and `pv_energy_total_wh` is provisional.
+- Tests: 3,013 checks in ten programs plus the panel texts; new ones cover the negative temperatures, the units of the BMS settings and the abandoned exchange.
+- Shared with the other nodes (from ARMOR-COMMON's firmware base): updates are signed for the project, the board, the version and the hash (a node refuses an older image, another board's image and an address that is not the repository's), the pairing of Bluetooth closes after repeated failures, the random generator keeps away from the converter, a user write is all-or-nothing, a repeated key in a JSON document is refused, four-number firmware versions are understood, Improv over USB on a board with a cable also tells the node to use the Wi-Fi it was given, and the upload by hand is refused while an installation runs.
+
 ## [0.4.1] - The Bluetooth PIN in the panel
 
 - **Signed firmware:** a node installs from GitHub only a firmware whose signature verifies. Each release carries, next to the image and its SHA-256, an Ed25519 signature of that hash (`<image>.sig`); the node downloads the image, hashes it and installs it only when the hash is the published one and the signature verifies with the public key of the releases, which is in the firmware (the private key never leaves the maintainer's computer). A release without a signature, or with a wrong one, is refused and nothing changes.

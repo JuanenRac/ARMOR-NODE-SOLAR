@@ -142,7 +142,7 @@ void port_task(void* argument) {
     const std::size_t n = port->read(buffer, sizeof buffer, 40);
     if (n > 0) poller.on_rx(buffer, n, uptime_ms());
     std::string topic, payload;
-    // The message carries the node's wall clock; while the clock is not set it is only for the panel (the broker link drops it).
+    // The message carries the node's wall clock; while the clock is not set it carries the time since the node started, and the server stamps it with the time it receives it.
     const bool ready = poller.take_message(mqtt_link::clock_is_set() ? mqtt_link::wall_clock_ms() : uptime_ms(), topic, payload);
     if (ready && g_publish) g_publish(topic, payload);
     const std::uint64_t after = uptime_ms();
@@ -215,6 +215,7 @@ void group_task(void* argument) {
         line->configure(m.baud, m.invert);
         line->discard();
         run_bms_settings(slot, *line);
+        group->invalidate_line();
       }
       for (std::size_t k = 0; k < job.ports.size(); ++k) {
         Slot& slot = g_slots[job.ports[k]];
@@ -224,6 +225,7 @@ void group_task(void* argument) {
         line->configure(m.baud, m.invert);
         line->discard();
         run_console(slot, *line);
+        group->invalidate_line();
       }
     }
     const solar::MuxTurn turn = group->step(*line, clock, 20);
@@ -295,6 +297,7 @@ void start(const config::Settings& settings, Publish publish) {
     s.kind = cfg.kind; s.name = cfg.name;
     s.baud = config::effective_baud(cfg);
     s.rx = cfg.rx; s.tx = cfg.tx; s.de = cfg.de; s.poll_s = config::effective_poll_s(cfg);
+    s.invert = cfg.invert;
     s.state = cfg.enabled ? "starting" : "disabled";
     if (!cfg.enabled) continue;
     xTaskCreate(port_task, ("port" + std::to_string(i + 1)).c_str(), 6144, &slot, 5, nullptr);

@@ -32,3 +32,9 @@ add_test(NAME ble COMMAND test_ble)
 add_test(NAME mux COMMAND test_mux)
 add_test(NAME parallel COMMAND test_parallel)
 add_test(NAME console COMMAND test_console)
+
+# the panel's texts: eight languages in every row and a text for every error the firmware can answer with
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_FOUND)
+  add_test(NAME panel_text COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_panel_text.py)
+endif()

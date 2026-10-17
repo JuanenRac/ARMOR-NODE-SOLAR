@@ -1,5 +1,5 @@
 /* ARMOR-SOLAR node panel - the pages. Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
-   text.js (the seven languages) is joined in front of this file when the panel is packed, so LANGS and L exist here.
+   text.js (the eight languages) is joined in front of this file when the panel is packed, so LANGS and L exist here.
    No framework and no inline style: the panel is served with a strict content-security policy. */
 "use strict";
 
@@ -54,7 +54,7 @@ async function api(method, path, body) {
   return { ok: response.ok, status: response.status, data };
 }
 
-const errorText = code => (L["e_" + code] ? t("e_" + code) : String(code || "?"));
+const errorText = code => (L["e_" + code] ? t("e_" + code) : /^http_\d{3}$/.test(String(code)) ? t("e_http") + " " + String(code).slice(5) : String(code || "?"));
 const problemText = code => (L["p_" + code] ? t("p_" + code) : String(code));
 
 function pickLanguage(preferred) {
@@ -577,7 +577,7 @@ function portCard(index) {
         field("baudRate", base + "baud", { type: "select", number: true, options: [[0, t("baudKind", kind[2])]].concat(bauds.map(b => [b, String(b)])) })),
       el("div", { class: "row" }, field("deviceName", base + "name", { max: 32, hint: t("deviceNameHintSolar") }),
         cfg.kind === "raw" ? null : field("pollSeconds", base + "poll_s", { type: "number", min: 0, max: 3600, hint: t("pollHint") }),
-        cfg.kind === "pylontech" ? field("modulesLabel", base + "modules", { type: "number", min: 0, max: 8, hint: t("modulesHint") }) : null,
+        cfg.kind === "pylontech" ? field("modulesLabel", base + "modules", { type: "number", min: 0, max: 16, hint: t("modulesHint") }) : null,
         cfg.kind === "pylontech" ? field("cellsLabel", base + "cells_per_cycle", { type: "number", min: 0, max: 8, hint: t("cellsHint") }) : null,
         cfg.kind === "voltronic" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["pi30", t("dialectPi30")], ["revo", t("dialectRevo")], ["pi18", t("dialectPi18")]], hint: t("dialectHint") }) : null,
         cfg.kind === "voltronic" && (cfg.dialect === "auto" || cfg.dialect === "pi30") ? field("parallelLabel", base + "parallel", { type: "number", min: 0, max: 10, hint: t("parallelHint") }) : null),

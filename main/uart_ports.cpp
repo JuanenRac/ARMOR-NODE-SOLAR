@@ -18,6 +18,7 @@ extern "C" {
 #include "driver/gptimer.h"
 #include "driver/uart.h"
 #include "esp_attr.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
@@ -92,7 +93,9 @@ struct EdgeRecord {
 // What the interrupts share with the port's task: a ring of edges filled by the RX pin's interrupt, and the bits of the message being sent.
 struct SoftShared {
   static constexpr std::size_t kRing = 1024;
-  EdgeRecord ring[kRing];
+  // The interrupts read and write the ring while a flash write has the cache off, when the external RAM cannot be reached: it is taken from the chip's own memory (a ring of 16 KB in a
+  // plain allocation would be served from the external RAM, where this board's heap puts anything over 16 KB).
+  EdgeRecord* ring = nullptr;
   std::atomic<std::uint32_t> head{0}, tail{0};
   std::atomic<std::uint32_t> overruns{0};
   volatile bool sending = false;
@@ -152,12 +155,17 @@ class SoftPort final : public Port {
  public:
   explicit SoftPort(unsigned baud) : receiver_(baud), baud_(baud) {}
   ~SoftPort() override {
+    if (shared_.rx >= 0) gpio_isr_handler_remove(static_cast<gpio_num_t>(shared_.rx));
+    heap_caps_free(shared_.ring);
+    shared_.ring = nullptr;
     if (shared_.rx >= 0) { gpio_isr_handler_remove(static_cast<gpio_num_t>(shared_.rx)); gpio_reset_pin(static_cast<gpio_num_t>(shared_.rx)); }
     if (shared_.tx >= 0) gpio_reset_pin(static_cast<gpio_num_t>(shared_.tx));
     if (shared_.de >= 0) gpio_reset_pin(static_cast<gpio_num_t>(shared_.de));
   }
 
   bool start(const Options& o, std::string& error) {
+    shared_.ring = static_cast<EdgeRecord*>(heap_caps_calloc(SoftShared::kRing, sizeof(EdgeRecord), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    if (shared_.ring == nullptr) { error = "no_memory"; return false; }
     shared_.rx = o.rx; shared_.tx = o.tx; shared_.de = o.de;
     gpio_config_t input{};
     input.pin_bit_mask = 1ULL << o.rx;
@@ -208,7 +216,7 @@ class SoftPort final : public Port {
     const std::vector<bool> packed = softuart::message_bits(data, length);
     // The bits are held in a plain array the interrupt can read; vector<bool> is packed.
     const std::size_t total_bits = packed.size();
-    bool* copy = new (std::nothrow) bool[total_bits];
+    bool* copy = static_cast<bool*>(heap_caps_malloc(total_bits, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));   // the timer's interrupt reads it with the cache off
     if (copy == nullptr) return false;
     for (std::size_t i = 0; i < total_bits; ++i) copy[i] = packed[i];
     const std::uint64_t bit_us = 1000000ULL / baud_;
@@ -235,7 +243,7 @@ class SoftPort final : public Port {
     if (shared_.de >= 0) { esp_rom_delay_us(static_cast<std::uint32_t>(bit_us)); gpio_set_level(static_cast<gpio_num_t>(shared_.de), 0); }
     shared_.sending = false;
     shared_.bits = nullptr;
-    delete[] copy;
+    heap_caps_free(copy);
     // what came before, and what the transceiver heard of us, is not the answer
     shared_.tail.store(shared_.head.load(std::memory_order_acquire), std::memory_order_release);
     receiver_ = softuart::Receiver(baud_);

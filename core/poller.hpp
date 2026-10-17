@@ -135,6 +135,8 @@ class Poller {
 
   // Whether an exchange is under way (a request waits for its answer, or one is about to go out): a line shared with other ports keeps its channel on this one until it is over.
   bool busy() const { return step_ != Step::kIdle || !pending_.empty(); }
+  // Gives up an exchange that is under way (a shared line is taken from this port in the middle of it): what it had is dropped, so its next turn begins clean.
+  void abort(std::uint64_t now_ms) { if (busy()) abandon(now_ms); }
   // Whether the next cycle is due and nothing stands in its way (a reading not taken yet is not overwritten). A raw port never asks, so it is never due.
   bool due(std::uint64_t now_ms) const { return kind_ != config::Kind::kRaw && step_ == Step::kIdle && !ready_ && pending_.empty() && now_ms >= next_cycle_ms_; }
   // Whether a whole reading waits to be taken.

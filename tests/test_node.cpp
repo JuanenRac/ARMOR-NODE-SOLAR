@@ -405,6 +405,16 @@ static void test_pi18_pieces() {
   std::string two = kGs18;
   two.replace(two.find("0856,0000,1038,0000"), 19, "0400,0300,0900,1100");
   CHECK(voltronic::pi18::parse_gs(two, s) && s.pv_w == 700 && s.pv_v > 89.9 && s.pv_v < 90.1);
+  // a cold shed: the temperatures (fields 13 to 15) may be below zero; any other negative number is still not a status
+  {
+    std::vector<std::string> fields;
+    std::size_t from = 0;
+    for (std::size_t at; (at = std::string(kGs18).find(',', from)) != std::string::npos; from = at + 1) fields.push_back(std::string(kGs18).substr(from, at - from));
+    fields.push_back(std::string(kGs18).substr(from));
+    auto joined = [&](std::size_t index, const char* value) { std::string out; for (std::size_t i = 0; i < fields.size(); ++i) out += (i ? "," : "") + std::string(i == index ? value : fields[i]); return out; };
+    CHECK(voltronic::pi18::parse_gs(joined(13, "-005"), s) && s.heatsink_c == -5);
+    CHECK(!voltronic::pi18::parse_gs(joined(4, "-161"), s) && !voltronic::pi18::parse_gs(joined(12, "-001"), s));
+  }
   char mode = 0;
   CHECK(voltronic::pi18::parse_mod("00", mode) && mode == 'P' && voltronic::pi18::parse_mod("01", mode) && mode == 'S' && voltronic::pi18::parse_mod("03", mode) && mode == 'B' && voltronic::pi18::parse_mod("05", mode) && mode == 'L');
   CHECK(voltronic::pi18::parse_mod("04", mode) && mode == 'F' && !voltronic::pi18::parse_mod("06", mode) && !voltronic::pi18::parse_mod("0", mode) && !voltronic::pi18::parse_mod("1A", mode));
@@ -870,6 +880,11 @@ static void test_ant_settings_frames() {
   // a four-byte register
   const std::vector<std::uint8_t> wide = setting_response(0x00A2, 4, 280000000);
   CHECK(ant::decode_setting(wide.data(), wide.size(), address, raw) && address == 0x00A2 && raw == 280000000 && near(raw * 0.000001, 280.0, 0.001));
+  // the capacities of the new BMS are in micro-ampere-hours, the total of the cycles in milli-ampere-hours
+  for (std::size_t i = 0; i < ant::kRegisterCount; ++i) {
+    if (ant::kRegisters[i].address == 0x00A2 || ant::kRegisters[i].address == 0x00A6) CHECK(near(280000000 * ant::kRegisters[i].scale, 280.0, 0.001));
+    if (ant::kRegisters[i].address == 0x00AA) CHECK(near(1500000 * ant::kRegisters[i].scale, 1500.0, 0.001));
+  }
   // whatever is not a whole, checked answer is refused
   std::vector<std::uint8_t> bad = answer; bad[6] ^= 0x01;
   CHECK(!ant::decode_setting(bad.data(), bad.size(), address, raw));
@@ -1018,7 +1033,19 @@ static void test_pylontech_wake() {
   CHECK(asked_again && !woke_again);                                  // after an answer, no more bare Enter
 }
 
+// A port that loses the shared line in the middle of an exchange starts its next turn clean.
+static void test_abort_of_an_exchange() {
+  using namespace armor::solar;
+  Poller poller(config::Kind::kPylontech, "solar-1", "us3000-1", 10, 4);
+  CHECK(!poller.busy());
+  CHECK(!poller.next_tx(0).empty() && poller.busy());   // the first request is out: an answer is awaited
+  poller.abort(500);
+  CHECK(!poller.busy() && !poller.ready());
+  CHECK(!poller.due(1000) && poller.due(11000));        // its next cycle is a poll period away
+}
+
 int main() {
+  test_abort_of_an_exchange();
   test_pylontech_wake();
   test_bms_fields_in_messages();
   test_ant_temperature_cap();

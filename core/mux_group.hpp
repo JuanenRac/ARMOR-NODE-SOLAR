@@ -106,12 +106,16 @@ class MuxGroup {
         got_reading_ = true;
       }
     }
-    if (!poller.busy() || after - turn_started_ms_ > kMaxTurnMs) finish(out, !got_reading_);
+    const bool out_of_time = poller.busy() && after - turn_started_ms_ > kMaxTurnMs;
+    if (out_of_time) poller.abort(after);   // the line goes to the next port: this one starts its next turn clean, not with half an exchange and bytes of another channel
+    if (!poller.busy() || out_of_time) finish(out, !got_reading_);
     return out;
   }
 
   const std::vector<MuxMember>& members() const { return members_; }
   bool has_line() const { return current_ != kNone; }
+  // Something outside the group (the reading of a BMS's settings, the console) set the line's speed or channel: the next turn sets them again whatever it believes they are.
+  void invalidate_line() { configured_ = false; }
   std::uint32_t write_failures() const { return write_failures_; }
   std::size_t turns() const { return turns_; }
 

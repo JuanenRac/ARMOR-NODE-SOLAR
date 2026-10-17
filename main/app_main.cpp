@@ -1,5 +1,5 @@
 /*
- * ARMOR-SOLAR - ESP32-S3 solar gateway node (ESP32-S3-WROOM-1 N16R8, Wi-Fi only): reads solar inverters and batteries through up to ten serial ports and
+ * ARMOR-SOLAR - ESP32-S3 solar gateway node (ESP32-S3-WROOM-1 N16R8 on Wi-Fi, or the Waveshare ESP32-S3-ETH on its cable): reads solar inverters and batteries through up to ten serial ports and
  * publishes their readings to the A.R.M.O.R. server.
  * Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
  *
@@ -139,6 +139,8 @@ extern "C" void app_main() {
   if (setup) xTaskCreate(setup_reminder_task, "setup-hint", 3072, nullptr, 2, nullptr);
   bool button_is_a_pin = false;
   for (const armor::config::PortConfig& port : settings.ports) if (port.enabled && (port.rx == 0 || port.tx == 0 || port.de == 0)) button_is_a_pin = true;
+#if CONFIG_ARMOR_BOOT_FACTORY_RESET
   if (!button_is_a_pin) xTaskCreate(boot_button_task, "boot-button", 3072, nullptr, 2, nullptr);
+#endif
   xTaskCreate(confirm_firmware_task, "confirm", 3072, panel_ok ? reinterpret_cast<void*>(1) : nullptr, 2, nullptr);
 }

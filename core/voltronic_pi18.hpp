@@ -98,7 +98,8 @@ inline bool parse_gs(const std::string& payload, Status& out) {
   const std::vector<std::string> f = split_commas(payload);
   if (f.size() < 27) return false;
   double v[28] = {};
-  for (std::size_t i = 0; i < f.size() && i < 28; ++i) if (!detail::number(f[i], v[i]) || v[i] < 0) return false;
+  // the three temperatures (fields 13 to 15: the inverter's and the two chargers') may be below zero in a shed in winter; every other field is a size, a power or a code
+  for (std::size_t i = 0; i < f.size() && i < 28; ++i) if (!detail::number(f[i], v[i]) || (v[i] < 0 && !(i >= 13 && i <= 15))) return false;
   Status s;
   s.grid_v = v[0] / 10; s.grid_hz = v[1] / 10; s.out_v = v[2] / 10; s.out_hz = v[3] / 10;
   s.out_va = v[4]; s.out_w = v[5]; s.load_percent = v[6];
