@@ -13,6 +13,7 @@ All notable changes to this project are documented here.
 - A user change that could not be written is told as a storage error, the panel tells every error the node can answer with in the eight languages (a test fails when a new code has no text), the comments say eight languages, ten ports and both boards, and `secrets/node.conf.example` no longer carries a usable set-up code.
 - A build option turns off the reset by the BOOT button for a node in a place anyone can reach.
 - The documents say what the node does today: the Bluetooth pairing has a passkey and `pv_energy_total_wh` is provisional.
+- The Bluetooth note of the panel no longer calls the pairing *just works*: it says what the pairing asks for and what protects it.
 - Tests: 3,013 checks in ten programs plus the panel texts; new ones cover the negative temperatures, the units of the BMS settings and the abandoned exchange.
 - Shared with the other nodes (from ARMOR-COMMON's firmware base): updates are signed for the project, the board, the version and the hash (a node refuses an older image, another board's image and an address that is not the repository's), the pairing of Bluetooth closes after repeated failures, the random generator keeps away from the converter, a user write is all-or-nothing, a repeated key in a JSON document is refused, four-number firmware versions are understood, Improv over USB on a board with a cable also tells the node to use the Wi-Fi it was given, and the upload by hand is refused while an installation runs.
 
