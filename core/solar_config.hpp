@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "board_s3.hpp"
+#include "admin_sources.hpp"
 #include "json.hpp"
 #include "net_text.hpp"
 #include "node_id.hpp"
@@ -161,6 +162,7 @@ struct Settings {
   std::array<MuxGroup, kMuxGroups> mux;
   LedPins leds;
   WebMode web = WebMode::kBoth;
+  std::string admin_sources;   // the networks that may use the panel; empty = the private ranges of a house (see admin_sources.hpp)
   BleMode ble = BleMode::kSetup;   // "setup": only while the node has no user; "always"; "off": the Bluetooth stack is not even started
   std::string language = "en";
   // A periodic, unconditional restart (disconnect_before_restart() then esp_restart()), independent of any fault: 0 means never. One of
@@ -436,6 +438,11 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
   }
   if (const json::Value* web = document.get("web"); web != nullptr && web->is_object()) {
     if (!read_choice<WebMode>(*web, "mode", {{"http", WebMode::kHttp}, {"both", WebMode::kBoth}, {"https", WebMode::kHttps}}, s.web)) bad(problems, "web.mode", "invalid");
+    if (web->get("admin_sources") != nullptr) {
+      std::string sources = s.admin_sources;
+      read_text(*web, "admin_sources", sources, adminsrc::kMaxText, "web.admin_sources", problems);
+      if (!adminsrc::valid_list(sources)) bad(problems, "web.admin_sources", "invalid"); else s.admin_sources = sources;
+    }
   }
   if (const json::Value* ble = document.get("ble"); ble != nullptr && ble->is_object()) {
     if (!read_choice<BleMode>(*ble, "mode", {{"off", BleMode::kOff}, {"setup", BleMode::kSetup}, {"always", BleMode::kAlways}}, s.ble)) bad(problems, "ble.mode", "invalid");
@@ -673,7 +680,7 @@ inline std::string to_json(const Settings& s, bool secrets) {
   for (const MuxGroup& group : s.mux) w.begin_object().field("tx", group.tx).field("rx", group.rx).field("s0", group.s0).field("s1", group.s1).field("channels", group.channels).end_object();
   w.end_array();
   w.key("leds").begin_object().field("data", s.leds.data).field("clock", s.leds.clock).field("latch", s.leds.latch).field("led9", s.leds.led9).field("led10", s.leds.led10).end_object();
-  w.key("web").begin_object().field("mode", to_text(s.web)).end_object();
+  w.key("web").begin_object().field("mode", to_text(s.web)).field("admin_sources", s.admin_sources).end_object();
   w.key("ble").begin_object().field("mode", to_text(s.ble)).end_object();
   w.key("ui").begin_object().field("language", s.language).end_object();
   w.key("time").begin_object().field("ntp_enabled", s.time.ntp_enabled).field("ntp", s.time.ntp).field("zone", s.time.zone).end_object();
