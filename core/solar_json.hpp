@@ -39,6 +39,7 @@ struct InverterExtras {
   voltronic::Ratings ratings;
   bool has_energy = false;             // QET: the energy the panels have made in all, in Wh
   double energy_total_wh = 0;
+  bool warnings_unknown = false;       // the dialect cannot ask for the warnings (REVO): an empty list means "unknown", and the message says so
 };
 
 inline std::string inverter_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, char mode, const voltronic::Status& s,
@@ -56,6 +57,7 @@ inline std::string inverter_json(const std::string& node_id, const std::string& 
   w.key("warnings").begin_array();
   for (const std::string& name : warnings) w.string(name);
   w.end_array();
+  if (extras != nullptr && extras->warnings_unknown) w.field("warnings_known", false);
   if (pv2) w.key("pv2_v").number(extras->pv2.voltage_v, 1).key("pv2_a").number(extras->pv2.current_a, 1).key("pv2_w").number(extras->pv2.power_w, 0);
   if (extras != nullptr && !extras->units.empty()) {
     const voltronic::ParallelUnit& first = extras->units.front();   // the totals are those of the whole system, whichever unit says them

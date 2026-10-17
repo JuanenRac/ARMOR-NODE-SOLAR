@@ -159,7 +159,7 @@ class Poller {
     ready_ = false;
     topic = solar::topic(node_id_, device_);
     if (topic.empty()) return false;
-    if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
+    if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.warnings_unknown = dialect_ == Dialect::kRevo; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
     else payload = battery_json(node_id_, device_, wall_ms, modules_);   // a Pylontech stack or an ANT-BMS (one module)
     last_payload_ = payload;
     ++stats_.readings;

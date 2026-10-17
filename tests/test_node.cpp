@@ -1017,6 +1017,11 @@ static void test_bms_fields_in_messages() {
   CHECK(inverter_message.find("\"bus_v\":381.5") != std::string::npos);
   status.bus_v = 0;
   CHECK(armor::solar::inverter_json("solar-1", "axpert-1", 1000, 'L', status, {}).find("bus_v") == std::string::npos);
+  // a dialect that cannot ask for the warnings says so, so that an empty list is not read as "no warnings"
+  CHECK(armor::solar::inverter_json("solar-1", "axpert-1", 1000, 'L', status, {}).find("warnings_known") == std::string::npos);
+  armor::solar::InverterExtras revo_extras;
+  revo_extras.warnings_unknown = true;
+  CHECK(armor::solar::inverter_json("solar-1", "axpert-1", 1000, 'L', status, {}, &revo_extras).find("\"warnings_known\":false") != std::string::npos);
 }
 
 // The first `pwr` of a Pylontech port, and the first after a silence, is preceded by a bare Enter that wakes the console; the ones in between are not.
