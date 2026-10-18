@@ -32,6 +32,7 @@ extern "C" {
 #include "ble_provision.hpp"
 #include "clock_sync.hpp"
 #include "mqtt_link.hpp"
+#include "node_health.hpp"
 #include "network.hpp"
 #include "node_store.hpp"
 #include "solar_manager.hpp"
@@ -131,6 +132,15 @@ extern "C" void app_main() {
   armor::improv_serial::start();   // Improv Wi-Fi over the USB cable (ESP Web Tools)
   const bool panel_ok = network_ok && armor::web::start(settings);
   armor::mqtt_link::start(settings);
+  // The health report every node says about itself (uptime, why it restarted, memory, link, broker reconnects, the last error): armor/health/<node>, see ARMOR-COMMON node_health.schema.json.
+  if (!setup && settings.mqtt.enabled) {
+    armor::node_health::Options health;
+    health.node_id = settings.node_id;
+    health.family = "solar";
+    health.publish = [](const std::string& topic, const std::string& payload) { armor::mqtt_link::publish(topic, payload); };
+    health.connected = []() { return armor::mqtt_link::connected(); };
+    armor::node_health::start(health);
+  }
   armor::ble_provision::start(settings, setup);   // only when the settings say so: Bluetooth stays unused otherwise
 
   // A periodic, unconditional restart the panel can turn on (0: never) - a board left running for weeks without anyone touching it.
