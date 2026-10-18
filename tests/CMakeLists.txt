@@ -22,6 +22,13 @@ add_executable(test_console test_console.cpp)
 add_executable(emit_samples emit_samples.cpp)
 add_executable(emit_poller_samples emit_poller_samples.cpp)
 
+add_executable(test_limits test_limits.cpp)
+
+# rules shared with the other nodes (ARMOR-COMMON/firmware_base/tests); the _eth builds are the s3-eth board profile
+add_executable(test_shared test_shared.cpp)
+add_executable(test_shared_eth test_shared.cpp)
+target_compile_definitions(test_shared_eth PRIVATE ARMOR_BOARD_S3_ETH=1)
+
 enable_testing()
 add_test(NAME release COMMAND test_release)
 add_test(NAME mqtt_tls COMMAND test_mqtt_tls)
@@ -34,6 +41,9 @@ add_test(NAME ble COMMAND test_ble)
 add_test(NAME mux COMMAND test_mux)
 add_test(NAME parallel COMMAND test_parallel)
 add_test(NAME console COMMAND test_console)
+add_test(NAME shared COMMAND test_shared)
+add_test(NAME shared_eth COMMAND test_shared_eth)
+add_test(NAME limits COMMAND test_limits)
 
 # the panel's texts: eight languages in every row and a text for every error the firmware can answer with
 find_package(Python3 COMPONENTS Interpreter)
