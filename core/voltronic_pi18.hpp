@@ -115,6 +115,7 @@ inline bool parse_gs(const std::string& payload, Status& out) {
   s.charging = v[24] == 1;
   s.ac_charging = v[25] == 1;
   s.config_changed = v[20] == 1;
+  hold_limits(s);   // an absurd load or power is held at its limit, as for the other dialects, so the message still goes out
   out = s;
   return true;
 }

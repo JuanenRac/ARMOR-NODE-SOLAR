@@ -12,22 +12,12 @@
 
 static int failures = 0;
 static int checks = 0;
-static int known_gaps = 0;
 #define CHECK(condition)                                                              \
   do {                                                                                \
     ++checks;                                                                         \
     if (!(condition)) {                                                               \
       ++failures;                                                                     \
       std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #condition);                \
-    }                                                                                 \
-  } while (0)
-// A behaviour that is wanted and not there yet: it is reported, and it does not fail the run; when the behaviour arrives the check passes and the report goes away.
-#define KNOWN_GAP(condition)                                                          \
-  do {                                                                                \
-    ++checks;                                                                         \
-    if (!(condition)) {                                                               \
-      ++known_gaps;                                                                   \
-      std::printf("KNOWN GAP %s:%d  %s\n", __FILE__, __LINE__, #condition);           \
     }                                                                                 \
   } while (0)
 
@@ -231,12 +221,12 @@ static void test_absurd_values_are_held_at_the_limit() {
   std::string absurd = kGs18;
   absurd.replace(absurd.find("003,"), 4, "255,");
   CHECK(voltronic::pi18::parse_gs(absurd, pi18));
-  KNOWN_GAP(pi18.load_percent <= 200);
+  CHECK(pi18.load_percent <= 200);
   std::string huge = kGs18;
   huge.replace(huge.find("0161,"), 5, "99999999,");
   voltronic::Status huge_status;
   CHECK(voltronic::pi18::parse_gs(huge, huge_status));
-  KNOWN_GAP(huge_status.out_va <= 100000);
+  CHECK(huge_status.out_va <= 100000);
 }
 
 // ---- the other replies --------------------------------------------------------------------------------------------------------------------------
@@ -312,7 +302,7 @@ static void test_other_replies() {
 // ---- the broker password belongs to its broker ------------------------------------------------------------------------------------------------------
 
 // The password stored for a broker is that broker's: pointing the node at another host without typing a password must not send the stored one there, or a stolen panel session could read it
-// out by naming a broker of its own. The settings of the radar node do this; these settings do not yet.
+// out by naming a broker of its own. 
 static config::Problems read(config::Settings& s, const std::string& text) {
   armor::json::Value document;
   const bool ok = armor::json::parse(text, document);
@@ -331,11 +321,11 @@ static void test_password_follows_its_broker() {
   CHECK(read(typed, "{\"mqtt\":{\"uri\":\"mqtt://elsewhere.example\",\"password\":\"typed-pass\"}}").empty() && typed.mqtt.password == "typed-pass");
   config::Settings moved = s;
   CHECK(read(moved, "{\"mqtt\":{\"uri\":\"mqtt://elsewhere.example:1883\"}}").empty());
-  KNOWN_GAP(moved.mqtt.password.empty());
+  CHECK(moved.mqtt.password.empty());
   s.mqtt.backup = {{"mqtt://b1.local", "u1", "p1"}};
   config::Settings slot = s;
   CHECK(read(slot, "{\"mqtt\":{\"backup\":[{\"uri\":\"mqtt://elsewhere.example\",\"username\":\"u1\"}]}}").empty());
-  KNOWN_GAP(slot.mqtt.backup.size() == 1 && slot.mqtt.backup[0].password.empty());
+  CHECK(slot.mqtt.backup.size() == 1 && slot.mqtt.backup[0].password.empty());
 }
 
 int main() {
@@ -347,6 +337,6 @@ int main() {
   test_warning_bits();
   test_other_replies();
   test_password_follows_its_broker();
-  std::printf("%d checks, %d failures, %d known gaps\n", checks, failures, known_gaps);
+  std::printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }
