@@ -29,6 +29,7 @@ extern "C" {
 #include "core/admin_sources.hpp"
 #include "core/auth.hpp"
 #include "core/board_s3.hpp"
+#include "core/http_status.hpp"
 #include "core/netplan.hpp"
 #include "core/json.hpp"
 #include "core/web_policy.hpp"
@@ -80,25 +81,7 @@ std::uint64_t now_ms() { return static_cast<std::uint64_t>(esp_timer_get_time())
 
 // ---- answering -----------------------------------------------------------------------------------------------------------------
 
-const char* status_line(int code) {
-  switch (code) {
-    case 200: return "200 OK";
-    case 202: return "202 Accepted";   // the work was started; the answer comes later (the BMS settings, the console)
-    case 400: return "400 Bad Request";
-    case 401: return "401 Unauthorized";
-    case 403: return "403 Forbidden";
-    case 404: return "404 Not Found";
-    case 408: return "408 Request Timeout";
-    case 409: return "409 Conflict";
-    case 413: return "413 Payload Too Large";
-    case 422: return "422 Unprocessable Entity";
-    case 423: return "423 Locked";
-    case 429: return "429 Too Many Requests";
-    case 500: return "500 Internal Server Error";
-    case 503: return "503 Service Unavailable";
-    default: return "500 Internal Server Error";
-  }
-}
+using armor::http::status_line;
 
 void security_headers(httpd_req_t* r) {
   httpd_resp_set_hdr(r, "Cache-Control", "no-store");

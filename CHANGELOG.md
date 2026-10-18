@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.9] - Shared node base update
+
+- Shared base update: a wider login table, slot-sized download limit, stricter JSON text and a set-up code kept in capitals.
+- The status line of each answer of the panel's server lives in the core with a test that every code it uses has its own line.
+
 ## [0.4.8] - Stored passwords follow their host and a bounded PI18 reply
 
 - A stored password is tied to its host: changing the address of the broker (or of a backup broker slot) without typing a password erases the stored one instead of sending it to the new host, and the panel says under the field that the password has to be typed again. The same host (another port, other letter case) keeps it.

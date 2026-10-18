@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "../core/http_status.hpp"
 #include "../core/json.hpp"
 #include "../core/solar_config.hpp"
 #include "../core/voltronic.hpp"
@@ -328,7 +329,17 @@ static void test_password_follows_its_broker() {
   CHECK(slot.mqtt.backup.size() == 1 && slot.mqtt.backup[0].password.empty());
 }
 
+static void test_every_code_has_its_status_line() {
+  for (const int code : armor::http::kKnownCodes) {
+    const std::string line = armor::http::status_line(code);
+    CHECK(line.compare(0, 3, std::to_string(code)) == 0);                     // the line starts with its own code
+    CHECK(line.size() > 4 && line[3] == ' ');
+  }
+  CHECK(std::string(armor::http::status_line(999)) == "500 Internal Server Error");
+}
+
 int main() {
+  test_every_code_has_its_status_line();
   test_damaged_replies_are_refused();
   test_revo_checksum_that_looks_like_the_end();
   test_pi18_damage();
