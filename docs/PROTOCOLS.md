@@ -65,6 +65,14 @@ Models the firmwares are known under: US2000 / US2000B, US2000C, US2000B Plus, U
  The stack summary uses what physics says of a parallel stack: the same voltage (so the mean), currents that add, the extreme temperatures and cell
 voltages, the mean state of charge. Any state column other than `Normal` raises `alarm`.
 
+### Writing (off by default, a separate capability)
+
+The panel's one-question console stays read-only. The node can also write to a battery's console when the owner turns that on, as the maker's own tool does, but only through typed operations
+(`core/battery_ops.hpp`) and a console session that logs in with the battery's service password (a setting of the node): `logout`, then `login <password>` (the prompt changes from `pylon>` to
+`pylon_debug>`), then the lines of the operation, each waiting for its prompt and for `Command completed successfully` or `Test result:pass`. A line the battery refuses answers `Invalid command or fail to excute.`
+or `Unknown command`; `trst` returns the console to the user mode, so the run logs in again. The firmware transfer after `updata` is XMODEM-1K with a CRC-16 (`core/xmodem.hpp`). Everything about it is in
+[BATTERY_MAINTENANCE.md](BATTERY_MAINTENANCE.md), and none of it has run against a real battery.
+
 ## ANT-BMS
 
 The ANT battery management system (the black board of many home-made LiFePO4 packs, 7S to 32S, from 100 A to 320 A) has a 4-pin JST connector with **3.3 V TTL

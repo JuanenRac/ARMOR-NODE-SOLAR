@@ -42,6 +42,10 @@ struct Slot {
   // the console question asked from the panel
   std::atomic<bool> console_requested{false};
   ConsoleStatus console;
+  // a battery maintenance job (core/battery_ops.hpp), handed over by battery_maintenance.cpp and run by the port's task
+  std::atomic<bool> battery_requested{false};
+  std::shared_ptr<BatteryJob> battery_job;
+  bool battery_running = false;
 };
 std::array<Slot, config::kPortCount> g_slots;
 Publish g_publish;
@@ -107,6 +111,32 @@ void run_console(Slot& slot, Line& port) {
   slot.console.truncated = probe.truncated();
 }
 
+// Runs the battery maintenance job that was handed over, line by line, and tells how it went. The port's readings wait meanwhile (this is the port's own task). Nothing here
+// has run on a board; the plan and the runner are tested on a computer against a simulated console.
+template <class Line>
+void run_battery(Slot& slot, Line& port) {
+  std::shared_ptr<BatteryJob> job;
+  { std::lock_guard<std::mutex> guard(slot.lock); job = slot.battery_job; }
+  if (!job) return;
+  const std::unique_ptr<solar::battery::Runner> runner = std::make_unique<solar::battery::Runner>(job->plan, job->secret, job->image ? job->image.get() : nullptr);
+  runner->start(uptime_ms());
+  std::uint8_t buffer[256];
+  std::uint64_t last_progress_ms = uptime_ms();
+  while (!runner->finished()) {
+    if (job->cancel.load()) runner->cancel();
+    job->committed = runner->committed();
+    const std::vector<std::uint8_t> request = runner->next_tx(uptime_ms());
+    if (!request.empty() && !port.write(request.data(), request.size())) ESP_LOGW(kTag, "port %u: a maintenance line could not be sent", static_cast<unsigned>(slot.index + 1));
+    const std::size_t n = port.read(buffer, sizeof buffer, 20);
+    if (n > 0) runner->on_rx(buffer, n, uptime_ms());
+    const std::uint64_t now = uptime_ms();
+    if (job->on_progress && now - last_progress_ms >= 2000) { last_progress_ms = now; job->on_progress(runner->result()); }
+  }
+  const solar::battery::RunResult result = runner->result();
+  { std::lock_guard<std::mutex> guard(slot.lock); slot.battery_running = false; slot.battery_job.reset(); }
+  if (job->on_done) job->on_done(result);
+}
+
 void port_task(void* argument) {
   Slot& slot = *static_cast<Slot*>(argument);
   const config::PortConfig& cfg = slot.config;
@@ -136,6 +166,7 @@ void port_task(void* argument) {
   for (;;) {
     if (slot.settings_requested.exchange(false)) run_bms_settings(slot, *port);
     if (slot.console_requested.exchange(false)) run_console(slot, *port);
+    if (slot.battery_requested.exchange(false)) run_battery(slot, *port);
     const std::uint64_t now = uptime_ms();
     const std::vector<std::uint8_t> request = poller.next_tx(now);
     if (!request.empty() && !port->write(request.data(), request.size())) ESP_LOGW(kTag, "port %u: the request could not be sent", static_cast<unsigned>(slot.index + 1));
@@ -225,6 +256,16 @@ void group_task(void* argument) {
         line->configure(m.baud, m.invert);
         line->discard();
         run_console(slot, *line);
+        group->invalidate_line();
+      }
+      for (std::size_t k = 0; k < job.ports.size(); ++k) {
+        Slot& slot = g_slots[job.ports[k]];
+        if (!slot.battery_requested.exchange(false)) continue;
+        const solar::MuxMember& m = group->members()[k];
+        line->select(m.channel);
+        line->configure(m.baud, m.invert);
+        line->discard();
+        run_battery(slot, *line);
         group->invalidate_line();
       }
     }
@@ -352,6 +393,51 @@ PortStatus status(std::size_t index) {
   Slot& slot = g_slots[index];
   std::lock_guard<std::mutex> guard(slot.lock);
   return slot.status;
+}
+
+BatteryPortFacts battery_port_facts(std::size_t index) {
+  BatteryPortFacts facts;
+  if (index >= config::kPortCount) return facts;
+  Slot& slot = g_slots[index];
+  std::string payload;
+  {
+    std::lock_guard<std::mutex> guard(slot.lock);
+    facts.pylontech = slot.status.enabled && slot.status.kind == "pylontech";
+    payload = slot.status.last_payload;
+  }
+  if (!facts.pylontech || payload.empty()) return facts;
+  json::Value reading;
+  if (!json::parse(payload, reading) || reading.string_or("kind", "") != "battery") return facts;
+  const json::Value* stack = reading.get("stack");
+  if (stack == nullptr || !stack->is_array() || stack->items.empty()) return facts;
+  // the console answers for the module it is connected to (the first of the stack)
+  const json::Value& first = stack->items.front();
+  facts.present = first.bool_or("present", false);
+  facts.current_ma = static_cast<long>(first.number_or("current_a", 0.0) * 1000.0);
+  facts.critical_alarm = reading.bool_or("alarm", false);
+  return facts;
+}
+
+std::string start_battery_job(std::size_t index, std::shared_ptr<BatteryJob> job) {
+  if (index >= config::kPortCount) return "no_port";
+  if (!job) return "no_port";
+  Slot& slot = g_slots[index];
+  std::lock_guard<std::mutex> guard(slot.lock);
+  if (!slot.status.enabled || slot.status.kind != "pylontech") return "not_pylontech";
+  if (slot.battery_running || slot.battery_job) return "busy";
+  slot.battery_job = std::move(job);
+  slot.battery_running = true;
+  slot.battery_requested = true;
+  return "";
+}
+
+bool cancel_battery_job(std::size_t index) {
+  if (index >= config::kPortCount) return false;
+  Slot& slot = g_slots[index];
+  std::lock_guard<std::mutex> guard(slot.lock);
+  if (!slot.battery_job || slot.battery_job->committed.load()) return false;
+  slot.battery_job->cancel = true;
+  return true;
 }
 
 std::string raw_dump(std::size_t index) {

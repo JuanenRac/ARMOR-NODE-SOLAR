@@ -30,6 +30,7 @@ extern "C" {
 #include "log_buffer.hpp"
 #include "improv_serial.hpp"
 #include "ble_provision.hpp"
+#include "battery_maintenance.hpp"
 #include "clock_sync.hpp"
 #include "mqtt_link.hpp"
 #include "node_health.hpp"
@@ -131,6 +132,7 @@ extern "C" void app_main() {
   armor::clocksync::start(settings);
   armor::improv_serial::start();   // Improv Wi-Fi over the USB cable (ESP Web Tools)
   const bool panel_ok = network_ok && armor::web::start(settings);
+  if (!setup) armor::maintenance::start(settings);   // subscribes before the broker link starts
   armor::mqtt_link::start(settings);
   // The health report every node says about itself (uptime, why it restarted, memory, link, broker reconnects, the last error): armor/health/<node>, see ARMOR-COMMON node_health.schema.json.
   if (!setup && settings.mqtt.enabled) {

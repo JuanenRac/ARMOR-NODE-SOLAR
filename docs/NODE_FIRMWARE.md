@@ -98,6 +98,14 @@ A Pylontech port's card in the panel has a small tool for an administrator: it s
 **The dump of what a port heard.** *Show what it hears* on a port shows the last bytes the port received as hexadecimal lines with the printable characters beside them, and an administrator can **download it as a text file**: it is how another battery model is diagnosed without a computer.
 Only an administrator can ask the node for it (the dump can hold a serial number). A Pylontech port that stays silent shows a hint that the battery **may be asleep** (how to wake it, the pins of the cable and the speeds to try), and the port's speed list says which speed is for the console and which for the RS485 protocol.
 
+## Writing to a battery (off by default)
+
+The one-question console above only reads. Changing what a Pylontech battery keeps (its clock, counters, limits, outputs, serial number, firmware) is a separate capability, **off unless the owner
+turns it on** in the node (Network page of the panel, *Battery maintenance*: the switch and the battery's service password, which is kept only here), in the server (`ARMOR_BATTERY_WRITE=1`) and in
+the broker's access list. It does not go through the panel at all: the server sends the node typed orders on `armor/solar/<node>/maintenance/command` and the node answers on `.../result`
+(ARMOR-COMMON `docs/CONTRACTS.md`). How it works, what is checked first and what each operation sends: [BATTERY_MAINTENANCE.md](BATTERY_MAINTENANCE.md). **Untried on a real battery**: the staged plan
+for a spare one is [BATTERY_BENCH_TEST_PLAN.md](BATTERY_BENCH_TEST_PLAN.md).
+
 ## The base board with multiplexers (the *mux* profile)
 
 The three hardware UARTs are all a node has for the Pylontech console (115200 baud is beyond the emulated ports), so the base board with **ten RJ45 sockets** (eight for batteries, two for inverters) puts a **74HC4052** multiplexer in front of each UART and a **MAX3232** on every pair of ports. The setting *Ports of the node* (Ports page, `profile` in the settings) chooses between the two ways of using the pins: **direct** (the default: ten ports, each with its own pins, as before) and **mux** (the eight ports of that board).

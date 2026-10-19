@@ -2,13 +2,43 @@
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #pragma once
 #include <cstddef>
+#include <atomic>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
+#include <vector>
 
+#include "core/battery_ops.hpp"
+#include "core/battery_runner.hpp"
 #include "core/solar_config.hpp"
 
 namespace armor::manager {
+
+// A job on a Pylontech battery's console (core/battery_ops.hpp), run by the port's own task: the port's readings wait while it runs. The plan is the checked one; the password is the node's
+// own setting. `on_done` is called by the port's task when the job ends, `on_progress` now and then while it runs.
+struct BatteryJob {
+  solar::battery::Plan plan;
+  std::string secret;
+  std::shared_ptr<const std::vector<std::uint8_t>> image;   // a firmware update's image, staged beforehand
+  std::atomic<bool> cancel{false};          // asked to stop (honoured between two steps, and never in the middle of a sequence that must not be cut)
+  std::atomic<bool> committed{false};       // the port's task says: from now on it cannot be cancelled
+  std::function<void(const solar::battery::RunResult&)> on_done;
+  std::function<void(const solar::battery::RunResult&)> on_progress;
+};
+
+// What the port knows about its battery from its last reading, for the preconditions of a write.
+struct BatteryPortFacts {
+  bool pylontech = false;
+  bool present = false;
+  bool critical_alarm = false;
+  long current_ma = 0;
+};
+BatteryPortFacts battery_port_facts(std::size_t index);
+// Hands a job to the port (0 to 9). Returns "" when it was accepted, or why not: no_port, not_pylontech, busy.
+std::string start_battery_job(std::size_t index, std::shared_ptr<BatteryJob> job);
+// Asks the job running on the port to stop. False when there is none or it can no longer be cancelled.
+bool cancel_battery_job(std::size_t index);
 
 using Publish = std::function<void(const std::string& topic, const std::string& payload)>;
 

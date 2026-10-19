@@ -333,6 +333,8 @@ function networkPage() {
     card(t("systemTitle"), field("autoRestart", "system.auto_restart_hours", { type: "select", number: true,
       options: [[0, t("autoRestartNever")], [1, t("autoRestart1")], [2, t("autoRestart2")], [3, t("autoRestart3")], [4, t("autoRestart4")], [6, t("autoRestart6")], [12, t("autoRestart12")], [24, t("autoRestart24")], [48, t("autoRestart48")]] }),
       note(t("autoRestartNote"), "info")),
+    isAdmin() ? card(t("batteryTitle"), field("batteryWrite", "battery.write_enabled", { type: "checkbox" }),
+      field("batteryPassword", "battery.service_password", { type: "password", hint: t("batteryPasswordHint") }), note(t("batteryNote"), "info")) : null,
     isAdmin() ? card(t("configBackupTitle"),
       el("div", { class: "row" },
         el("button", { class: "b", tip: "exportConfig", onclick: exportConfig }, t("exportConfig")),

@@ -152,6 +152,13 @@ struct Clock {
   std::string zone = "UTC0";
 };
 
+// Writing to the batteries (core/battery_ops.hpp). OFF unless the owner turns it on; the battery's service password is a secret like the others: stored here,
+// never written to the panel (which only learns that there is one), never in a log or an answer.
+struct BatteryWrite {
+  bool enabled = false;
+  std::string service_password;
+};
+
 struct Settings {
   std::string node_id;
   std::string node_name;
@@ -173,6 +180,7 @@ struct Settings {
   // A periodic, unconditional restart (disconnect_before_restart() then esp_restart()), independent of any fault: 0 means never. One of
   // {0, 1, 2, 3, 4, 6, 12, 24, 48} hours (auto_restart_hours_is_valid()).
   int auto_restart_hours = 0;
+  BatteryWrite battery;
 };
 
 struct Problem {
@@ -482,6 +490,10 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
   }
   if (const json::Value* ui = document.get("ui"); ui != nullptr && ui->is_object()) read_text(*ui, "language", s.language, 4, "ui.language", problems);
   if (const json::Value* system = document.get("system"); system != nullptr && system->is_object()) read_int(*system, "auto_restart_hours", s.auto_restart_hours, 0, 48, "system.auto_restart_hours", problems);
+  if (const json::Value* battery = document.get("battery"); battery != nullptr && battery->is_object()) {
+    read_bool(*battery, "write_enabled", s.battery.enabled, "battery.write_enabled", problems);
+    read_secret(*battery, "service_password", s.battery.service_password, "battery.service_password", problems);
+  }
 }
 
 // ---- checking ------------------------------------------------------------------------------------------------------------------
@@ -551,6 +563,8 @@ inline Problems validate(const Settings& s) {
   else if (!net::valid_utf8(s.node_name, &name_characters) || name_characters > 48) bad(problems, "node.name", "invalid");
   if (!language_is_known(s.language)) bad(problems, "ui.language", "invalid");
   if (!auto_restart_hours_is_valid(s.auto_restart_hours)) bad(problems, "system.auto_restart_hours", "invalid");
+  if (s.battery.enabled && s.battery.service_password.empty()) bad(problems, "battery.service_password", "required");
+  for (const char c : s.battery.service_password) if (static_cast<unsigned char>(c) < 0x21 || static_cast<unsigned char>(c) > 0x7E) { bad(problems, "battery.service_password", "invalid"); break; }
   if (!s.hostname.empty() && !net::valid_hostname(s.hostname)) bad(problems, "node.hostname", "invalid");
 
   // the way in: the Ethernet cable (only the s3-eth board has one), with DHCP or a fixed address, or Wi-Fi
@@ -714,6 +728,9 @@ inline std::string to_json(const Settings& s, bool secrets) {
   w.key("ui").begin_object().field("language", s.language).end_object();
   w.key("time").begin_object().field("ntp_enabled", s.time.ntp_enabled).field("ntp", s.time.ntp).field("zone", s.time.zone).end_object();
   w.key("system").begin_object().field("auto_restart_hours", s.auto_restart_hours).end_object();
+  w.key("battery").begin_object().field("write_enabled", s.battery.enabled);
+  if (secrets) w.field("service_password", s.battery.service_password); else w.field("service_password_set", !s.battery.service_password.empty());
+  w.end_object();
   w.end_object();
   return w.str();
 }
