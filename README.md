@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.5.2-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.3-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Version | `0.5.2` |
+| Version | `0.5.3` |
 | Maturity | Functional |
 | Tests | 9,319 checks in 14 programs (`ctest`) |
 | Stack | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
@@ -59,6 +59,7 @@
 * **Only the house may use the panel:** the panel answers the private network by default (or the networks its owner lists, such as a VPN), refuses a list that would lock out whoever saves it, counts wrong passwords for each person as well as each address, and works behind the server's proxy so that it can be reached from outside the house without publishing the node.**Unknown is not none:** a REVO inverter has no warning query, so its message carries `warnings_known: false` and Studio shows the warnings as unknown instead of "none".
 * **Optional encrypted link to the broker (TLS):** off by default, so the node talks plain MQTT as before. A switch and a box for the certificate of the installation's own authority (PEM, at most 2 KB) in the Broker page make it connect with `mqtts://`, trust that authority only and check that the broker's certificate was made for the address it reached; anything that is not one PEM certificate is refused. Covered by host tests; the handshake has not been run on a board yet.
 * **Health report:** about once a minute the node publishes how long it has been up and why it last restarted, its free memory, its link and Wi-Fi signal, how many times it connected to the broker and the last error it logged (`armor/health/<node>`, the `node_health` contract of ARMOR-COMMON). The code that builds it is shared by every node and tested on a computer; it has not run on a board.
+* **Control from the server:** Studio can restart the node cleanly, pause it for up to an hour (it resumes by itself), put its work in standby (no end, kept across restarts, the node stays connected and keeps answering), make it show itself, ask for a diagnostics snapshot and mark it as in maintenance (`armor/control/<node>/...`, the `node_control` contract of ARMOR-COMMON). Every order takes two steps with a one-time token that belongs to that operation, only the server may write them on the broker, and there is no factory reset, no erase and no deep sleep. While the node is paused or in standby it writes no battery (a running operation can still be cancelled) and keeps reading the inverters and batteries. The code is shared by every node and tested on a computer; it has not run on a board.
 * **Writing to Pylontech batteries (off by default):** typed operations only - clock, counters and logs, restart, capacity, the reset of the charge level, limits and protections, outputs, serial number, external memory, firmware by XMODEM-1K and an expert console with a block list - in two steps (arm, then execute with a one-time token), with the battery read before and after, the service password kept only in the node and a simulated console for the tests. Untried on a real battery: see the [bench test plan](docs/BATTERY_BENCH_TEST_PLAN.md).
 
 ## 🖼️ Screenshots

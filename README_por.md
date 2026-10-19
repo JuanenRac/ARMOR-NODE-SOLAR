@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.5.2-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.3-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Versão | `0.5.2` |
+| Versão | `0.5.3` |
 | Maturidade | Funcional |
 | Testes | 9,319 checks in 14 programs (`ctest`) |
 | Tecnologia | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
@@ -59,6 +59,7 @@
 * **Só a casa pode usar o painel:** o painel responde por omissão à rede privada (ou às redes que o dono indicar, como uma VPN), recusa uma lista que deixaria de fora quem a guarda, conta as palavras-passe erradas por pessoa e por endereço e funciona atrás do proxy do servidor para ser alcançado de fora de casa sem publicar o nó.**Desconhecido não é nenhum:** um inversor REVO não tem consulta de avisos, por isso a sua mensagem leva `warnings_known: false` e o Studio mostra os avisos como desconhecidos em vez de "nenhum".
 * **Ligação cifrada opcional ao broker (TLS):** desativada por predefinição, por isso o nó fala MQTT sem cifra como antes. Um interruptor e uma caixa para o certificado da autoridade própria da instalação (PEM, no máximo 2 KB) na página Broker fazem-no ligar-se com `mqtts://`, confiar só nessa autoridade e verificar que o certificado do broker foi feito para o endereço alcançado; o que não for um único certificado PEM é recusado. Coberto por testes no computador; o handshake ainda não foi executado numa placa.
 * **Relatório de saúde:** cerca de uma vez por minuto o nó publica há quanto tempo está ligado e porque reiniciou da última vez, a memória livre, a ligação e o sinal Wi-Fi, quantas vezes se ligou ao broker e o último erro que registou (`armor/health/<nó>`, o contrato `node_health` do ARMOR-COMMON). O código que o constrói é partilhado por todos os nós e testado num computador; nunca correu numa placa.
+* **Controlo a partir do servidor:** o Studio pode reiniciar o nó de forma limpa, pô-lo em pausa até uma hora (retoma sozinho), pôr o seu trabalho em espera (sem fim, mantida nos reinícios, o nó continua ligado e a responder), fazê-lo mostrar-se, pedir um instantâneo de diagnóstico e marcá-lo em manutenção (`armor/control/<nó>/...`, o contrato `node_control` do ARMOR-COMMON). Cada ordem tem dois passos com um token de uso único que pertence a essa operação, só o servidor as pode escrever no broker, e não existe reposição de fábrica, apagamento nem sono profundo. Enquanto o nó está em pausa ou em espera, não escreve em nenhuma bateria (uma operação em curso ainda pode ser cancelada) e continua a ler inversores e baterias. O código é partilhado por todos os nós e testado num computador; ainda não correu numa placa.
 * **Escrita em baterias Pylontech (desligada por omissão):** só operações tipificadas - relógio, contadores e registos, reinício, capacidade, a reposição do nível de carga, limites e proteções, saídas, número de série, memória externa, firmware por XMODEM-1K e uma consola de especialista com lista de bloqueio - em dois passos (preparar e executar com um token de uso único), lendo a bateria antes e depois, com a palavra-passe de serviço guardada só no nó e uma consola simulada para os testes. Não experimentado numa bateria real: veja o [plano de testes de bancada](docs/BATTERY_BENCH_TEST_PLAN.md).
 
 ## 🖼️ Capturas de ecrã

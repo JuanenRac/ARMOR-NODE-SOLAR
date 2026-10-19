@@ -27,6 +27,7 @@ add_executable(test_limits test_limits.cpp)
 
 # rules shared with the other nodes (ARMOR-COMMON/firmware_base/tests); the _eth builds are the s3-eth board profile
 add_executable(test_shared test_shared.cpp)
+add_executable(test_control test_control.cpp)
 add_executable(test_shared_eth test_shared.cpp)
 target_compile_definitions(test_shared_eth PRIVATE ARMOR_BOARD_S3_ETH=1)
 
@@ -44,6 +45,7 @@ add_test(NAME parallel COMMAND test_parallel)
 add_test(NAME console COMMAND test_console)
 add_test(NAME battery_write COMMAND test_battery_write)
 add_test(NAME shared COMMAND test_shared)
+add_test(NAME control COMMAND test_control ${CMAKE_CURRENT_SOURCE_DIR}/../../ARMOR-COMMON/conformance)
 add_test(NAME shared_eth COMMAND test_shared_eth)
 add_test(NAME limits COMMAND test_limits)
 

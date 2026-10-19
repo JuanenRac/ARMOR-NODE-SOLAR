@@ -9,4 +9,7 @@ namespace armor::maintenance {
 // battery.write_enabled is off or the battery's service password is not set.
 void start(const config::Settings& settings);
 
+// Whether an operation on a battery is under way (the node does not restart in the middle of one).
+bool busy();
+
 }  // namespace armor::maintenance

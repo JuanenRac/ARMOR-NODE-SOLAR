@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.5.2-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.3-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Version | `0.5.2` |
+| Version | `0.5.3` |
 | Maturité | Fonctionnel |
 | Tests | 9,319 checks in 14 programs (`ctest`) |
 | Technologie | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
@@ -59,6 +59,7 @@
 * **Seule la maison peut utiliser le panneau :** le panneau répond par défaut au réseau privé (ou aux réseaux que son propriétaire indique, comme un VPN), refuse une liste qui exclurait celui qui l'enregistre, compte les mauvais mots de passe par personne et par adresse, et fonctionne derrière le proxy du serveur pour être atteint depuis l'extérieur sans publier le nœud.**Inconnu ne veut pas dire aucun :** un onduleur REVO n'a pas de requête d'avertissements, son message porte donc `warnings_known: false` et Studio affiche les avertissements comme inconnus et non comme "aucun".
 * **Liaison chiffrée facultative avec le broker (TLS) :** désactivée par défaut, le nœud parle donc MQTT non chiffré comme avant. Un interrupteur et une zone pour le certificat de l'autorité propre à l'installation (PEM, 2 Ko au plus) dans la page Broker lui font se connecter en `mqtts://`, ne faire confiance qu'à cette autorité et vérifier que le certificat du broker a été établi pour l'adresse atteinte ; ce qui n'est pas un seul certificat PEM est refusé. Couvert par des tests sur ordinateur ; la poignée de main n'a pas encore été exécutée sur une carte.
 * **Rapport de santé :** environ une fois par minute le nœud publie depuis combien de temps il tourne et pourquoi il a redémarré la dernière fois, sa mémoire libre, sa liaison et son signal Wi-Fi, combien de fois il s'est connecté au broker et la dernière erreur notée (`armor/health/<nœud>`, le contrat `node_health` d'ARMOR-COMMON). Le code qui le construit est partagé par tous les nœuds et testé sur un ordinateur ; il n'a pas tourné sur une carte.
+* **Commande depuis le serveur :** Studio peut redémarrer le nœud proprement, le mettre en pause jusqu'à une heure (il reprend seul), mettre son travail en veille (sans fin, conservée aux redémarrages, le nœud reste connecté et continue de répondre), le faire se signaler, demander un instantané de diagnostic et le marquer en maintenance (`armor/control/<nœud>/...`, le contrat `node_control` d'ARMOR-COMMON). Chaque ordre se fait en deux temps avec un jeton à usage unique propre à cette opération, seul le serveur peut les écrire sur le broker, et il n'existe ni réinitialisation d'usine, ni effacement, ni sommeil profond. Tant que le nœud est en pause ou en veille, il n'écrit dans aucune batterie (une opération en cours peut encore être annulée) et continue de lire onduleurs et batteries. Le code est partagé par tous les nœuds et testé sur un ordinateur ; il n'a pas tourné sur une carte.
 * **Écriture sur les batteries Pylontech (désactivée par défaut) :** uniquement des opérations typées - horloge, compteurs et journaux, redémarrage, capacité, la réinitialisation du niveau de charge, limites et protections, sorties, numéro de série, mémoire externe, firmware par XMODEM-1K et une console expert avec liste de blocage - en deux étapes (préparer, puis exécuter avec un jeton à usage unique), la batterie étant lue avant et après, le mot de passe de service gardé seulement dans le nœud et une console simulée pour les tests. Non essayé sur une vraie batterie : voir le [plan d'essais sur banc](docs/BATTERY_BENCH_TEST_PLAN.md).
 
 ## 🖼️ Captures d'écran

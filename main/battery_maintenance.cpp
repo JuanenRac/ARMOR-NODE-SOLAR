@@ -24,6 +24,7 @@ extern "C" {
 #include "core/json.hpp"
 #include "entropy.hpp"
 #include "mqtt_link.hpp"
+#include "node_control.hpp"
 #include "solar_manager.hpp"
 
 namespace armor::maintenance {
@@ -339,6 +340,7 @@ void handle(const std::string& payload) {
   if (ctx.command_id.size() < 8 || ctx.command_id.size() > 32 || ctx.port == 0) return;   // not an order this node can answer
   for (char c : ctx.command_id) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z'))) return;
   if (!g_enabled) { reject(ctx, bat::refusal::kDisabled); return; }
+  if (!node_control::working() && ctx.action != "cancel") { reject(ctx, bat::refusal::kDisabled); return; }   // paused or in standby by the server's order: no battery is written (a running operation can still be cancelled)
   if (g_password.empty()) { reject(ctx, bat::refusal::kNoPassword); return; }
   if (ctx.action == "stage") { stage(ctx, in); return; }
   if (ctx.action == "cancel") {
@@ -362,6 +364,12 @@ void on_message(const std::string& topic, const std::string& payload) {
   post([payload] { handle(payload); });
 }
 }  // namespace
+
+bool busy() {
+  std::lock_guard<std::mutex> guard(g_lock);
+  for (int port = 1; port <= bat::Guard::kPorts; ++port) if (g_guard.busy(port)) return true;
+  return false;
+}
 
 void start(const config::Settings& settings) {
   g_node = settings.node_id;

@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.3] - Control the nodes from the server: restart, pause, standby, identify, diagnostics and maintenance
+
+- **The server can control the node:** restart, pause, resume, standby (kept across restarts, the node stays connected), identify, diagnostics and maintenance on and off, on `armor/control/<node>/command`, with a one-time token bound to the operation; there is no factory reset, no erase and no deep sleep. While the node is paused or in standby it refuses every battery write (a running operation can still be cancelled), and restart, pause and standby wait for a battery operation to end. The health report says what the node is doing. Rules and host tests are shared with the other nodes; nothing of it has run on a board.
+- **Planned maintenance:** before the node goes quiet on purpose (a restart, a pause, a standby, a firmware install or copy, a panel upload) it publishes a retained `armor/control/<node>/maintenance` message (`node_maintenance`: active, why and for how long) so that the server holds back the node-offline alert for a bounded time, and clears it (retained too) when it is back; a node that boots into standby keeps saying so until it is resumed, and a window that is never closed ends by itself. The pure parts are in `control_gate.hpp` with host tests; nothing of this has run on a board.
+
 ## [0.5.2] - Write to Pylontech batteries through typed operations, off by default
 
 - **Writing to Pylontech batteries, off by default:** the node can do through a battery's console most of what the maker's own tool does - set its clock, clear its counters and logs, restart and shut it down, write its capacity, reset its charge level, change its limits and protections (a whole group at a time, inside the ranges the tool states), switch its outputs, write its serial number, erase its external memory and send it firmware - but only as typed operations, never as a free command (the expert console has a block list). Orders arrive on `armor/solar/<node>/maintenance/command` and are answered on `.../result`.

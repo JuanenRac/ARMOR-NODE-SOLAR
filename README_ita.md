@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.5.2-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.3-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Versione | `0.5.2` |
+| Versione | `0.5.3` |
 | Maturità | Funzionale |
 | Test | 9,319 checks in 14 programs (`ctest`) |
 | Tecnologia | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
@@ -59,6 +59,7 @@
 * **Solo la casa può usare il pannello:** il pannello risponde per impostazione predefinita alla rete privata (o alle reti indicate dal proprietario, come una VPN), rifiuta un elenco che escluderebbe chi lo salva, conta le password errate per persona e per indirizzo e funziona dietro il proxy del server per essere raggiunto da fuori casa senza pubblicare il nodo.**Sconosciuto non è nessuno:** un inverter REVO non ha una richiesta degli avvisi, quindi il suo messaggio porta `warnings_known: false` e Studio mostra gli avvisi come sconosciuti invece di "nessuno".
 * **Collegamento cifrato facoltativo con il broker (TLS):** disattivato per impostazione predefinita, quindi il nodo parla MQTT non cifrato come prima. Un interruttore e una casella per il certificato dell'autorità propria dell'installazione (PEM, al massimo 2 KB) nella pagina Broker lo fanno collegare con `mqtts://`, fidarsi solo di quell'autorità e verificare che il certificato del broker sia stato fatto per l'indirizzo raggiunto; ciò che non è un solo certificato PEM viene rifiutato. Coperto da test sul computer; l'handshake non è ancora stato eseguito su una scheda.
 * **Rapporto di salute:** circa una volta al minuto il nodo pubblica da quanto è acceso e perché si è riavviato l'ultima volta, la memoria libera, il collegamento e il segnale Wi-Fi, quante volte si è connesso al broker e l'ultimo errore registrato (`armor/health/<nodo>`, il contratto `node_health` di ARMOR-COMMON). Il codice che lo costruisce è condiviso da tutti i nodi e testato su un computer; non è mai girato su una scheda.
+* **Controllo dal server:** Studio può riavviare il nodo in modo pulito, metterlo in pausa fino a un'ora (riprende da solo), mettere il suo lavoro in standby (senza fine, conservato ai riavvii, il nodo resta connesso e continua a rispondere), farlo mostrare, chiedere un'istantanea diagnostica e segnarlo in manutenzione (`armor/control/<nodo>/...`, il contratto `node_control` di ARMOR-COMMON). Ogni ordine è in due passi con un token monouso legato a quell'operazione, solo il server può scriverli sul broker e non esistono ripristino di fabbrica, cancellazione né sonno profondo. Finché il nodo è in pausa o in standby non scrive su nessuna batteria (un'operazione in corso si può ancora annullare) e continua a leggere inverter e batterie. Il codice è condiviso da tutti i nodi e provato su un computer; non ha ancora girato su una scheda.
 * **Scrittura sulle batterie Pylontech (disattivata di default):** solo operazioni tipizzate - orologio, contatori e registri, riavvio, capacità, il ripristino del livello di carica, limiti e protezioni, uscite, numero di serie, memoria esterna, firmware via XMODEM-1K e una console esperto con lista di blocco - in due passi (prepara, poi esegui con un token monouso), leggendo la batteria prima e dopo, con la password di servizio conservata solo nel nodo e una console simulata per i test. Non provato su una batteria reale: vedi il [piano di prove al banco](docs/BATTERY_BENCH_TEST_PLAN.md).
 
 ## 🖼️ Schermate
