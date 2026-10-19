@@ -7,12 +7,17 @@
 #include "battery_maintenance.hpp"
 
 #include <ctime>
+#include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 extern "C" {
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
 }
 #include "core/battery_ops.hpp"
 #include "core/battery_stage.hpp"
@@ -34,6 +39,39 @@ bool g_enabled = false;
 std::string g_password;
 
 std::uint64_t uptime_ms() { return static_cast<std::uint64_t>(esp_timer_get_time()) / 1000ULL; }
+
+// Everything that thinks (reading an order, building a plan, checking a firmware image) runs in one task of its own with a large stack: the broker's client and the ports' tasks only hand work
+// over. The queue is short; when it is full the oldest piece of work is dropped (an order that is lost is asked again by the server, which gives up on it by itself).
+std::mutex g_queue_lock;
+std::deque<std::function<void()>> g_queue;
+SemaphoreHandle_t g_ready = nullptr;
+constexpr std::size_t kQueueMax = 64;
+
+void post(std::function<void()> work) {
+  if (g_ready == nullptr) return;
+  {
+    std::lock_guard<std::mutex> guard(g_queue_lock);
+    g_queue.push_back(std::move(work));
+    if (g_queue.size() > kQueueMax) g_queue.pop_front();
+  }
+  xSemaphoreGive(g_ready);
+}
+
+void worker(void*) {
+  for (;;) {
+    xSemaphoreTake(g_ready, portMAX_DELAY);
+    for (;;) {
+      std::function<void()> next;
+      {
+        std::lock_guard<std::mutex> guard(g_queue_lock);
+        if (g_queue.empty()) break;
+        next = std::move(g_queue.front());
+        g_queue.pop_front();
+      }
+      next();
+    }
+  }
+}
 
 std::string token_hex() {
   std::uint8_t raw[16];
@@ -161,7 +199,7 @@ void arm(const Context& ctx, bat::Op op, const json::Value& in) {
   const std::shared_ptr<manager::BatteryJob> job = std::make_shared<manager::BatteryJob>();
   job->plan = bat::preflight_plan();
   job->secret = password;
-  job->on_done = [ctx, op, typed, params](const bat::RunResult& result) {
+  const auto finish_arm = [ctx, op, typed, params](const bat::RunResult& result) {
     {
       std::lock_guard<std::mutex> guard(g_lock);
       g_guard.finish(ctx.port, false, uptime_ms());
@@ -204,6 +242,7 @@ void arm(const Context& ctx, bat::Op op, const json::Value& in) {
     r.has_battery = true; r.battery = result.identity; r.before = result.before;
     say(r);
   };
+  job->on_done = [finish_arm](const bat::RunResult& result) { const bat::RunResult copy = result; post([finish_arm, copy] { finish_arm(copy); }); };
   const std::string why = manager::start_battery_job(static_cast<std::size_t>(ctx.port - 1), job);
   if (!why.empty()) {
     { std::lock_guard<std::mutex> guard(g_lock); g_guard.finish(ctx.port, false, uptime_ms()); }
@@ -244,11 +283,16 @@ void execute(const Context& ctx, bat::Op op, const json::Value& in) {
   job->secret = password;
   job->image = image;
   const bool uses_image = plan.uses_image;
-  job->on_done = [ctx, uses_image](const bat::RunResult& result) { finish_job(ctx, uses_image, result); };
+  job->on_done = [ctx, uses_image](const bat::RunResult& result) { const bat::RunResult copy = result; post([ctx, uses_image, copy] { finish_job(ctx, uses_image, copy); }); };
   job->on_progress = [ctx](const bat::RunResult& result) {
-    Reply r;
-    r.ctx = ctx; r.stage = "progress"; r.accepted = true; r.has_result = true; r.result = result; r.result.outcome = "running";
-    say(r);
+    bat::RunResult copy = result;
+    copy.outcome = "running";
+    copy.transcript.clear(); copy.before.clear(); copy.after.clear();   // a progress report is a few numbers
+    post([ctx, copy] {
+      Reply r;
+      r.ctx = ctx; r.stage = "progress"; r.accepted = true; r.has_result = true; r.result = copy;
+      say(r);
+    });
   };
   const std::string why = manager::start_battery_job(static_cast<std::size_t>(ctx.port - 1), job);
   if (!why.empty()) {
@@ -283,8 +327,7 @@ void stage(const Context& ctx, const json::Value& in) {
   say(r);
 }
 
-void on_message(const std::string& topic, const std::string& payload) {
-  (void)topic;
+void handle(const std::string& payload) {
   json::Value in;
   if (!json::parse(payload, in) || !in.is_object()) return;
   if (in.string_or("kind", "") != "solar_battery_command" || in.string_or("node_id", "") != g_node) return;
@@ -311,6 +354,13 @@ void on_message(const std::string& topic, const std::string& payload) {
   else if (ctx.action == "execute") execute(ctx, op, in);
   else reject(ctx, bat::refusal::kUnknownOp);
 }
+
+// The broker's client only hands the text over: the reading and the thinking are done by the task of this file.
+void on_message(const std::string& topic, const std::string& payload) {
+  (void)topic;
+  if (payload.size() > 4096) return;   // an order is a few hundred bytes (a piece of an image, a little over six hundred)
+  post([payload] { handle(payload); });
+}
 }  // namespace
 
 void start(const config::Settings& settings) {
@@ -318,6 +368,8 @@ void start(const config::Settings& settings) {
   g_enabled = settings.battery.enabled;
   g_password = settings.battery.service_password;
   if (g_node.empty()) return;
+  g_ready = xSemaphoreCreateBinary();
+  if (g_ready == nullptr || xTaskCreate(worker, "battery-ops", 12288, nullptr, 4, nullptr) != pdPASS) { ESP_LOGE(kTag, "the battery maintenance task could not be started: it stays off"); g_ready = nullptr; return; }
   mqtt_link::subscribe("armor/solar/" + g_node + "/maintenance/command", on_message);
   ESP_LOGI(kTag, "battery maintenance %s", g_enabled ? "is ON" : "is off");
 }
