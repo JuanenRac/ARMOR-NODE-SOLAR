@@ -20,7 +20,7 @@ the nodes that see the router well and the PoE one for the rest. A stack of batt
 ## What connects to what
 
 - **Voltronic / MPP Solar inverter:** its **RS232** port (a DB9 or an RJ45, depending on the model) at 2400 baud. The USB port cannot be used: it is HID.
-- **Pylontech US2000 / US3000 / US5000:** the **console** RJ45 (RS232 levels, 115200 baud) for the `pwr` table; the other RJ45 is RS485 for the
+- **Pylontech US2000 / US3000 / US5000:** the **console** RJ45 (RS232 levels, 115200 baud; an old unit may say 19200) for the `pwr` table; the other RJ45 is RS485 for the
   battery link to the inverter. Do not put the node on the RS485 bus the inverter is using unless a capture shows what is safe to share.
 - **ANT-BMS:** the 4-pin JST 1.25 mm connector: **TX, RX, ground and 3.3 V VCC** (it does not start on TX, RX and ground alone). It is 3.3 V TTL, so it goes straight to the
   pins of a port (RX of the node to TX of the BMS, TX to RX), no level converter; keep the wire short and the ground common. Its battery ground is the pack's negative:

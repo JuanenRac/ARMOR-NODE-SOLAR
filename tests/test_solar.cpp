@@ -6,6 +6,10 @@
 #include <vector>
 
 #include "../core/solar_json.hpp"
+#include "../core/solar_config.hpp"
+#include "pylontech_real.hpp"
+#include "pylontech_us2000_real.hpp"
+#include "pylontech_logs_real.hpp"
 
 static int failures = 0;
 static int checks = 0;
@@ -282,7 +286,7 @@ static void test_pylontech_real_formats() {
   pylontech::Module m;
   const std::string info = "@\r\nDevice address      : 1\r\nManufacturer        : Pylon\r\nDevice name         : US5000\r\nMain Soft version   : B66.6\r\nSpecification       : 48V/74AH\r\nCell Number         : 15\r\n";
   CHECK(pylontech::parse_info(info, m) == 2 && m.model == "US5000" && m.full_capacity_ah == 74.0 && m.capacity_ah < 0);
-  CHECK(pylontech::parse_info("CHARGE Cnt.         : 400\r\nCYCLE Times         : 312\r\n", m) == 1 && m.cycles == 312);
+  CHECK(pylontech::parse_info("CHARGE Cnt.         : 400\r\nCYCLE Times         : 312\r\n", m) == 2 && m.cycles == 312);
   pylontech::Module both;
   CHECK(pylontech::parse_info("Total Capacity : 74000 mAH\r\nSpecification : 48V/50AH\r\n", both) == 1 && both.full_capacity_ah == 74.0);   // the measured one wins
   pylontech::Module odd;
@@ -319,7 +323,7 @@ static void test_pylontech_real_captures() {
       "@\r\nDevice address           1\r\nData Items      :     1938\r\nCharge Times    :    49299\r\nBat OV Times    :      755\r\nSOH Times       :        0\r\nCYCLE Times     :     1344\r\n"
       "Pwr Percent     :       42\r\nPwr Coulomb     : 147752280\r\nDsg Cap         : 149287073\r\nHT Cnt          :        0 Hours\r\nCurrent Greater 70A Hours:        0 Hours\r\n"
       "System Error Times:        0\r\nCommand completed successfully\r\n$$\r\npylon_debug>\r\n";
-  CHECK(pylontech::parse_info(echoed(stat), c) == 2 && c.cycles == 1344 && c.model == "US3000C" && c.health_percent == 55);   // 147752280 mAs of 74 Ah (266400000)
+  CHECK(pylontech::parse_info(echoed(stat), c) == 10 && c.cycles == 1344 && c.model == "US3000C" && c.health_percent == 55);   // 147752280 mAs of 74 Ah (266400000)
   pylontech::Module worn;
   worn.full_capacity_ah = 50.0;
   CHECK(pylontech::parse_info("Pwr Coulomb     : 100856900\r\nCYCLE Times     :      576\r\n", worn) == 2 && worn.health_percent == 56 && worn.cycles == 576);
@@ -369,6 +373,225 @@ static void test_messages() {
   CHECK(armor::json::parse(battery_json("solar-1", "us3000-1", 99, {}), document) && document.get("modules")->number == 0 && document.get("state") == nullptr);
 }
 
+// The counters of `stat`: the texts below are written the way the consoles of the three families print them (the same lines as the captures above, with other numbers); no real battery was
+// asked for these. The meaning of a counter is not official; what is tested is that the name, the number and the message are right.
+static long long counter(const pylontech::Module& m, const char* key) {
+  for (const auto& item : m.counters) if (item.first == key) return item.second;
+  return -1;
+}
+static void test_pylontech_stat_counters() {
+  const std::string us2000b =
+      "@\r\nDevice address           1\r\nData Items      :     2411\r\nHisData Items   :      905\r\nCharge Times    :    61822\r\nShut Times      :        3\r\nReset Times     :       12\r\nIdle Times      :     4410\r\n"
+      "Bat OV Times    :        0\r\nBat HV Times    :       17\r\nBat LV Times    :        0\r\nBat UV Times    :        2\r\nPwr OV Times    :        0\r\nPwr UV Times    :        0\r\nInput OV Times  :        0\r\n"
+      "COC Times       :        1\r\nDOC Times       :        0\r\nSC Times        :        0\r\nCOT Times       :        0\r\nDOT Times       :        4\r\nCUT Times       :        0\r\nDUT Times       :        0\r\n"
+      "SOH Times       :        0\r\nCYCLE Times     :      812\r\nPwr Percent     :       64\r\nDsg Cap         : 88123456\r\nBMICERR Times   :        0\r\nRV Times        :        0\r\n"
+      "LifeWarn Times  :        0\r\nLifeAlarm Times :        0\r\nHT Cnt          :        0 Hours\r\nLT Cnt          :        5 Hours\r\nHT@0.5C Cnt     :        0 Hours\r\nCommand completed successfully\r\n$$\r\npylon>\r\n";
+  pylontech::Module b;
+  CHECK(pylontech::parse_info(echoed(us2000b), b) > 20);
+  CHECK(counter(b, "bat_hv_times") == 17 && counter(b, "bat_uv_times") == 2 && counter(b, "dot_times") == 4 && counter(b, "coc_times") == 1 && counter(b, "bat_ov_times") == 0);
+  CHECK(counter(b, "data_items") == 2411 && counter(b, "charge_times") == 61822 && counter(b, "lt_cnt") == 5 && counter(b, "dsg_cap") == 88123456 && counter(b, "pwr_percent") == 64);
+  CHECK(counter(b, "cycle_times") == -1 && b.cycles == 812);   // the cycles keep their own field
+  CHECK(b.counters.size() == 30);
+  // the severe ones are marked, the ones of use and of the temperature sensors' hours are not
+  int severe = 0;
+  for (const pylontech::StatCounterInfo& item : pylontech::stat_catalog()) if (item.severe) ++severe;
+  CHECK(severe == 17);
+  // a US3000C and a US5000 print fewer or other lines: only what is in the catalog is kept, whatever else is there
+  const std::string us3000c = "@\r\nDevice address           1\r\nData Items      :     1938\r\nCharge Times    :    49299\r\nBat OV Times    :      755\r\nSOH Times       :        0\r\nCYCLE Times     :     1344\r\nPwr Percent     :       42\r\n"
+                              "Unknown Thing   :        9\r\nSystem Error Times:        0\r\nCurrent Greater 70A Hours:        3 Hours\r\nCommand completed successfully\r\n$$\r\npylon_debug>\r\n";
+  pylontech::Module c;
+  CHECK(pylontech::parse_info(echoed(us3000c), c) > 0 && counter(c, "bat_ov_times") == 755 && counter(c, "system_error_times") == 0 && counter(c, "unknown_thing") == -1 && c.cycles == 1344);
+  const std::string us5000 = "@\r\nDevice address           2\r\nData Items      :      311\r\nBat HV Times    :        0\r\nCOC2 Times      :        1\r\nDOC2 Times      :        0\r\nCOCA Times      :        0\r\nDOCA Times      :        0\r\n"
+                             "CHT Times       :        0\r\nCLT Times       :        0\r\nDHT Times       :        0\r\nDLT Times       :        0\r\nPwr HV Times    :        0\r\nPwr LV Times    :        0\r\nBat SLP Times   :        0\r\nCYCLE Times     :       96\r\n"
+                             "Command completed successfully\r\n$$\r\npylon>\r\n";
+  pylontech::Module d;
+  CHECK(pylontech::parse_info(echoed(us5000), d) > 10 && counter(d, "coc2_times") == 1 && counter(d, "bat_slp_times") == 0 && d.cycles == 96);
+  // a value that is not a number, too long or negative is skipped; the same counter twice keeps the last
+  pylontech::Module e;
+  CHECK(pylontech::parse_info("Bat OV Times    :  abc\r\nBat HV Times    :  -3\r\nBat UV Times    :  12345678901\r\nCOC Times : 4\r\nCOC Times : 6\r\n", e) == 2 && counter(e, "bat_ov_times") == -1 && counter(e, "bat_hv_times") == -1 && counter(e, "bat_uv_times") == -1 && counter(e, "coc_times") == 6);
+  // the key of every catalog line is a name the contract accepts, and none repeats
+  for (const pylontech::StatCounterInfo& item : pylontech::stat_catalog()) {
+    const std::string key = item.key;
+    CHECK(!key.empty() && key.size() <= 32 && key[0] >= 'a' && key[0] <= 'z');
+    for (char ch : key) CHECK((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_');
+    int same = 0;
+    for (const pylontech::StatCounterInfo& other : pylontech::stat_catalog()) if (key == other.key || std::string(item.console) == other.console) ++same;
+    CHECK(same == 1);
+  }
+  // the message carries them under the module, only for a module that is there
+  std::vector<pylontech::Module> modules(1);
+  modules[0] = b; modules[0].number = 1; modules[0].present = true; modules[0].voltage_v = 50;
+  armor::json::Value document;
+  CHECK(armor::json::parse(battery_json("solar-1", "us2000-1", 99, modules), document));
+  const armor::json::Value* counters = document.get("stack")->items[0].get("counters");
+  CHECK(counters != nullptr && counters->is_object() && counters->get("bat_hv_times")->number == 17 && counters->get("dsg_cap")->number == 88123456);
+  modules[0].counters.clear();
+  CHECK(armor::json::parse(battery_json("solar-1", "us2000-1", 99, modules), document) && document.get("stack")->items[0].get("counters") == nullptr);
+}
+
+// The answers of a real battery's console, as the maker's documentation shows them (tests/pylontech_real.hpp, unchanged): `bat 1`, `soh 1`, `stat 1` and `data event 1`.
+static void test_pylontech_real_console_answers() {
+  CHECK(pylontech::console_done(kRealBat) && pylontech::console_done(kRealSoh) && pylontech::console_done(kRealStat) && pylontech::console_done(kRealDataEvent));
+  // bat: fourteen cells, in volts
+  std::vector<double> cells;
+  double remaining = -1;
+  int balancing = -1;
+  CHECK(pylontech::parse_bat(kRealBat, cells, &remaining, &balancing) == 15 || pylontech::parse_bat(kRealBat, cells, &remaining, &balancing) == 14);
+  CHECK(cells.size() >= 14 && cells.size() <= 15);
+  const double last = cells.back();
+  CHECK(last > 3.30 && last < 3.31);
+  CHECK(remaining > 33.4 && remaining < 33.5);   // 33424 mAH
+  // stat: the counters of the life of the battery
+  pylontech::Module m;
+  CHECK(pylontech::parse_info(kRealStat, m) >= 28);
+  CHECK(counter(m, "data_items") == 628 && counter(m, "hisdata_items") == 2044 && counter(m, "charge_cnt") == 0 && counter(m, "discharge_cnt") == 761 && counter(m, "charge_times") == 35859);
+  CHECK(counter(m, "status_cnt") == 760 && counter(m, "idle_times") == 38704 && counter(m, "bat_ov_times") == 44 && counter(m, "bat_hv_times") == 83 && counter(m, "bat_lv_times") == 8);
+  CHECK(counter(m, "pwr_ov_times") == 220 && counter(m, "pwr_hv_times") == 278 && counter(m, "pwr_lv_times") == 8 && counter(m, "pwr_uv_times") == 1 && counter(m, "shut_times") == 7);
+  CHECK(counter(m, "reset_times") == 22 && counter(m, "soh_times") == 31 && counter(m, "pwr_percent") == 67 && counter(m, "dsg_cap") == 4542819 && counter(m, "lv_cnt") == 17416);
+  CHECK(counter(m, "coc_times") == 0 && counter(m, "sc_times") == 0 && counter(m, "bmicerr_times") == 0 && counter(m, "lt_half_c_cnt") == 0 && m.cycles == 11);
+  // soh: nothing in it is a counter or an event
+  pylontech::Module other;
+  pylontech::Event none;
+  CHECK(pylontech::parse_info(kRealSoh, other) == 0 && !pylontech::parse_event(kRealSoh, none) && !pylontech::parse_event(kRealStat, none));
+  // data event: the entry, the mnemonics as the console printed them
+  pylontech::Event e;
+  CHECK(pylontech::parse_event(kRealDataEvent, e) && e.valid);
+  CHECK(e.index == 1 && e.time == "17-05-13 20:52:58" && e.voltage_v > 54.014 && e.voltage_v < 54.016 && e.current_a > 10.64 && e.current_a < 10.65 && e.temperature_c > 28.9 && e.temperature_c < 29.1 && e.percent == 100);
+  CHECK(e.base_state == "Charge" && e.voltage_state == "High" && e.current_state == "Normal" && e.temperature_state == "Normal" && e.coulomb_state == "Full");
+  CHECK(e.power_events == "0x2 PHV" && e.battery_events == "0x0" && e.system_fault == "0x0");
+  // no index or no time: not an event
+  pylontech::Event bad;
+  CHECK(!pylontech::parse_event("Time : 17-05-13 20:52:58\r\nVoltage : 54015 mV\r\n", bad) && !pylontech::parse_event("Item Index : 3\r\nVoltage : 54015 mV\r\n", bad) && !pylontech::parse_event("", bad));
+  // the message carries the last event of a module under its own words
+  std::vector<pylontech::Module> modules(1);
+  modules[0] = m; modules[0].number = 1; modules[0].present = true; modules[0].voltage_v = 54; modules[0].model = "US2000B"; modules[0].last_event = e;
+  armor::json::Value document;
+  CHECK(armor::json::parse(battery_json("solar-1", "us2000-1", 99, modules), document));
+  const armor::json::Value* item = document.get("stack")->items[0].get("last_event");
+  CHECK(item != nullptr && item->get("index")->number == 1 && item->get("power_events")->text == "0x2 PHV" && item->get("time")->text == "17-05-13 20:52:58");
+  CHECK(document.get("stack")->items[0].get("model")->text == "US2000B");
+}
+
+// The console is woken at 1200 baud with this frame (the maker's documentation gives it as hexadecimal: 7E 32 30 30 31 34 36 38 32 43 30 30 34 38 35 32 30 46 43 43 33 0D).
+static void test_pylontech_wake_frame() {
+  CHECK(pylontech::build_frame(0x20, 0x01, 0x46, 0x82, "8520") == "~20014682C0048520FCC3\r");
+  pylontech::Frame frame;
+  CHECK(pylontech::parse_frame("~20014682C0048520FCC3\r", frame) && frame.cid1 == 0x46 && frame.cid2 == 0x82 && frame.info == "8520");
+}
+
+// The speed of a Pylontech port: the console always runs at 115200; 9600 is the speed of the RS485 protocol (the battery's DIP switch 1 on). Both are valid on a hardware port.
+static void test_pylontech_port_speeds() {
+  armor::config::Settings s;
+  s.ports[0].kind = "pylontech";
+  s.ports[0].baud = 0;
+  CHECK(armor::config::effective_baud(s.ports[0]) == 115200);
+  for (int baud : {9600, 115200}) {
+    s.ports[0].baud = baud;
+    bool refused = false;
+    for (const auto& problem : armor::config::validate(s)) if (problem.path == "ports.0.baud") refused = true;
+    CHECK(!refused);
+  }
+}
+
+// The answers of a real US2000 (V1.5, prompt `pylon>`, tests/pylontech_us2000_real.hpp, unchanged): the header of `pwr` has a name of two words and the row a state of one, the date
+// and the hour are two words, `getpwr` prints "value#", `data` prints the mnemonic after the hexadecimal number and `info` tells the limits and the speed of the console.
+static void test_pylontech_real_us2000() {
+  CHECK(pylontech::console_done(kUs2000Pwr) && pylontech::console_done(kUs2000Bat) && pylontech::console_done(kUs2000Data) && pylontech::console_done(kUs2000GetPwr) && pylontech::console_done(kUs2000Info) && pylontech::console_done(kUs2000Soh));
+  CHECK(pylontech::console_done("pylon>pwr\r\n@\r\nPower Volt\r\nCommand completed successfully\r\n$$\r\n\r\npylon>") && pylontech::console_done("x\r\n$$\r\npylon_debug>\r\n"));
+  CHECK(!pylontech::console_done("pylon>pwr\r") && !pylontech::console_done("@\r\nPower Volt Curr"));
+  // pwr: ten rows, two modules there
+  std::vector<pylontech::Module> modules;
+  CHECK(pylontech::parse_pwr(kUs2000Pwr, modules) == 10);
+  CHECK(modules.size() == 10 && modules[0].present && modules[1].present && !modules[2].present && !modules[9].present && modules[2].base_state == "Absent");
+  CHECK(modules[0].voltage_v > 51.687 && modules[0].voltage_v < 51.689 && modules[0].soc_percent == 52 && modules[0].voltage_state == "OV" && modules[0].base_state == "Charge");
+  CHECK(modules[0].cell_voltage_state == "Normal" && modules[0].cell_temperature_state == "Normal" && modules[0].cell_low_v > 3.346 && modules[0].cell_high_v < 3.496);
+  CHECK(modules[1].current_a < -0.014 && modules[1].current_a > -0.016 && modules[1].soc_percent == 29 && modules[1].base_state == "Dischg" && modules[1].cell_high_v > 3.973);
+  // the same table with the state of the battery's lifecycle in a column of its own on a header of two words, whatever its order
+  std::vector<pylontech::Module> shifted;
+  CHECK(pylontech::parse_pwr("Power Volt Curr Tempr Tlow Thigh Vlow Vhigh Base.St Volt.St Curr.St Temp.St Coulomb LC. St Time B.V.St B.T.St\r\n1 51000 0 30000 30000 30000 3400 3450 Charge Normal Normal Normal 50% ON 2025-03-09 19:11:40 High Normal\r\n", shifted) == 1 && shifted[0].cell_voltage_state == "High" && shifted[0].cell_temperature_state == "Normal");
+  // bat: fifteen cells from 0, the weak one is the seventh
+  std::vector<double> cells;
+  double remaining = -1;
+  int balancing = -1;
+  CHECK(pylontech::parse_bat(kUs2000Bat, cells, &remaining, &balancing) == 15 && cells[6] > 3.345 && cells[6] < 3.347 && cells[10] > 3.497 && remaining > 30.05 && remaining < 30.06);
+  // info: identity, the limits of the module and the speed of the console of an old unit
+  pylontech::Module m;
+  pylontech::parse_info(kUs2000Info, m);
+  CHECK(m.model == "US2000" && m.full_capacity_ah == 50.0 && m.cell_count == 15 && m.max_charge_a > 52.9 && m.max_charge_a < 53.1 && m.max_discharge_a > 54.9 && m.max_discharge_a < 55.1 && m.console_baud == 19200);
+  pylontech::Module odd;
+  pylontech::parse_info("Cell Number : 99\r\nMax Charge Curr : abc\r\nMax Dischg Curr : 0mA\r\nConsole Port rate : 7\r\n", odd);
+  CHECK(odd.cell_count == -1 && odd.max_charge_a < 0 && odd.max_discharge_a < 0 && odd.console_baud == -1);
+  // soh: the weak cell is the one the battery calls Abnormal; a count alone does not make a cell abnormal
+  pylontech::Module health;
+  CHECK(pylontech::parse_soh(kUs2000Soh, health) == 15 && health.soh_counts.size() == 15);
+  CHECK(health.soh_counts[6] == 13 && health.soh_counts[10] == 12 && health.soh_counts[0] == 0 && health.soh_abnormal.size() == 1 && health.soh_abnormal[0] == 6);
+  pylontech::Module health_doc;
+  CHECK(pylontech::parse_soh(kRealSoh, health_doc) == 15 && health_doc.soh_abnormal.empty());   // the documentation's table, printed with dashes
+  pylontech::Module none;
+  CHECK(pylontech::parse_soh(kUs2000Pwr, none) == 0 && none.soh_counts.empty() && pylontech::parse_soh("", none) == 0);
+  CHECK(pylontech::parse_soh("Battery Voltage SOHCount SOHStatus\r\n0 3400 0 Normal\r\n2 3400 0 Normal\r\n", none) == 0);   // a cell missing: the table is not trusted
+  // getpwr: the whole snapshot in one answer
+  pylontech::PowerSnapshot snapshot;
+  CHECK(pylontech::parse_getpwr(kUs2000GetPwr, snapshot));
+  CHECK(snapshot.voltage_v > 51.70 && snapshot.voltage_v < 51.702 && snapshot.current_a == 0 && snapshot.temperature_c == 36.0 && snapshot.lowest_cell_ah > 26.03 && snapshot.lowest_cell_ah < 26.04);
+  CHECK(snapshot.base_state == "Charge" && snapshot.voltage_state == "OV" && snapshot.current_state == "Normal" && snapshot.temperature_state == "Normal");
+  CHECK(snapshot.cells_v.size() == 15 && snapshot.cells_v[6] > 3.344 && snapshot.cells_v[6] < 3.346 && snapshot.cell_temperatures_c[0] == 36.0 && snapshot.cell_states[0] == "Normal Normal");
+  pylontech::PowerSnapshot nothing;
+  CHECK(!pylontech::parse_getpwr(kUs2000Pwr, nothing) && !pylontech::parse_getpwr("", nothing) && !pylontech::parse_getpwr("abc# 1# 2# 3# a# b# c# d#\r\n", nothing));
+  // data with no argument: one record, the mnemonic after the hexadecimal number, the old names of the protections in one list
+  pylontech::Event e;
+  CHECK(pylontech::parse_event(kUs2000Data, e) && e.index == 754 && e.time == "25-03-09 19:01:42" && e.voltage_v > 51.75 && e.voltage_v < 51.76 && e.percent == 52);
+  CHECK(e.voltage_state == "OV" && e.coulomb_state == "Normal" && e.power_events == "0x0" && e.battery_events == "0x4 BVNOR" && e.system_fault == "0x0");
+  // the two firmwares print the same record in their own words: both read
+  pylontech::Event newer;
+  CHECK(pylontech::parse_event(kRealDataEvent, newer) && newer.power_events == "0x2 PHV" && newer.battery_events == "0x0");
+  // the message carries what the module told about itself
+  std::vector<pylontech::Module> stack(1);
+  stack[0] = m; stack[0].number = 1; stack[0].present = true; stack[0].voltage_v = 51.7; stack[0].soh_counts = health.soh_counts; stack[0].soh_abnormal = health.soh_abnormal;
+  armor::json::Value document;
+  CHECK(armor::json::parse(battery_json("solar-1", "us2000-1", 99, stack), document));
+  const armor::json::Value& first = document.get("stack")->items[0];
+  CHECK(first.get("cell_count")->number == 15 && first.get("max_charge_a")->number == 53 && first.get("max_discharge_a")->number == 55 && first.get("console_baud")->number == 19200);
+  CHECK(first.get("soh_counts")->items.size() == 15 && first.get("soh_counts")->items[6].number == 13 && first.get("soh_abnormal")->items.size() == 1 && first.get("soh_abnormal")->items[0].number == 6);
+  // the speed an old unit tells is a speed a port may be set to
+  armor::config::Settings s;
+  s.ports[0].kind = "pylontech";
+  s.ports[0].baud = 19200;
+  bool refused = false;
+  for (const auto& problem : armor::config::validate(s)) if (problem.path == "ports.0.baud") refused = true;
+  CHECK(!refused);
+}
+
+// Real captures of the logs of other batteries (tests/pylontech_logs_real.hpp, the serial number removed): `info` with the board and the software, a worn battery's `stat` with high counters,
+// and the tables of `datalist` (event and history).
+static void test_pylontech_real_logs() {
+  pylontech::Module m;
+  pylontech::parse_info(kRealInfoUs2000c, m);
+  CHECK(m.model == "US2000C" && m.board_version == "V10R04" && m.main_soft_version == "B68.2.0.0" && m.soft_version == "V2.6" && m.cell_count == 15 && m.max_charge_a == 90 && m.max_discharge_a == 90 && m.console_baud == 115200);
+  CHECK(m.full_capacity_ah == 50.0);
+  pylontech::Module worn;
+  pylontech::parse_info(kRealStatWorn, worn);
+  CHECK(counter(worn, "bat_ov_times") == 2428 && counter(worn, "bat_hv_times") == 530 && counter(worn, "coca_times") == 3 && counter(worn, "soh_times") == 237 && counter(worn, "data_items") == 1919 && counter(worn, "misc_data_items") == -1 && worn.cycles == 29);
+  pylontech::DataList list;
+  CHECK(pylontech::parse_datalist(kRealDatalistEvent, list) == 20 && list.rows.size() == 20 && list.save_every_s == -1);
+  CHECK(list.rows[0].item == 0 && list.rows[0].date == "25-10-28" && list.rows[0].time == "16:27:27" && list.rows[0].voltage_v > 50.908 && list.rows[0].voltage_v < 50.91 && list.rows[0].current_a == 0 && list.rows[0].temperature_c == 30.0);
+  CHECK(list.rows[0].cell_low_v > 3.377 && list.rows[0].cell_low_v < 3.379 && list.rows[0].cell_high_v > 3.494 && list.rows[0].base_state == "Charge" && list.rows[0].voltage_state == "Normal" && list.rows[0].percent == 89 && list.rows[0].events == "BHV" && !list.rows[0].history);
+  CHECK(list.rows[1].events == "BOV" && list.rows[1].current_a > 13.68 && list.rows[1].current_a < 13.69);
+  CHECK(list.rows[15].item == 15 && list.rows[15].events == "BOV");   // the first row after the "Press [Enter]" line is read too
+  CHECK(list.rows[19].item == 19);
+  pylontech::DataList history;
+  CHECK(pylontech::parse_datalist(kRealDatalistHistory, history) == 6 && history.save_every_s == 1800);
+  CHECK(history.rows[0].history && history.rows[0].error_code == "0x0" && history.rows[0].mosfet_state == "Normal" && history.rows[0].percent == 89 && history.rows[0].voltage_v > 50.5 && history.rows[0].voltage_v < 50.6 && history.rows[0].current_a > 3.9 && history.rows[0].time == "18:18:04");
+  CHECK(history.rows[4].base_state == "Dischg" && history.rows[4].current_a < -1.8);
+  pylontech::DataList nothing;
+  CHECK(pylontech::parse_datalist("", nothing) == 0 && pylontech::parse_datalist(kRealStatWorn, nothing) == 0 && nothing.save_every_s == -1);
+  CHECK(pylontech::parse_datalist("1 25-10-28 16:27:41 51549 13683 31000 29000 29000 3407 99999 Charge Normal Normal Normal 89% BOV\r\n", nothing) == 0);   // a cell of 99.999 V is not a row
+  // the counters of a worn battery: a rise of the severe ones is what the server tells (see the server's tests); here the parsed values are the ones a rise is judged by
+  pylontech::Module again = worn;
+  pylontech::parse_info("Bat OV Times    :     2429\r\n", again);
+  CHECK(counter(again, "bat_ov_times") == 2429 && counter(again, "bat_hv_times") == 530);
+}
+
 int main() {
   test_voltronic_commands();
   test_voltronic_replies();
@@ -378,6 +601,12 @@ int main() {
   test_pylontech_cells_and_capacity();
   test_pylontech_real_formats();
   test_pylontech_real_captures();
+  test_pylontech_stat_counters();
+  test_pylontech_real_console_answers();
+  test_pylontech_wake_frame();
+  test_pylontech_real_us2000();
+  test_pylontech_real_logs();
+  test_pylontech_port_speeds();
   test_messages();
   std::printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;

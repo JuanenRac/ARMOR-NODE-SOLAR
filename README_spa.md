@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.5.0-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,9 +35,9 @@
 
 | | |
 |---|---|
-| Versión | `0.5.0` |
+| Versión | `0.5.1` |
 | Madurez | Funcional |
-| Tests | 5,466 checks in 13 programs (`ctest`) |
+| Tests | 6,843 checks in 13 programs (`ctest`) |
 | Tecnología | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
 | En hardware real | Ninguno todavía: ninguna placa montada ni inversor o batería conectado (solo tests en ordenador, la compilación y el panel en un navegador) |
 
@@ -48,6 +48,7 @@
 * **El panel web del nodo,** el mismo de los nodos radar: configuración con un código que se muestra en la consola USB, acceso y usuarios, Wi-Fi (estación y punto de acceso), broker, actualización por aire con vuelta atrás, registro, HTTPS, y las páginas de los puertos (con lo que oye cada uno, para protocolos aún sin decodificar) y de las lecturas, en ocho idiomas.
 * **Inversores Voltronic / MPP Solar** (Axpert, PIP, InfiniSolar y clones), RS232 a 2400 baudios: las tramas y su CRC, y las lecturas `QPIGS` (red, salida, batería, FV, bits de estado), `QMOD` (modo), `QPIWS` (avisos y averías por nombre) y `QPIRI` (valores nominales). Solo se pueden construir comandos de lectura: un ajuste cambia cómo se alimenta la casa. Tres dialectos, elegidos en el puerto o encontrados por él (*auto*): PI30, REVO (otro `QPIGS`, respuestas con suma de comprobación) y PI18 (`^P005GS`: InfiniSolar V, LV5048, SunGoldPower), solo lectura.
 * **Baterías Pylontech** (US2000, US3000, US5000): la tabla `pwr` de la consola (tensión, corriente, temperaturas y estado de carga de cada módulo), `bat <n>` (tensión y temperatura de cada celda) e `info <n>` (modelo, capacidad restante y total, ciclos), resumidas como una pila con su capacidad y energía totales, y la trama RS485 con sus dos comprobaciones. Los formatos están escritos de memoria de la consola pública y pueden variar entre firmwares. Las columnas se encuentran por los nombres de la cabecera (incluido el formato de la US5000 V2.3 con sus columnas Id, MosTempr y SysAlarm.St), la carga restante y el equilibrado salen de `bat`, y el modelo, la capacidad nominal y los ciclos de `info` y `stat`, que se piden una vez y se guardan media hora.
+* **Lo que dice de sí mismo un módulo Pylontech:** su modelo y las versiones de su placa y su software, sus celdas y la corriente que admite, los contadores de su vida (`stat`), la salud de cada celda (`soh`, marcando la anormal) y la entrada más reciente de su registro de eventos, con los nombres de las protecciones tal como los imprime la consola. La consola solo lee, y un administrador puede descargar como archivo de texto lo que oyó un puerto.
 * **Los mensajes del nodo** (`armor/solar/<nodo>/<dispositivo>/state`, uno por inversor o pila de baterías), definidos en ARMOR-COMMON con esquemas y vectores de conformidad; lo que producen los puertos se comprueba contra ellos.
 * **Baterías con ANT-BMS** (las placas negras de los packs caseros, de 7S a 32S), UART de 3,3 V a 19200 baudios: los dos protocolos de su firmware (el nodo pregunta en uno y luego en el otro y se queda con el que responde), con las celdas, temperaturas, estado de carga, corriente, capacidades y los estados de los MOSFET y del equilibrador, comprobados con tramas capturadas en cuatro modelos reales. Solo lectura: sus comandos de escritura pueden desconectar una batería en carga. Un botón de la página de puertos lee además el modelo, la versión y los 56 ajustes de protección y equilibrado de la BMS (protocolo nuevo), solo lectura.
 * **Configuración desde el móvil por Bluetooth,** el mismo canal que el del nodo radar: la app ARMOR encuentra el nodo como `ARMOR-XXXXXX` y ajusta su nombre, Wi-Fi, dirección, broker y modo de Bluetooth con los usuarios y el código de puesta en marcha del panel ([el protocolo](docs/BLE_PROVISIONING.md)). Solo escucha mientras el nodo no tiene usuarios, salvo que se indique otra cosa. La parte de radio nunca ha corrido en una placa.
@@ -90,7 +91,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console && build/host/test_release      # 5,466 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console && build/host/test_release      # 6,843 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin

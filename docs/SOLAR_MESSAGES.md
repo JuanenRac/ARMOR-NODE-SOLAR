@@ -33,7 +33,8 @@ Optional, when the port asks for them (see PROTOCOLS.md): `pv2_v`, `pv2_a` and `
 ```
 
 A module may also carry `cells_v` (the voltage of each cell, in order), `temperatures_c` (each temperature sensor), `capacity_ah` and `full_capacity_ah` (what is left
-and what the module holds when full), and `cycles`; the stack carries `model`, `capacity_ah`, `full_capacity_ah` (the sums of its modules), `energy_kwh` (the remaining
+and what the module holds when full), and `cycles`; and, when the console tells them, `model`, `board_version`, `main_soft_version` and `soft_version` of the module, `cell_count`, `max_charge_a` and `max_discharge_a` (the current the module says it allows,
+positive), `console_baud`, `soh_counts` and `soh_abnormal` (the health of each cell, and the cells counted from 0 that are not `Normal`), `counters` (the life counters of `stat`) and `last_event` (the newest entry of the module's event log, as printed); the stack carries `model`, `capacity_ah`, `full_capacity_ah` (the sums of its modules), `energy_kwh` (the remaining
 energy at the mean voltage) and `cycles` (the highest of its modules). A field the battery did not report is left out.
 
 With no module present the message has `modules: 0` and the empty `stack`, and no other reading: the node says the battery does not answer instead of inventing numbers.

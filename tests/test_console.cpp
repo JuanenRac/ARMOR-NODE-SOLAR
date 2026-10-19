@@ -50,6 +50,30 @@ static void test_what_may_be_asked() {
   CHECK(std::string(out.begin(), out.end()) == "bat 2\r");
 }
 
+// The console of a battery has commands that change it (limits, calibration, the storage, the clock, the counters, a shut-down). The solar node only reads: every one of them, with
+// no argument and with a module number as the panel would send it, is refused, and so are the commands that read but are not on the short list.
+static void test_nothing_that_writes_is_ever_asked() {
+  const char* const writes[] = {"config", "ctrl", "prot", "setprt", "setlowcfg", "blocksoc", "emptyvolt", "totalcoul", "couls", "eepe", "eepw", "flae", "flaw", "mm", "rtcw", "socw", "login", "logout",
+                                "logc", "statc", "datac", "save", "shut", "re", "m2s", "urates", "y", "t", "t1", "t2", "t3", "tsoc", "ttemp", "tbar", "trst", "updata", "resetsoc", "tmos", "tbuz", "tled", "cmdquit",
+                                "mm", "md", "eepr", "flar", "bmicw", "bmice", "rtcr", "socr", "soccfg", "soccal", "socclr", "emptyvolt", "tpwr", "tdip", "tcan"};
+  for (const char* name : writes) {
+    CHECK(canon(name) == "REFUSED");
+    for (const char* argument : {"1", "2", "16", "1 1", "on", "off", "0", "-1"}) CHECK(canon(std::string(name) + " " + argument) == "REFUSED");
+    Probe p;
+    std::string why;
+    CHECK(!p.start(name, 0, why) && why == "not_allowed" && p.next_tx(1).empty());
+  }
+  for (const char* name : {"adc", "ci", "disp", "getpwr", "log", "logt", "time", "datalist"}) {
+    CHECK(canon(name) == "REFUSED" && canon(std::string(name) + " 1") == "REFUSED");
+  }
+  // the only names that get through, on any module, are these
+  for (const char* name : {"bat", "info", "stat", "soh", "data"}) for (int module = 1; module <= 16; ++module) CHECK(canon(std::string(name) + " " + std::to_string(module)) == std::string(name) + " " + std::to_string(module));
+  CHECK(canon("pwr") == "pwr");
+  // datalist reads the logs of the BMS in a table: the kind, the optional dtls and an item up to 9999
+  CHECK(canon("datalist event 0") == "datalist event 0" && canon("DATALIST   history   dtls 15") == "datalist history dtls 15" && canon("datalist misc 9999") == "datalist misc 9999");
+  for (const char* bad : {"datalist event", "datalist event -1", "datalist event 10000", "datalist event 01", "datalist foo 1", "datalist event 1 2", "datalist history dtls", "datalist history xx 1", "datalist event 1;", "datalist bat 1 volt 1", "datalist event 1 volt"}) CHECK(canon(bad) == "REFUSED");
+}
+
 static void test_a_question_and_its_answer() {
   Probe p;
   std::string why;
@@ -126,6 +150,7 @@ static void test_a_long_answer_is_cut() {
 
 int main() {
   test_what_may_be_asked();
+  test_nothing_that_writes_is_ever_asked();
   test_a_question_and_its_answer();
   test_a_refusal_is_an_answer_too();
   test_silence_ends_the_question();

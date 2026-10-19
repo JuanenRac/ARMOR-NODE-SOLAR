@@ -232,7 +232,8 @@ const PAGES = [
 ];
 
 const card = (title, ...kids) => el("section", { class: "card" }, title ? el("h2", {}, title) : null, ...kids);
-const kv = rows => el("dl", { class: "kv" }, rows.filter(Boolean).flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
+const kv = (rows, cls) => el("dl", { class: cls || "kv" }, rows.filter(Boolean).flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
+const kvf = rows => kv(rows, "kv framed");
 const note = (text, kind) => el("p", { class: "note " + (kind || "") }, text);
 
 const fmtBytes = b => b >= 1048576 ? (Math.round(b / 104857.6) / 10) + " MB" : b >= 1024 ? Math.round(b / 1024) + " kB" : b + " B";
@@ -259,7 +260,7 @@ function flashCard(flash) {
       rows.push([label, p.used ? fmtBytes(p.used) + " / " + fmtBytes(p.size) + " (" + Math.round(p.used * 100 / p.size) + " %) · " + fmtBytes(p.size - p.used) + " " + t("flashFree") + " · v" + p.version + state : t("slotEmpty") + " · " + fmtBytes(p.size)]);
     } else rows.push([label, fmtBytes(p.size)]);
   });
-  return card(t("ovFlash"), kv(rows));
+  return card(t("ovFlash"), kvf(rows));
 }
 
 function formatUptime(seconds) {
@@ -284,20 +285,20 @@ function overviewPage() {
   const layoutNote = n.ap_setup ? t("setupNetwork") : n.ap_active ? t("ownNetwork") : "";
   const active = s.ports.filter(p => p.enabled);
   return el("div", { class: "grid" },
-    card(t("ovNode"), kv([[t("nodeId"), s.node_id], [t("nodeName"), s.name], [t("firmware"), s.version + " (" + s.partition + ")"], [t("uptime"), formatUptime(s.uptime_s)],
+    card(t("ovNode"), kvf([[t("nodeId"), s.node_id], [t("nodeName"), s.name], [t("firmware"), s.version + " (" + s.partition + ")"], [t("uptime"), formatUptime(s.uptime_s)],
       [t("resetReason"), reasonText(s.reset_reason)], [t("memory"), Math.round(s.heap_free / 1024) + " kB" + (s.psram_free ? " + " + Math.round(s.psram_free / 1048576 * 10) / 10 + " MB PSRAM" : "")]])),
-        s.time ? card(t("ovTime"), kv([[t("localTime"), s.time.set ? s.time.local + " (" + utcLabel(s.time.utc_offset_min) + ")" : t("clockNotSet")],
+        s.time ? card(t("ovTime"), kvf([[t("localTime"), s.time.set ? s.time.local + " (" + utcLabel(s.time.utc_offset_min) + ")" : t("clockNotSet")],
           [t("timeSource"), !s.time.set ? "—" : s.time.synced ? t("timeFromNtp") : s.time.ntp ? t("timeNtpWaiting") : t("timeManual")], [t("timeZone"), zoneName(s.time.zone)]])) : null,
         s.flash ? flashCard(s.flash) : null,
-        s.hardware ? card(t("ovHardware"), kv([[t("chip"), s.hardware.chip.toUpperCase() + " rev " + s.hardware.chip_revision + " · " + s.hardware.cores + " " + t("cores")],
+        s.hardware ? card(t("ovHardware"), kvf([[t("chip"), s.hardware.chip.toUpperCase() + " rev " + s.hardware.chip_revision + " · " + s.hardware.cores + " " + t("cores")],
       [t("flash"), s.hardware.flash_mb + " MB"], [t("psram"), s.hardware.psram_mb ? s.hardware.psram_mb + " MB" : t("none")],
       [t("appIdf"), s.hardware.app_idf], [t("bootloaderIdf"), s.hardware.bootloader_idf]])) : null,
-    card(t("ovNetwork"), kv([[t("board"), BOARD_NAMES[n.board] || n.board || "—"], [t("layout"), n.layout], [t("link"), n.link_up ? t("linkUp") : t("linkDown")], [t("address"), n.has_ip ? n.ip : "—"], [t("netmask"), n.netmask || "—"], [t("gateway"), n.gateway || "—"],
+    card(t("ovNetwork"), kvf([[t("board"), BOARD_NAMES[n.board] || n.board || "—"], [t("layout"), n.layout], [t("link"), n.link_up ? t("linkUp") : t("linkDown")], [t("address"), n.has_ip ? n.ip : "—"], [t("netmask"), n.netmask || "—"], [t("gateway"), n.gateway || "—"],
       [t("dns"), n.dns || "—"], [t("mac"), n.mac],
       n.ap_active ? [t("apActive"), "“" + n.ap_ssid + "” · " + t("channel") + " " + n.ap_channel + " · " + n.ap_clients + " " + t("apClients") + " · " + layoutNote] : null,
       n.sta_ssid ? [t("station"), n.sta_ssid + (n.sta_connected ? " · " + n.sta_rssi + " dBm" : " · " + t("notConnected"))] : null]),
       n.ap_active && n.sta_connected && !n.ap_setup ? note(t("apStaWarning")) : null),
-    card(t("ovBroker"), kv([[t("navBroker"), !m.enabled ? t("notConfigured") : m.connected ? t("connected") : t("notConnected")], [t("clock"), m.clock_set ? t("clockSet") : t("clockNotSet")], [t("messages"), m.published],
+    card(t("ovBroker"), kvf([[t("navBroker"), !m.enabled ? t("notConfigured") : m.connected ? t("connected") : t("notConnected")], [t("clock"), m.clock_set ? t("clockSet") : t("clockNotSet")], [t("messages"), m.published],
       m.dropped ? [t("mqDropped"), m.dropped] : null])),
     card(t("portsTitle"), active.length ? el("div", { class: "row" }, active.map(p => el("div", {}, el("h3", {}, t("portN", p.port) + " · " + p.name), psPill(p.state),
       el("p", { class: "muted" }, t("kind_" + p.kind).split(" (")[0] + " · " + p.baud + " · " + portLiveText(p))))) : el("p", { class: "muted" }, t("noPorts"))));
@@ -494,6 +495,18 @@ async function refreshRaw() {
   if (r.ok) { S.raw = r.data.text; const box = document.getElementById("port-raw"); if (box) box.textContent = S.raw || t("rawEmpty"); }
 }
 
+// The dump of what port `index` heard, saved as a text file (an administrator only: the node refuses anybody else).
+function downloadRaw(index) {
+  const blob = new Blob([S.raw || ""], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "port-" + (index + 1) + "-dump.txt";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
 // Where port `index` (0 to 7) sits in the mux profile: its group (0 to 2) and channel, from the sizes of the groups; null when the groups have no such port.
 function muxSlotOf(index) {
   let first = 0;
@@ -580,6 +593,7 @@ function portCard(index) {
       el("div", { class: "row" },
         field("equipment", base + "kind", { type: "select", rerender: true, after: kindChanged, options: KINDS.map(k => [k[0], t(k[1])]) }),
         field("baudRate", base + "baud", { type: "select", number: true, options: [[0, t("baudKind", kind[2])]].concat(bauds.map(b => [b, String(b)])) })),
+      cfg.kind === "pylontech" ? el("p", { class: "hint" }, t("pylontechBaudHint")) : null,
       el("div", { class: "row" }, field("deviceName", base + "name", { max: 32, hint: t("deviceNameHintSolar") }),
         cfg.kind === "raw" ? null : field("pollSeconds", base + "poll_s", { type: "number", min: 0, max: 3600, hint: t("pollHint") }),
         cfg.kind === "pylontech" ? field("modulesLabel", base + "modules", { type: "number", min: 0, max: 16, hint: t("modulesHint") }) : null,
@@ -595,8 +609,9 @@ function portCard(index) {
       st.enabled ? el("div", { class: "actions" }, psPill(st.state), el("span", { class: "muted", id: "port-live-" + index }, portLiveText(st))) : null,
       st.enabled && st.detail ? el("p", { class: "muted" }, t("portDetail") + ": " + st.detail) : null,
       st.enabled && (st.error || st.state === "error") ? el("p", { class: "err" }, portErrorText(st)) : null,
-      st.state === "silent" || st.state === "garbled" || st.state === "waiting" ? el("p", { class: "hint" }, t("hint_" + st.state)) : null,
+      st.state === "silent" || st.state === "garbled" || st.state === "waiting" ? el("p", { class: "hint" }, t(st.state === "silent" && cfg.kind === "pylontech" ? "hint_silent_pylontech" : "hint_" + st.state)) : null,
       st.enabled ? el("div", { class: "actions" }, el("button", { class: "b", onclick: () => showRaw(index) }, t(S.rawOpen === index ? "hideRaw" : "showRaw")),
+        S.rawOpen === index && isAdmin() ? el("button", { class: "b", onclick: () => downloadRaw(index) }, t("downloadRaw")) : null,
         cfg.kind === "ant" ? el("button", { class: "b", disabled: !isAdmin() || (S.bms && S.bms.port === index && S.bms.state === "running"), onclick: () => readBmsSettings(index) }, t("antRead")) : null) : null,
       cfg.kind === "ant" ? bmsSettingsView(index) : null,
       cfg.kind === "pylontech" && st.enabled ? consoleView(index) : null,

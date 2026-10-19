@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "pylontech_us2000_real.hpp"
 #include "../core/mux_group.hpp"
 #include "../core/port_leds.hpp"
 #include "../core/solar_config.hpp"
@@ -59,7 +60,7 @@ static std::string bat_table(int seed) {
   return t + "Command completed successfully\r\n$$\r\npylon>";
 }
 static const char* kInfo = "@\r\nDevice address      : 1\r\nDevice name         : US3000C\r\nRemain Capacity     : 65100 mAH\r\nTotal Capacity      : 74000 mAH\r\nCycle Times         : 312\r\nCommand completed successfully\r\n$$\r\npylon>";
-static const char* kStat = "@\r\nDevice address      : 1\r\nData Items          : 100\r\nCHARGE Cnt.         : 400\r\nCYCLE Times         : 312\r\nPwr Coulomb         : 133200000\r\nCommand completed successfully\r\n$$\r\npylon>";
+static const char* kStat = "@\r\nDevice address      : 1\r\nCHARGE Cnt.         : 400\r\nCYCLE Times         : 312\r\nPwr Coulomb         : 133200000\r\nCommand completed successfully\r\n$$\r\npylon>";
 static std::vector<std::uint8_t> bytes_of(const std::string& text) { return std::vector<std::uint8_t>(text.begin(), text.end()); }
 static std::string as_text(const std::vector<std::uint8_t>& bytes) { return std::string(bytes.begin(), bytes.end()); }
 
@@ -154,6 +155,7 @@ static Device pylontech_device(int modules) {
     if (c.rfind("bat ", 0) == 0) return bytes_of(bat_table(std::atoi(c.c_str() + 4)));
     if (c.rfind("info ", 0) == 0) return bytes_of(kInfo);
     if (c.rfind("stat ", 0) == 0) return bytes_of(kStat);
+    if (c.rfind("soh ", 0) == 0) return bytes_of(kUs2000Soh);
     return {};
   };
   return d;
@@ -315,7 +317,7 @@ static void test_ports_take_turns() {
   // what was asked on a channel is what that channel's equipment speaks: nothing of a battery on an inverter's channel, nothing of an inverter on the battery's
   bool clean = true;
   for (const auto& question : board.asked) {
-    const bool console = question.second == "pwr" || question.second.rfind("bat ", 0) == 0 || question.second.rfind("info ", 0) == 0 || question.second.rfind("stat ", 0) == 0;
+    const bool console = question.second == "pwr" || question.second.rfind("bat ", 0) == 0 || question.second.rfind("info ", 0) == 0 || question.second.rfind("stat ", 0) == 0 || question.second.rfind("soh ", 0) == 0;
     if (question.first == 1 && !console) clean = false;
     if (question.first != 1 && console) clean = false;
   }
@@ -536,6 +538,7 @@ struct StackBench {
         else if (command.rfind("bat ", 0) == 0) { const int n = std::atoi(command.c_str() + 4); cycles.back().push_back(n); text = bat_table(n * 3); }
         else if (command.rfind("info ", 0) == 0) text = kInfo;
         else if (command.rfind("stat ", 0) == 0) text = kStat;
+        else if (command.rfind("soh ", 0) == 0) text = kUs2000Soh;
         if (!text.empty()) in_flight.push_back({now + 40, bytes_of(text)});
       }
       std::string topic, payload;

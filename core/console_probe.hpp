@@ -26,7 +26,7 @@ inline bool allowed(std::string_view text, std::string& canonical) {
     if (static_cast<unsigned char>(c) < 0x20 || static_cast<unsigned char>(c) > 0x7E) return false;   // no control characters, no bytes past ASCII
     words += (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
   }
-  if (words.size() > 24) return false;
+  if (words.size() > 32) return false;
   // one or two words, single spaces
   std::size_t begin = 0;
   while (begin < words.size() && words[begin] == ' ') ++begin;
@@ -41,6 +41,19 @@ inline bool allowed(std::string_view text, std::string& canonical) {
   if (gap == std::string::npos) {
     if (name == "help" || name == "pwr" || name == "pwrsys") { canonical = name; return true; }
     return false;
+  }
+  if (name == "datalist") {   // the BMS's logs in a table: datalist event|history|misc [dtls] <item> (the item up to 9999); it reads, nothing more
+    std::vector<std::string> parts;
+    std::string current;
+    for (char c : argument + " ") { if (c == ' ') { if (!current.empty()) parts.push_back(current); current.clear(); } else current += c; }
+    if (parts.size() < 2 || parts.size() > 3) return false;
+    if (parts[0] != "event" && parts[0] != "history" && parts[0] != "misc") return false;
+    if (parts.size() == 3 && parts[1] != "dtls") return false;
+    const std::string& item = parts.back();
+    if (item.empty() || item.size() > 4 || (item.size() > 1 && item[0] == '0')) return false;
+    for (char c : item) if (c < '0' || c > '9') return false;
+    canonical = "datalist " + parts[0] + (parts.size() == 3 ? " dtls " : " ") + item;
+    return true;
   }
   if (name != "bat" && name != "info" && name != "stat" && name != "soh" && name != "data") return false;
   if (argument.empty() || argument.size() > 2 || argument.find(' ') != std::string::npos) return false;

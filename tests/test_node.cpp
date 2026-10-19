@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "pylontech_real.hpp"
+#include "pylontech_us2000_real.hpp"
 #include "../core/ant_bms.hpp"
 #include "../core/ant_settings.hpp"
 #include "../core/auth.hpp"
@@ -285,7 +287,7 @@ static std::string bat_table_mah() {
 static const char* kInfoReal =
     "@\r\nDevice address      : 1\r\nManufacturer        : Pylon\r\nDevice name         : US5000\r\nBoard version       : PHILTEC_BOARD_V2\r\nMain Soft version   : B66.6\r\n"
     "Specification       : 48V/74AH\r\nCell Number         : 15\r\nMax Dischg Curr     : -100000mA\r\nMax Charge Curr     : 100000mA\r\nCommand completed successfully\r\n$$\r\npylon>";
-static const char* kStat = "@\r\nDevice address      : 1\r\nData Items          : 100\r\nCHARGE Cnt.         : 400\r\nCYCLE Times         : 312\r\nPwr Coulomb         : 133200000\r\nCommand completed successfully\r\n$$\r\npylon>";
+static const char* kStat = "@\r\nDevice address      : 1\r\nCHARGE Cnt.         : 400\r\nCYCLE Times         : 312\r\nPwr Coulomb         : 133200000\r\nCommand completed successfully\r\n$$\r\npylon>";
 static const char* kInfo = "@\r\nDevice address      : 1\r\nDevice name         : US3000C\r\nRemain Capacity     : 65100 mAH\r\nTotal Capacity      : 74000 mAH\r\nCycle Times         : 312\r\nCommand completed successfully\r\n$$\r\npylon>";
 
 static std::vector<std::uint8_t> bytes_of(const std::string& text) { return std::vector<std::uint8_t>(text.begin(), text.end()); }
@@ -575,6 +577,37 @@ static void test_inverter_dialects() {
   CHECK(config::load("{\"ports\":[{\"dialect\":\"pi30\"}]}", s, back, problems) && back.ports[0].dialect == "pi30" && config::default_settings("000000").ports[0].dialect == "auto");
 }
 
+// The newest entry of the battery's event log is asked after `stat` says there are entries, and it goes out under the module; asked again only when the count moves.
+static void test_pylontech_event_log() {
+  Bench b(config::Kind::kPylontech, 10, 1);
+  b.answers["pwr\r"] = bytes_of(kPwr);
+  b.answers["bat 1\r"] = bytes_of(bat_table());
+  b.answers["info 1\r"] = bytes_of(kInfo);
+  b.answers["stat 1\r"] = bytes_of(std::string("@\r\nDevice address      : 1\r\nData Items          : 1\r\nCYCLE Times         : 312\r\nCommand completed successfully\r\n$$\r\npylon_debug>\r\n"));
+  b.answers["data event 1\r"] = bytes_of(std::string(kRealDataEvent));
+  b.answers["soh 1\r"] = bytes_of(std::string(kUs2000Soh));
+  b.run(12000);
+  CHECK(b.asked.size() >= 7 && b.asked[3] == "stat 1\r" && b.asked[4] == "data event 1\r" && b.asked[5] == "soh 1\r" && b.asked[6] == "pwr\r");
+  CHECK(!b.messages.empty());
+  {
+    armor::json::Value health;
+    CHECK(armor::json::parse(b.messages[0], health) && health.get("stack")->items[0].get("soh_abnormal")->items.size() == 1 && health.get("stack")->items[0].get("soh_counts")->items[6].number == 13);
+  }
+  armor::json::Value doc;
+  CHECK(!b.messages.empty() && armor::json::parse(b.messages[0], doc));
+  const armor::json::Value* event = doc.get("stack")->items[0].get("last_event");
+  CHECK(event != nullptr && event->get("power_events")->text == "0x2 PHV" && event->get("index")->number == 1);
+  int asked_again = 0;
+  for (const std::string& command : b.asked) if (command == "data event 1\r") ++asked_again;
+  CHECK(asked_again == 1);   // the details are kept for half an hour
+  // a battery that does not know the command (it answers with its refusal) leaves the event out and the reading goes on
+  Bench refusing(config::Kind::kPylontech, 10, 1);
+  refusing.answers = b.answers;
+  refusing.answers["data event 1\r"] = bytes_of(std::string("@\r\nInvalid command or fail to excute.\r\n$$\r\npylon_debug>\r\n"));
+  refusing.run(12000);
+  CHECK(!refusing.messages.empty() && armor::json::parse(refusing.messages[0], doc) && doc.get("stack")->items[0].get("last_event") == nullptr && doc.get("cycles")->number == 312);
+}
+
 static void test_pylontech_port() {
   Bench b(config::Kind::kPylontech, 10);
   b.answers["pwr\r"] = bytes_of(kPwr);
@@ -584,8 +617,10 @@ static void test_pylontech_port() {
   b.answers["info 2\r"] = bytes_of(kInfo);
   b.answers["stat 1\r"] = bytes_of(kStat);
   b.answers["stat 2\r"] = bytes_of(kStat);
+  b.answers["soh 1\r"] = bytes_of(kUs2000Soh);
+  b.answers["soh 2\r"] = bytes_of(kUs2000Soh);
   b.run(15000);
-  CHECK(b.asked.size() >= 8 && b.asked[0] == "pwr\r" && b.asked[1] == "bat 1\r" && b.asked[2] == "info 1\r" && b.asked[3] == "stat 1\r" && b.asked[4] == "bat 2\r" && b.asked[5] == "info 2\r" && b.asked[6] == "stat 2\r" && b.asked[7] == "pwr\r");
+  CHECK(b.asked.size() >= 10 && b.asked[0] == "pwr\r" && b.asked[1] == "bat 1\r" && b.asked[2] == "info 1\r" && b.asked[3] == "stat 1\r" && b.asked[4] == "soh 1\r" && b.asked[5] == "bat 2\r" && b.asked[6] == "info 2\r" && b.asked[7] == "stat 2\r" && b.asked[8] == "soh 2\r" && b.asked[9] == "pwr\r");
   CHECK(b.messages.size() == 2);        // module 3 is absent and is never asked about
   armor::json::Value doc;
   CHECK(armor::json::parse(b.messages[0], doc) && doc.get("kind")->text == "battery" && doc.get("modules")->number == 2 && doc.get("full_capacity_ah")->number > 147.9);
@@ -597,8 +632,9 @@ static void test_pylontech_port() {
   one.answers["bat 1\r"] = bytes_of(bat_table());
   one.answers["info 1\r"] = bytes_of(kInfo);
   one.answers["stat 1\r"] = bytes_of(kStat);
+  one.answers["soh 1\r"] = bytes_of(kUs2000Soh);
   one.run(12000);
-  CHECK(one.asked.size() >= 5 && one.asked[0] == "pwr\r" && one.asked[1] == "bat 1\r" && one.asked[2] == "info 1\r" && one.asked[3] == "stat 1\r" && one.asked[4] == "pwr\r" && one.messages.size() == 2);
+  CHECK(one.asked.size() >= 6 && one.asked[0] == "pwr\r" && one.asked[1] == "bat 1\r" && one.asked[2] == "info 1\r" && one.asked[3] == "stat 1\r" && one.asked[4] == "soh 1\r" && one.asked[5] == "pwr\r" && one.messages.size() == 2);
 
   // a battery of the newer firmware (US5000 V2.3): its own header, the charge in mAH on the cells' rows, the identity in `info` and the cycles in `stat`. The identity and the
   // history are asked once and kept: the next cycle asks `pwr` and `bat` only, and still reports them
@@ -607,8 +643,9 @@ static void test_pylontech_port() {
   real.answers["bat 1\r"] = bytes_of(bat_table_mah());
   real.answers["info 1\r"] = bytes_of(kInfoReal);
   real.answers["stat 1\r"] = bytes_of(kStat);
+  real.answers["soh 1\r"] = bytes_of(kUs2000Soh);
   real.run(25000);
-  CHECK(real.asked.size() >= 8 && real.asked[0] == "pwr\r" && real.asked[1] == "bat 1\r" && real.asked[2] == "info 1\r" && real.asked[3] == "stat 1\r" && real.asked[4] == "pwr\r" && real.asked[5] == "bat 1\r" && real.asked[6] == "pwr\r");
+  CHECK(real.asked.size() >= 9 && real.asked[0] == "pwr\r" && real.asked[1] == "bat 1\r" && real.asked[2] == "info 1\r" && real.asked[3] == "stat 1\r" && real.asked[4] == "soh 1\r" && real.asked[5] == "pwr\r" && real.asked[6] == "bat 1\r" && real.asked[7] == "pwr\r");
   CHECK(real.messages.size() == 3);
   for (const std::string& message : real.messages) {
     CHECK(armor::json::parse(message, doc) && doc.get("model")->text == "US5000" && doc.get("cycles")->number == 312 && doc.get("full_capacity_ah")->number > 73.9 && doc.get("full_capacity_ah")->number < 74.1);
@@ -624,6 +661,7 @@ static void test_pylontech_refusals() {
   b.answers["bat 1\r"] = bytes_of(bat_table());
   b.answers["info 1\r"] = bytes_of(refused);
   b.answers["stat 1\r"] = bytes_of(refused);
+  b.answers["soh 1\r"] = bytes_of(refused);
   b.run(4000);
   // the refusals end the exchange at once: no timeout, and the cells came in
   CHECK(b.poller.stats().timeouts == 0 && !b.messages.empty());
@@ -635,7 +673,7 @@ static void test_pylontech_faults() {
   // the extras do not answer: the reading goes out with what `pwr` said
   Bench b(config::Kind::kPylontech, 10);
   b.answers["pwr\r"] = bytes_of(kPwr);
-  b.run(20000);
+  b.run(30000);
   CHECK(!b.messages.empty());
   armor::json::Value doc;
   CHECK(armor::json::parse(b.messages[0], doc));
@@ -1086,6 +1124,7 @@ int main() {
   test_revo_and_warning_bits();
   test_inverter_dialects();
   test_pylontech_port();
+  test_pylontech_event_log();
   test_pylontech_refusals();
   test_pylontech_faults();
   test_raw_port();

@@ -48,6 +48,19 @@ capacity, `Cell Number`, versions) and `stat <n>` the history (`CYCLE Times`). T
 Captured on real units (US2000C of four firmware versions, an US2KBPL, an US3000C and a 24 V unit), the console echoes every line followed by an empty one, `info` and `stat` answer as described
 (`Device name` says US2KBPL for what is sold as US2000B, and a few fields such as `Manufacturer` or `Barcode` can be empty), the console speed is 115200 (`Console Port rate` in `info`) and the prompt
 can be `pylon>` or `pylon_debug>`. The `pwr` and `bat` texts were not in those captures: their layouts remain those of the public descriptions.
+**What the node reads besides the table.** From `info`: the model, the board, the main software and the software versions (for example `US2000C`, `V10R04`, `B68.2.0.0`, `V2.6`), `Cell Number`, the current limits of the module
+(`Max Charge Curr` and `Max Dischg Curr`, `53000mA`, in amperes without the sign) and the speed the console says it uses (`Console Port rate`: recent units say 115200, an old US2000 with firmware V1.5 says 19200). From `stat`: the
+counters of the life of the module under the console's own names, lowercased with underscores (`bat_ov_times`, `coc_times`, `data_items` ... in `counters`); the severe ones (the protections and errors) are marked so the server can tell
+when one goes up, and what a counter means is not official. From `soh`: the count of each cell and which cells the console calls anything but `Normal` (`soh_counts`, `soh_abnormal`; a cell with a count and the word `Normal` is not
+abnormal). From `data event <n>` (n is the `Data Items` of `stat`, taken to be the newest entry): `last_event`, with the time of the battery's own clock, the three states, and the protection fields exactly as printed (`0x2 PHV`,
+`0x4 BVNOR`): they are never decoded, because the layout of the numbers has not been confirmed. Both the old names (`BOT`, `BHT`, `Protect ENA`) and the newer ones (`CBOT`, `Bat Protect ENA`, `Pwr Protect ENA`) are accepted as printed.
+All of it is asked when the module's details are asked (once, then every half hour), and a battery that does not answer a question leaves that part out and the reading goes on.
+The parsers also read the table of `datalist event|history|misc <item>` (the BMS's log as rows of time, voltage, current, temperatures, the lowest and highest cell, the states and the mnemonics of the events; the history keeps one point every 1800 s)
+and the snapshot of `getpwr` (`value#` for each field: the pack, then one line per cell); the console of the panel may ask `datalist`, but the poller does not use either yet.
+**Waking a battery.** A battery that has been idle for a while may go to sleep and stop answering the console. On the RJ45 console port, +5 to 12 V (5 to 15 mA) for at least half a second between pin 4 and pin 5 (ground on pin 5) wakes the
+US2000C, US3000C, US5000 and UP5000 (from the makers' manuals; the node does not drive it). The frame that opens the console at 1200 baud (`~20014682C0048520FCC3` and a carriage return) is `build_frame(0x20, 0x01, 0x46, 0x82, "8520")`, tested.
+**Speeds.** The console of recent batteries runs at 115200; the RS485 protocol runs at 9600 with the battery's DIP switch 1 on and at 115200 with it off (restart the battery after changing it). A port may be set to either, and to 19200 for an old unit.
+The console is read-only: the only commands ever sent are `help`, `pwr`, `pwrsys`, `bat`, `info`, `stat`, `soh`, `data` and `datalist`, and a test refuses every command of the console that writes (limits, calibration, storage, clock, counters, shut-down, tests).
 Models the firmwares are known under: US2000 / US2000B, US2000C, US2000B Plus, US2KBPL, US3000, US3000C, US5000, UP2500, UP5000, Force L1, Force L2 and the Pytes E-Box 48100R (its console is a relative of Pylontech's).
  The stack summary uses what physics says of a parallel stack: the same voltage (so the mean), currents that add, the extreme temperatures and cell
 voltages, the mean state of charge. Any state column other than `Normal` raises `alarm`.
@@ -115,6 +128,7 @@ read and configure it); the node uses the cable, which is the more stable of the
 ## Honest limits
 
 - The Pylontech console has a `pwrsys` command (a summary of the whole system) whose output could not be found in any public description, so it is **not read**: a port that asked for it would be guessing its format. The panel's *Ask the battery* (see NODE_FIRMWARE.md) shows what it answers on a real battery, and with that answer at hand it is a small parser to add.
+- The meaning of the numbers in the protection and event fields of the console (`0x2`, `0x4`) is not decoded: only the mnemonics beside them are shown. The newest entry of the event log is asked by the count of `Data Items`; that this is its index is an assumption to check on a real battery.
 
 - The exact text of the console differs between firmware versions: the columns are found by the header's names, but a row that lacks a column the reading needs (voltage, current, temperatures, cell extremes, the four states, the charge) is refused rather than guessed. The `pwrsys` command of the newer firmwares (the stack's own totals) is not read.
 - The scaling of the RS485 analogue values differs between versions of Pylontech's document; the frame is built and checked here, the values are not read.

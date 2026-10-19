@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
@@ -502,7 +503,7 @@ esp_err_t get_console(httpd_req_t* r) {
 // What a port has heard, as hexadecimal lines: to look at a protocol that is not decoded yet, or to see what an inverter really answers.
 esp_err_t get_port_raw(httpd_req_t* r) {
   Who who;
-  if (!require(r, who, false, false)) return ESP_OK;
+  if (!require(r, who, true, false)) return ESP_OK;   // administrators only: the dump can hold what a battery or an inverter said, serial numbers included
   const long number = query_port(r);
   if (number < 1 || number > static_cast<long>(config::kPortCount)) return send_error(r, 422, "invalid_port");
   json::Writer w;
@@ -746,7 +747,7 @@ esp_err_t post_ota(httpd_req_t* r) {
 }
 
 // The GitHub counterpart of post_ota(): checking for a release, and installing it, next to (never instead of) the manual upload above.
-bool g_ota_restart_scheduled = false;
+std::atomic<bool> g_ota_restart_scheduled{false};   // read by the timer that watches the installation and written by the handlers
 
 // The restart after an installation from GitHub used to be scheduled only when the panel asked how far it was: with the browser closed the new image was set to boot and the node went
 // on with the old one until the next restart of any kind (a power cut) switched it, unannounced. Now a timer of its own watches the installation and restarts the node when it is done.
@@ -755,6 +756,8 @@ void watch_install(void*) {
   if (p.state == "done" && !g_ota_restart_scheduled) { g_ota_restart_scheduled = true; restart_after(2500); }
 }
 void start_install_watch() {
+  static std::mutex watch_lock;
+  std::lock_guard<std::mutex> guard(watch_lock);
   static esp_timer_handle_t timer = nullptr;
   if (timer == nullptr) {
     esp_timer_create_args_t args{};
@@ -919,6 +922,8 @@ void restart_now(void*) { network::disconnect_before_restart(); esp_restart(); }
 }  // namespace
 
 void restart_after(unsigned delay_ms) {
+  static std::mutex timer_lock;   // two handlers may ask at once: the timer is made once and started by one of them at a time
+  std::lock_guard<std::mutex> guard(timer_lock);
   static esp_timer_handle_t timer = nullptr;
   if (timer == nullptr) {
     esp_timer_create_args_t args{};

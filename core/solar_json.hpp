@@ -121,6 +121,7 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
   for (const pylontech::Module& m : modules) {
     w.begin_object().field("n", m.number).field("present", m.present);
     if (m.present) {
+      if (!m.model.empty()) w.field("model", m.model);
       w.key("voltage_v").number(m.voltage_v, 3).key("current_a").number(m.current_a, 3).key("temperature_c").number(m.temperature_c, 1);
       if (m.soc_percent >= 0) w.field("soc_percent", m.soc_percent);
       w.field("state", m.base_state);
@@ -128,6 +129,37 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
       if (m.full_capacity_ah >= 0) w.key("full_capacity_ah").number(m.full_capacity_ah, 2);
       if (m.cycles >= 0) w.field("cycles", m.cycles);
       if (m.health_percent >= 0) w.field("health_percent", m.health_percent);
+      if (m.cell_count >= 0) w.field("cell_count", m.cell_count);
+      if (!m.board_version.empty()) w.field("board_version", m.board_version);
+      if (!m.main_soft_version.empty()) w.field("main_soft_version", m.main_soft_version);
+      if (!m.soft_version.empty()) w.field("soft_version", m.soft_version);
+      if (m.max_charge_a >= 0) w.key("max_charge_a").number(m.max_charge_a, 1);
+      if (m.max_discharge_a >= 0) w.key("max_discharge_a").number(m.max_discharge_a, 1);
+      if (m.console_baud >= 0) w.field("console_baud", m.console_baud);
+      if (!m.soh_counts.empty()) {
+        w.key("soh_counts").begin_array();
+        for (int count : m.soh_counts) w.integer(count);
+        w.end_array();
+        w.key("soh_abnormal").begin_array();
+        for (int cell : m.soh_abnormal) w.integer(cell);
+        w.end_array();
+      }
+      if (!m.counters.empty()) { w.key("counters").begin_object(); for (const auto& counter : m.counters) w.key(counter.first).integer(counter.second); w.end_object(); }
+      if (m.last_event.valid) {
+        const pylontech::Event& ev = m.last_event;
+        w.key("last_event").begin_object().field("index", ev.index).field("time", ev.time);
+        w.key("voltage_v").number(ev.voltage_v, 3).key("current_a").number(ev.current_a, 3).key("temperature_c").number(ev.temperature_c, 1);
+        if (ev.percent >= 0) w.field("percent", ev.percent);
+        if (!ev.base_state.empty()) w.field("base_state", ev.base_state);
+        if (!ev.voltage_state.empty()) w.field("voltage_state", ev.voltage_state);
+        if (!ev.current_state.empty()) w.field("current_state", ev.current_state);
+        if (!ev.temperature_state.empty()) w.field("temperature_state", ev.temperature_state);
+        if (!ev.coulomb_state.empty()) w.field("coulomb_state", ev.coulomb_state);
+        if (!ev.power_events.empty()) w.field("power_events", ev.power_events);
+        if (!ev.battery_events.empty()) w.field("battery_events", ev.battery_events);
+        if (!ev.system_fault.empty()) w.field("system_fault", ev.system_fault);
+        w.end_object();
+      }
       if (!m.cells_v.empty()) { w.key("cells_v").begin_array(); for (double v : m.cells_v) w.number(v, 3); w.end_array(); }
       if (!m.temperatures_c.empty()) { w.key("temperatures_c").begin_array(); for (double v : m.temperatures_c) w.number(v, 1); w.end_array(); }
     }

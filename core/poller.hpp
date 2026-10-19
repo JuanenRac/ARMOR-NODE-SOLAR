@@ -197,7 +197,7 @@ class Poller {
   std::uint64_t last_rx_ms() const { return last_rx_ms_; }
 
  private:
-  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kMod, kFws, kPwr, kBat, kInfo, kStat, kAnt };
+  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt };
   enum class Dialect { kPi30, kRevo, kPi18 };
 
   void send(std::string_view text, std::uint64_t now_ms, std::uint64_t timeout_ms) {
@@ -512,6 +512,13 @@ class Poller {
       ask_stat(now_ms);
     } else if (step_ == Step::kStat) {
       if (pylontech::parse_info(buffer_, modules_[module_at_]) > 0) ++stats_.replies_ok;
+      ask_event_or_end(now_ms);
+    } else if (step_ == Step::kEvent) {
+      pylontech::Event event;
+      if (pylontech::parse_event(buffer_, event)) { modules_[module_at_].last_event = event; ++stats_.replies_ok; }
+      ask_soh(now_ms);
+    } else if (step_ == Step::kSoh) {
+      if (pylontech::parse_soh(buffer_, modules_[module_at_]) > 0) ++stats_.replies_ok;
       end_extras(now_ms);
     }
   }
@@ -525,6 +532,16 @@ class Poller {
       if (e.full_capacity_ah >= 0) m.full_capacity_ah = e.full_capacity_ah;
       if (e.cycles >= 0) m.cycles = e.cycles;
       if (e.health_percent >= 0) m.health_percent = e.health_percent;
+      if (!e.counters.empty()) m.counters = e.counters;
+      if (e.last_event.valid) m.last_event = e.last_event;
+      if (e.cell_count >= 0) m.cell_count = e.cell_count;
+      if (!e.board_version.empty()) m.board_version = e.board_version;
+      if (!e.main_soft_version.empty()) m.main_soft_version = e.main_soft_version;
+      if (!e.soft_version.empty()) m.soft_version = e.soft_version;
+      if (e.max_charge_a >= 0) m.max_charge_a = e.max_charge_a;
+      if (e.max_discharge_a >= 0) m.max_discharge_a = e.max_discharge_a;
+      if (e.console_baud >= 0) m.console_baud = e.console_baud;
+      if (!e.soh_counts.empty()) { m.soh_counts = e.soh_counts; m.soh_abnormal = e.soh_abnormal; }
       ++module_at_;
       ask_next_module(now_ms);
       return;
@@ -539,11 +556,29 @@ class Poller {
     buffer_.clear();
     send("stat " + std::to_string(modules_[module_at_].number) + "\r", now_ms, kConsoleExtraTimeoutMs);
   }
+  // The newest entry of the battery's event log is asked when `stat` says there are entries and the one kept is not the newest (the log's last item is taken to be the count of
+  // `Data Items`; a battery that answers something else just leaves the event out).
+  void ask_event_or_end(std::uint64_t now_ms) {
+    const pylontech::Module& m = modules_[module_at_];
+    long long items = 0;
+    for (const auto& counter : m.counters) if (counter.first == "data_items") items = counter.second;
+    const Extras& e = extras_[static_cast<std::size_t>(m.number)];
+    if (items < 1 || items > 100000 || (e.last_event.valid && e.last_event.index == items)) { ask_soh(now_ms); return; }
+    step_ = Step::kEvent;
+    buffer_.clear();
+    send("data event " + std::to_string(items) + "\r", now_ms, kConsoleExtraTimeoutMs);
+  }
+  // The health of each cell (`soh`), the last of the details asked once in a while.
+  void ask_soh(std::uint64_t now_ms) {
+    step_ = Step::kSoh;
+    buffer_.clear();
+    send("soh " + std::to_string(modules_[module_at_].number) + "\r", now_ms, kConsoleExtraTimeoutMs);
+  }
   // Both extras have been asked (answered or not): keep what came, unless the module also reports its remaining charge there (that one has to be fresh every time).
   void end_extras(std::uint64_t now_ms) {
     const pylontech::Module& m = modules_[module_at_];
     Extras& e = extras_[static_cast<std::size_t>(m.number)];
-    e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.at_ms = now_ms;
+    e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.counters = m.counters; if (m.last_event.valid) e.last_event = m.last_event; e.cell_count = m.cell_count; e.board_version = m.board_version; e.main_soft_version = m.main_soft_version; e.soft_version = m.soft_version; e.max_charge_a = m.max_charge_a; e.max_discharge_a = m.max_discharge_a; e.console_baud = m.console_baud; e.soh_counts = m.soh_counts; e.soh_abnormal = m.soh_abnormal; e.at_ms = now_ms;
     e.valid = had_capacity_ || m.capacity_ah < 0;
     ++module_at_;
     ask_next_module(now_ms);
@@ -592,7 +627,9 @@ class Poller {
     if (step_ == Step::kQpgs) { ++unit_at_; ask_unit(now_ms); return; }
     if (is_identity_step()) { identity_missed(); if (step_ == Step::kQpiri && have_ratings_) ratings_at_ms_ = now_ms; if (step_ == Step::kQet && have_energy_) energy_at_ms_ = now_ms; next_identity(now_ms); return; }
     if (step_ == Step::kInfo) { ask_stat(now_ms); return; }
-    if (step_ == Step::kStat) { end_extras(now_ms); return; }
+    if (step_ == Step::kStat) { ask_event_or_end(now_ms); return; }
+    if (step_ == Step::kEvent) { ask_soh(now_ms); return; }
+    if (step_ == Step::kSoh) { end_extras(now_ms); return; }
     stats_.last_error = "timeout";
     if (kind_ == config::Kind::kPylontech) wake_ = true;   // the console did not answer: the next try starts with a bare Enter
     if (kind_ == config::Kind::kVoltronic && auto_) {
@@ -646,7 +683,7 @@ class Poller {
   char mode_ = 0;
   std::vector<std::string> warnings_;
   std::vector<pylontech::Module> modules_;
-  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::uint64_t at_ms = 0; bool valid = false; };
+  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string, long long>> counters; pylontech::Event last_event; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0; bool valid = false; };
   std::array<Extras, 17> extras_;   // by module number (1 to 16): what `info` and `stat` said, kept between cycles
   bool had_capacity_ = false;
   std::size_t module_at_ = 0;
