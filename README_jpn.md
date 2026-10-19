@@ -21,13 +21,13 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.4.9-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.0-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
 ---
 
-**正直さのチェック - 今日動いているもの:** ファームウェアは ESP-IDF 5.4 コンテナーでビルドでき、そのコア（設定、各種機器とのやり取り、エミュレートした UART の計算、Bluetooth チャネル、バージョンと署名の検査：13 のテストプログラムで 5,412 項目）は代替機器を使ってコンピューター上でテストされ、生成するメッセージは ARMOR-COMMON に受け付けられ、パネルは代替ノードに対してブラウザーで動かしました。**基板上で動いたことはなく、インバーターやバッテリーも接続されていません**：Wi-Fi、TLS のパネル、アップデート、ハードウェアとエミュレートした UART、プロトコルの形式（公開資料と記憶から作成）は未検証です。テスト内の ANT-BMS フレームは他の人が自分の機器で取得したもので、このプロジェクト自身はまだ 1 つも読み取っていません。
+**正直さのチェック - 今日動いているもの:** ファームウェアは ESP-IDF 5.4 コンテナーでビルドでき、そのコア（設定、各種機器とのやり取り、エミュレートした UART の計算、Bluetooth チャネル、バージョンと署名の検査：13 のテストプログラムで 5,466 項目）は代替機器を使ってコンピューター上でテストされ、生成するメッセージは ARMOR-COMMON に受け付けられ、パネルは代替ノードに対してブラウザーで動かしました。**基板上で動いたことはなく、インバーターやバッテリーも接続されていません**：Wi-Fi、TLS のパネル、アップデート、ハードウェアとエミュレートした UART、プロトコルの形式（公開資料と記憶から作成）は未検証です。テスト内の ANT-BMS フレームは他の人が自分の機器で取得したもので、このプロジェクト自身はまだ 1 つも読み取っていません。
 
 ---
 
@@ -35,9 +35,9 @@
 
 | | |
 |---|---|
-| バージョン | `0.4.9` |
+| バージョン | `0.5.0` |
 | 成熟度 | 機能する |
-| テスト | 5,412 checks in 13 programs (`ctest`) |
+| テスト | 5,466 checks in 13 programs (`ctest`) |
 | 技術 | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
 | 実機での確認 | まだありません：基板は未製作で、インバーターやバッテリーも未接続（コンピューター上のテスト、ビルド、ブラウザーでのパネルのみ） |
 
@@ -90,7 +90,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console && build/host/test_release      # 5,412 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console && build/host/test_release      # 5,466 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin
