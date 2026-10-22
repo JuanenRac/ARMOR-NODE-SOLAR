@@ -27,7 +27,7 @@
 
 ---
 
-**Honesty check - what runs today:** The firmware builds in the ESP-IDF 5.4 container, its core (the settings, the exchange with each kind of equipment, the arithmetic of the emulated UART, the Bluetooth channel, the release and signature checks: 9,319 checks in 14 test programs) is tested on a computer with stand-in equipment, the messages it makes are accepted by ARMOR-COMMON and the panel was exercised in a browser against a stand-in node. **It has never run on a board and no inverter or battery has been connected**: the Wi-Fi, the panel over TLS, the update, the hardware and emulated UARTs and the formats of the protocols (written from public documents and from memory) are untried. The ANT-BMS frames in its tests were captured by other people on their own units: this project has not read one itself.
+**Honesty check - what runs today:** The firmware builds in the ESP-IDF 5.5.5 container, its core (the settings, the exchange with each kind of equipment, the arithmetic of the emulated UART, the Bluetooth channel, the release and signature checks: 9,319 checks in 14 test programs) is tested on a computer with stand-in equipment, the messages it makes are accepted by ARMOR-COMMON and the panel was exercised in a browser against a stand-in node. **It has never run on a board and no inverter or battery has been connected**: the Wi-Fi, the panel over TLS, the update, the hardware and emulated UARTs and the formats of the protocols (written from public documents and from memory) are untried. The ANT-BMS frames in its tests were captured by other people on their own units: this project has not read one itself.
 
 ---
 
@@ -38,7 +38,7 @@
 | Version | `0.5.4` |
 | Maturity | Functional |
 | Tests | 9,319 checks in 14 programs (`ctest`) |
-| Stack | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
+| Stack | C++17 (host-tested core); ESP-IDF 5.5.5 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
 | On real hardware | None yet: no board built and no inverter or battery connected (host tests, the build and the panel in a browser only) |
 
 ## 🎯 Overview
@@ -91,7 +91,7 @@ ARMOR-SOLAR/
 
 ## 🛠️ Development Environment
 
-**Requirements:** a C++17 compiler for the host tests, the ESP-IDF 5.4 container to build the image, an ESP32-S3-WROOM-1 N16R8 or a Waveshare ESP32-S3-ETH
+**Requirements:** a C++17 compiler for the host tests, the ESP-IDF 5.5.5 container to build the image, an ESP32-S3-WROOM-1 N16R8 or a Waveshare ESP32-S3-ETH
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host

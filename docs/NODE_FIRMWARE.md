@@ -5,7 +5,7 @@ inverters and batteries through up to **ten serial ports** and publishes their r
 messages of ARMOR-COMMON). It has the same web panel as the radar nodes' (setup, login, users, Wi-Fi, broker, over-the-air update with rollback, log, the panel
 over HTTPS) and the pages of its own: the ports and the readings.
 
-**Nothing here has run on a board, and no inverter or battery has been connected.** What has been done: the firmware builds for both boards in the ESP-IDF 5.4.2 container
+**Nothing here has run on a board, and no inverter or battery has been connected.** What has been done: the firmware builds for both boards in the ESP-IDF 5.5.5 container
 (a 1.3 MB image in a 3 MB slot), its core (settings, the exchange with each kind of equipment, the emulated UART's arithmetic) is tested on a computer with
 stand-ins for the equipment, the messages it makes are accepted by ARMOR-COMMON, and the panel was exercised in a browser against a stand-in node. The host tests are 2,550 checks.
 

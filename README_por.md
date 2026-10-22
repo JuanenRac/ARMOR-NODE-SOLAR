@@ -27,7 +27,7 @@
 
 ---
 
-**Verificação de honestidade - o que funciona hoje:** O firmware compila no contentor ESP-IDF 5.4, o seu núcleo (as definições, a troca com cada tipo de equipamento, a aritmética da UART emulada, o canal Bluetooth, as verificações de versão e assinatura: 2885 verificações em 10 programas de teste) é testado num computador com equipamentos de substituição, as mensagens que produz são aceites pelo ARMOR-COMMON e o painel foi exercitado num navegador contra um nó de substituição. **Nunca correu numa placa e nenhum inversor ou bateria foi ligado**: o Wi-Fi, o painel sobre TLS, a atualização, as UART de hardware e emuladas e os formatos dos protocolos (escritos a partir de documentos públicos e de memória) estão por experimentar. As tramas ANT-BMS dos seus testes foram capturadas por outras pessoas nas suas próprias unidades: este projeto ainda não leu nenhuma por si.
+**Verificação de honestidade - o que funciona hoje:** O firmware compila no contentor ESP-IDF 5.5.5, o seu núcleo (as definições, a troca com cada tipo de equipamento, a aritmética da UART emulada, o canal Bluetooth, as verificações de versão e assinatura: 2885 verificações em 10 programas de teste) é testado num computador com equipamentos de substituição, as mensagens que produz são aceites pelo ARMOR-COMMON e o painel foi exercitado num navegador contra um nó de substituição. **Nunca correu numa placa e nenhum inversor ou bateria foi ligado**: o Wi-Fi, o painel sobre TLS, a atualização, as UART de hardware e emuladas e os formatos dos protocolos (escritos a partir de documentos públicos e de memória) estão por experimentar. As tramas ANT-BMS dos seus testes foram capturadas por outras pessoas nas suas próprias unidades: este projeto ainda não leu nenhuma por si.
 
 ---
 
@@ -38,7 +38,7 @@
 | Versão | `0.5.4` |
 | Maturidade | Funcional |
 | Testes | 9 319 verificações em 14 programas (`ctest`) |
-| Tecnologia | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
+| Tecnologia | C++17 (host-tested core); ESP-IDF 5.5.5 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
 | Em hardware real | Nenhum ainda: nenhuma placa montada nem inversor ou bateria ligados (só testes no computador, a compilação e o painel num navegador) |
 
 ## 🎯 Visão geral
@@ -91,7 +91,7 @@ ARMOR-SOLAR/
 
 ## 🛠️ Ambiente de desenvolvimento
 
-**Requisitos:** um compilador de C++17 para os testes no computador, o contentor ESP-IDF 5.4 para compilar a imagem, um ESP32-S3-WROOM-1 N16R8 ou um Waveshare ESP32-S3-ETH
+**Requisitos:** um compilador de C++17 para os testes no computador, o contentor ESP-IDF 5.5.5 para compilar a imagem, um ESP32-S3-WROOM-1 N16R8 ou um Waveshare ESP32-S3-ETH
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host

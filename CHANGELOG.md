@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 - The repository has a security policy, a code of conduct, a contributing guide and a support file.
 - The banner follows the animated style of the ecosystem banners, with the name, the kind and the technologies of the project.
+- **ESP-IDF 5.5.5 is the one version:** `tools/build_node.sh` uses the 5.5.5 container, and the firmware guide, the requirements of the READMEs and the manifest name it (it said 5.4 in places).
 - **A number the inverter sent beyond what is possible and that the node held at the contract's limit is now named** in `clamped` (for example `["load_percent"]`), so the server shows it as not real instead of as a true 200 %.
 - **The raw dump of a port is only made while the panel is looking at it** (for fifteen seconds after each request) instead of 128 lines every second per port.
 - **How the last run ended:** after a start that was not clean (a crash, a watchdog, a sag of the supply, a failed allocation, a restart by the node's own guard) the health report carries the cause for the first ten minutes, so nobody has to be at the board with a cable.
