@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.5.3-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Version | `0.5.3` |
+| Version | `0.5.4` |
 | Reifegrad | Funktionsfähig |
 | Tests | 9,319 checks in 14 programs (`ctest`) |
 | Technik | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
@@ -61,6 +61,8 @@
 * **Zustandsbericht:** etwa einmal pro Minute veröffentlicht der Knoten, wie lange er läuft und warum er zuletzt neu gestartet ist, seinen freien Speicher, seine Verbindung und sein WLAN-Signal, wie oft er sich mit dem Broker verbunden hat und den letzten protokollierten Fehler (`armor/health/<Knoten>`, der Vertrag `node_health` von ARMOR-COMMON). Der Code, der ihn erzeugt, wird von allen Knoten geteilt und auf einem Computer getestet; auf einer Platine ist er noch nicht gelaufen.
 * **Schreiben auf Pylontech-Batterien (standardmäßig aus):** nur typisierte Operationen - Uhr, Zähler und Protokolle, Neustart, Kapazität, das Zurücksetzen des Ladezustands, Grenzwerte und Schutzfunktionen, Ausgänge, Seriennummer, externer Speicher, Firmware per XMODEM-1K und eine Expertenkonsole mit Sperrliste - in zwei Schritten (vorbereiten, dann mit einem Einmal-Token ausführen), die Batterie wird davor und danach gelesen, das Service-Passwort liegt nur im Knoten, und die Tests laufen gegen eine simulierte Konsole. An einer echten Batterie nicht erprobt: siehe den [Prüfstandsplan](docs/BATTERY_BENCH_TEST_PLAN.md).
 * **Steuerung vom Server aus:** Studio kann den Knoten sauber neu starten, bis zu einer Stunde pausieren (er läuft von selbst weiter), seine Arbeit in den Standby setzen (ohne Ende, über Neustarts hinweg gespeichert, der Knoten bleibt verbunden und antwortet weiter), ihn sich zeigen lassen, einen Diagnose-Schnappschuss anfordern und ihn als in Wartung markieren (`armor/control/<Knoten>/...`, der Vertrag `node_control` von ARMOR-COMMON). Jeder Befehl besteht aus zwei Schritten mit einem Einmal-Token, das zu dieser Operation gehört; nur der Server darf sie am Broker schreiben, und es gibt kein Zurücksetzen auf Werkseinstellungen, kein Löschen und keinen Tiefschlaf. Solange der Knoten pausiert oder im Standby ist, beschreibt er keine Batterie (eine laufende Operation lässt sich noch abbrechen) und liest weiter Wechselrichter und Batterien. Der Code wird von allen Knoten geteilt und auf einem Rechner getestet; auf einer Platine ist er noch nicht gelaufen.
+* **Absurde Werte werden benannt, nicht versteckt:** Sendet ein Wechselrichter eine unmögliche Zahl, hält der Knoten sie am Grenzwert des Vertrags fest und nennt sie in `clamped`, sodass der Server sie als nicht echt anzeigt; und der Rohdaten-Dump eines Ports wird nur erzeugt, solange das Panel ihn ansieht.
+* **Diagnose ohne Kabel:** Nach einem unsauberen Start (Absturz, Watchdog, Spannungseinbruch, fehlgeschlagene Speicherreservierung) nennt der Gesundheitsbericht zehn Minuten lang den Grund; ein Absturz hinterlässt sein Core-Dump, das man im Panel ansehen, herunterladen oder löschen kann; die gespeicherten Einstellungen werden vor jeder Firmware-Installation kopiert und wiederhergestellt, falls ein Update sie beschädigt; und ein Administrator kann den Knoten über den Server mit einem Einmal-Token nach einem Diagnosepaket oder seinem Protokoll fragen.
 
 ## 🖼️ Screenshots
 

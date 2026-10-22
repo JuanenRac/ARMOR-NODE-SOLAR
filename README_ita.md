@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.5.3-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Versione | `0.5.3` |
+| Versione | `0.5.4` |
 | Maturità | Funzionale |
 | Test | 9,319 checks in 14 programs (`ctest`) |
 | Tecnologia | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
@@ -61,6 +61,8 @@
 * **Rapporto di salute:** circa una volta al minuto il nodo pubblica da quanto è acceso e perché si è riavviato l'ultima volta, la memoria libera, il collegamento e il segnale Wi-Fi, quante volte si è connesso al broker e l'ultimo errore registrato (`armor/health/<nodo>`, il contratto `node_health` di ARMOR-COMMON). Il codice che lo costruisce è condiviso da tutti i nodi e testato su un computer; non è mai girato su una scheda.
 * **Scrittura sulle batterie Pylontech (disattivata di default):** solo operazioni tipizzate - orologio, contatori e registri, riavvio, capacità, il ripristino del livello di carica, limiti e protezioni, uscite, numero di serie, memoria esterna, firmware via XMODEM-1K e una console esperto con lista di blocco - in due passi (prepara, poi esegui con un token monouso), leggendo la batteria prima e dopo, con la password di servizio conservata solo nel nodo e una console simulata per i test. Non provato su una batteria reale: vedi il [piano di prove al banco](docs/BATTERY_BENCH_TEST_PLAN.md).
 * **Controllo dal server:** Studio può riavviare il nodo in modo pulito, metterlo in pausa fino a un'ora (riprende da solo), mettere il suo lavoro in standby (senza fine, conservato ai riavvii, il nodo resta connesso e continua a rispondere), farlo mostrare, chiedere un'istantanea diagnostica e segnarlo in manutenzione (`armor/control/<nodo>/...`, il contratto `node_control` di ARMOR-COMMON). Ogni ordine è in due passi con un token monouso legato a quell'operazione, solo il server può scriverli sul broker e non esistono ripristino di fabbrica, cancellazione né sonno profondo. Finché il nodo è in pausa o in standby non scrive su nessuna batteria (un'operazione in corso si può ancora annullare) e continua a leggere inverter e batterie. Il codice è condiviso da tutti i nodi e provato su un computer; non ha ancora girato su una scheda.
+* **I valori assurdi sono nominati, non nascosti:** quando un inverter invia un numero impossibile, il nodo lo trattiene al limite del contratto e lo nomina in `clamped`, così il server lo mostra come non reale; e il dump grezzo di una porta viene prodotto solo mentre il pannello lo sta guardando.
+* **Diagnostica senza cavo:** dopo un avvio non pulito (un blocco, un watchdog, un calo di alimentazione, un'allocazione fallita) il rapporto di salute ne indica la causa per dieci minuti; un arresto anomalo lascia il suo core dump da vedere, scaricare o cancellare dal pannello; le impostazioni salvate vengono copiate prima di ogni installazione del firmware e recuperate se un aggiornamento le danneggia; e un amministratore può chiedere al nodo, tramite il server, un pacchetto di diagnostica o il suo registro con un token monouso.
 
 ## 🖼️ Schermate
 
