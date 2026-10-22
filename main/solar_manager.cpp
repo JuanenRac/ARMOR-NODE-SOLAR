@@ -32,6 +32,7 @@ struct Slot {
   std::mutex lock;
   PortStatus status;
   std::string raw;
+  std::atomic<std::uint64_t> raw_wanted_until_ms{0};   // the dump is only made while the panel is looking at it (see raw_dump)
   std::string node_id;
   config::PortConfig config;
   std::size_t index = 0;
@@ -180,7 +181,7 @@ void port_task(void* argument) {
     if (ready || after - last_fill_ms >= 1000) {
       last_fill_ms = after;
       fill(slot, poller, port->overruns(), port->framing_errors(), ready ? payload : std::string());
-      if (poller.raw().total() != last_raw_total) {
+      if (after < slot.raw_wanted_until_ms.load() && poller.raw().total() != last_raw_total) {
         last_raw_total = poller.raw().total();
         const std::string dump = poller.raw().dump();
         std::lock_guard<std::mutex> guard(slot.lock);
@@ -281,7 +282,7 @@ void group_task(void* argument) {
     if (turn.reading || turn.ended || after - last_fill[turn.member] >= 1000) {
       last_fill[turn.member] = after;
       fill(slot, poller, 0, 0, turn.reading ? turn.payload : std::string());
-      if (poller.raw().total() != last_raw_total[turn.member]) {
+      if (after < slot.raw_wanted_until_ms.load() && poller.raw().total() != last_raw_total[turn.member]) {
         last_raw_total[turn.member] = poller.raw().total();
         const std::string dump = poller.raw().dump();
         std::lock_guard<std::mutex> guard(slot.lock);
@@ -443,6 +444,9 @@ bool cancel_battery_job(std::size_t index) {
 std::string raw_dump(std::size_t index) {
   if (index >= config::kPortCount) return "";
   Slot& slot = g_slots[index];
+  // The dump (128 lines of hexadecimal) is made by the port's task only for a while after somebody asks for it: nobody is looking most of the time, and it was built every second.
+  // The first answer can be an older dump; the panel asks again every few seconds.
+  slot.raw_wanted_until_ms.store(uptime_ms() + 15000);
   std::lock_guard<std::mutex> guard(slot.lock);
   return slot.raw;
 }

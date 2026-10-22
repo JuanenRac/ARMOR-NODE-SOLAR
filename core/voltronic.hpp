@@ -162,6 +162,7 @@ struct Status {
   bool ac_charging = false, scc_charging = false, charging = false, battery_steady = false, load_on = false, config_changed = false, scc_updated = false, sbu_priority = false;
   double pv_w = 0;                 // absent on old models: then pv_v * pv_a
   bool has_pv_w = false;
+  std::vector<std::string> clamped;   // the names (as in the message) of the numbers that were absurd and were held at a limit by hold_limits
   // Battery current with sign: positive charging, negative discharging.
   double battery_a() const { return battery_charge_a - battery_discharge_a; }
 };
@@ -170,11 +171,20 @@ struct Status {
 // quiet exactly when it was failing. A number that is read but absurd is held at the limit the server accepts, so the message still arrives with the warnings and the fault.
 inline double hold(double value, double low, double high) { return value < low ? low : (value > high ? high : value); }
 inline void hold_limits(Status& s) {
-  s.grid_v = hold(s.grid_v, 0, 600); s.out_v = hold(s.out_v, 0, 600); s.grid_hz = hold(s.grid_hz, 0, 100); s.out_hz = hold(s.out_hz, 0, 100);
-  s.out_va = hold(s.out_va, 0, 100000); s.out_w = hold(s.out_w, 0, 100000); s.load_percent = hold(s.load_percent, 0, 200); s.battery_v = hold(s.battery_v, 0, 1000);
-  s.battery_percent = hold(s.battery_percent, 0, 100); s.pv_v = hold(s.pv_v, 0, 1500); s.pv_a = hold(s.pv_a, 0, 500); s.pv_w = hold(s.pv_w, 0, 100000);
-  s.heatsink_c = hold(s.heatsink_c, -50, 200);
-  s.battery_charge_a = hold(s.battery_charge_a, 0, 1000); s.battery_discharge_a = hold(s.battery_discharge_a, 0, 1000);
+  // A number held at a limit is named in `clamped`, so the server can tell a real 200 % from an absurd value that was cut to 200 %.
+  const auto limit = [&s](double& value, double low, double high, const char* name) {
+    const double held = hold(value, low, high);
+    if (held != value) {
+      value = held;
+      for (const std::string& known : s.clamped) if (known == name) return;
+      s.clamped.push_back(name);
+    }
+  };
+  limit(s.grid_v, 0, 600, "grid_v"); limit(s.out_v, 0, 600, "out_v"); limit(s.grid_hz, 0, 100, "grid_hz"); limit(s.out_hz, 0, 100, "out_hz");
+  limit(s.out_va, 0, 100000, "out_va"); limit(s.out_w, 0, 100000, "out_w"); limit(s.load_percent, 0, 200, "load_percent"); limit(s.battery_v, 0, 1000, "battery_v");
+  limit(s.battery_percent, 0, 100, "battery_percent"); limit(s.pv_v, 0, 1500, "pv_v"); limit(s.pv_a, 0, 500, "pv_a"); limit(s.pv_w, 0, 100000, "pv_w");
+  limit(s.heatsink_c, -50, 200, "heatsink_c");
+  limit(s.battery_charge_a, 0, 1000, "battery_a"); limit(s.battery_discharge_a, 0, 1000, "battery_a");
 }
 
 inline bool parse_qpigs(const std::string& text, Status& out) {

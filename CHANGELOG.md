@@ -6,6 +6,8 @@ All notable changes to this project are documented here.
 
 - The repository has a security policy, a code of conduct, a contributing guide and a support file.
 - The banner follows the animated style of the ecosystem banners, with the name, the kind and the technologies of the project.
+- **A number the inverter sent beyond what is possible and that the node held at the contract's limit is now named** in `clamped` (for example `["load_percent"]`), so the server shows it as not real instead of as a true 200 %.
+- **The raw dump of a port is only made while the panel is looking at it** (for fifteen seconds after each request) instead of 128 lines every second per port.
 
 ## [0.5.3] - The node protects its memory, and the server can control it
 

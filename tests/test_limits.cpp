@@ -8,6 +8,7 @@
 #include "../core/http_status.hpp"
 #include "../core/json.hpp"
 #include "../core/solar_config.hpp"
+#include "../core/solar_json.hpp"
 #include "../core/voltronic.hpp"
 #include "../core/voltronic_pi18.hpp"
 
@@ -217,6 +218,29 @@ static void test_absurd_values_are_held_at_the_limit() {
   voltronic::hold_limits(held);
   CHECK(held.load_percent == 200 && held.out_va == 100000 && held.battery_percent == 0 && held.heatsink_c == 200 && held.pv_w == 0);
   CHECK(voltronic::hold(5, 0, 10) == 5 && voltronic::hold(-1, 0, 10) == 0 && voltronic::hold(11, 0, 10) == 10 && voltronic::hold(0, 0, 10) == 0 && voltronic::hold(10, 0, 10) == 10);
+  // a held number is named, once, by its name in the message, so the server can tell it from a real one; a clean reading names nothing
+  const auto has = [](const voltronic::Status& status, const char* name) { for (const std::string& n : status.clamped) if (n == name) return true; return false; };
+  CHECK(has(held, "load_percent") && has(held, "out_va") && has(held, "battery_percent") && has(held, "heatsink_c") && has(held, "pv_w") && held.clamped.size() == 5);
+  voltronic::Status both;
+  both.battery_charge_a = 5000; both.battery_discharge_a = 5000;
+  voltronic::hold_limits(both);
+  CHECK(both.clamped.size() == 1 && has(both, "battery_a"));
+  voltronic::Status clean;
+  clean.load_percent = 80; clean.pv_v = 300;
+  voltronic::hold_limits(clean);
+  CHECK(clean.clamped.empty());
+  clean.load_percent = 250;
+  voltronic::hold_limits(clean);
+  voltronic::hold_limits(clean);   // asked twice: the name stays, once
+  CHECK(clean.clamped.size() == 1 && has(clean, "load_percent"));
+  const std::string message = inverter_json("solar-1", "inv1", 1, 'L', held, {});
+  armor::json::Value doc;
+  CHECK(armor::json::parse(message, doc) && doc.get("clamped") != nullptr && doc.get("clamped")->is_array() && doc.get("clamped")->items.size() == 5);
+  voltronic::Status calm;
+  calm.load_percent = 80;
+  voltronic::hold_limits(calm);
+  armor::json::Value tidy;
+  CHECK(armor::json::parse(inverter_json("solar-1", "inv1", 1, 'L', calm, {}), tidy) && tidy.get("clamped") == nullptr);
   // the same rule for the third dialect: a load of 255 % does not take the message down
   voltronic::Status pi18;
   std::string absurd = kGs18;
