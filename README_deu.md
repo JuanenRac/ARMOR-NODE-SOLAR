@@ -37,7 +37,7 @@
 |---|---|
 | Version | `0.5.4` |
 | Reifegrad | Funktionsfähig |
-| Tests | 9,319 checks in 14 programs (`ctest`) |
+| Tests | 9.319 Prüfungen in 14 Programmen (`ctest`) |
 | Technik | C++17 (host-tested core); ESP-IDF 5.4 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
 | Auf echter Hardware | Noch keiner: keine Platine aufgebaut und kein Wechselrichter oder keine Batterie angeschlossen (nur Computertests, der Build und das Panel im Browser) |
 
@@ -91,7 +91,7 @@ ARMOR-SOLAR/
 
 ## 🛠️ Entwicklungsumgebung
 
-**Voraussetzungen:** a C++17 compiler for the host tests, the ESP-IDF 5.4 container to build the image, an ESP32-S3-WROOM-1 N16R8 or a Waveshare ESP32-S3-ETH
+**Voraussetzungen:** ein C++17-Compiler für die Host-Tests, der ESP-IDF-5.4-Container zum Bauen des Images, ein ESP32-S3-WROOM-1 N16R8 oder ein Waveshare ESP32-S3-ETH
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
