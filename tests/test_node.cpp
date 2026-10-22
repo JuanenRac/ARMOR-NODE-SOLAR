@@ -148,6 +148,13 @@ static void test_settings_document() {
   CHECK(config::load("{\"system\":{\"auto_restart_hours\":12}}", s, edited, problems) && edited.auto_restart_hours == 12);
   problems.clear();
   CHECK(!config::load("{\"system\":{\"auto_restart_hours\":5}}", s, edited, problems) && has(problems, "system.auto_restart_hours", "invalid"));
+  problems.clear();
+  CHECK(s.login_limit_per_minute == 30);                                                                                       // as the node has always behaved
+  CHECK(config::load("{\"system\":{\"login_limit_per_minute\":0}}", s, edited, problems) && edited.login_limit_per_minute == 0);   // no global limit
+  problems.clear();
+  CHECK(!config::load("{\"system\":{\"login_limit_per_minute\":121}}", s, edited, problems) && has(problems, "system.login_limit_per_minute", "range"));
+  problems.clear();
+  { config::Settings zero = s; zero.login_limit_per_minute = 0; config::Settings back; CHECK(config::load(config::to_json(zero, true), s, back, problems) && back.login_limit_per_minute == 0); }
 }
 
 // ---- the network -------------------------------------------------------------------------------------------------------------------------
