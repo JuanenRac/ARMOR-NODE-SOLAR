@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.5.4-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.5-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,9 +35,9 @@
 
 | | |
 |---|---|
-| バージョン | `0.5.4` |
+| バージョン | `0.5.5` |
 | 成熟度 | 機能する |
-| テスト | 14 個のプログラムで 9,319 件のチェック（`ctest`） |
+| テスト | 14 個のプログラムで 10,527 件のチェック（`ctest`） |
 | 技術 | C++17 (host-tested core); ESP-IDF 5.5.5 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
 | 実機での確認 | まだありません：基板は未製作で、インバーターやバッテリーも未接続（コンピューター上のテスト、ビルド、ブラウザーでのパネルのみ） |
 
@@ -95,7 +95,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console && build/host/test_release      # 9,319 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console && build/host/test_release      # 10,527 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin

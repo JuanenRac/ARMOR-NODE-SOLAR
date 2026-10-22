@@ -21,13 +21,13 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Version-0.5.4-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.5-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
 ---
 
-**Controllo di onestà - cosa funziona oggi:** Il firmware si compila nel contenitore ESP-IDF 5.5.5, il suo nucleo (le impostazioni, lo scambio con ogni tipo di apparecchio, l'aritmetica dell'UART emulata, il canale Bluetooth, i controlli di versione e firma: 3.013 controlli in 10 programmi di test) è provato su un computer con apparecchi sostitutivi, i messaggi che produce sono accettati da ARMOR-COMMON e il pannello è stato esercitato in un browser contro un nodo sostitutivo. **Non ha mai girato su una scheda e nessun inverter o batteria è stato collegato**: il Wi-Fi, il pannello su TLS, l'aggiornamento, le UART hardware ed emulate e i formati dei protocolli (scritti da documenti pubblici e a memoria) non sono provati. I frame ANT-BMS dei suoi test sono stati catturati da altre persone sulle loro unità: questo progetto non ne ha letto nessuno di persona.
+**Controllo di onestà - cosa funziona oggi:** Il firmware si compila nel contenitore ESP-IDF 5.5.5, il suo nucleo (le impostazioni, lo scambio con ogni tipo di apparecchio, l'aritmetica dell'UART emulata, il canale Bluetooth, i controlli di versione e firma: 10.527 controlli in 14 programmi di test) è provato su un computer con apparecchi sostitutivi, i messaggi che produce sono accettati da ARMOR-COMMON e il pannello è stato esercitato in un browser contro un nodo sostitutivo. **Non ha mai girato su una scheda e nessun inverter o batteria è stato collegato**: il Wi-Fi, il pannello su TLS, l'aggiornamento, le UART hardware ed emulate e i formati dei protocolli (scritti da documenti pubblici e a memoria) non sono provati. I frame ANT-BMS dei suoi test sono stati catturati da altre persone sulle loro unità: questo progetto non ne ha letto nessuno di persona.
 
 ---
 
@@ -35,9 +35,9 @@
 
 | | |
 |---|---|
-| Versione | `0.5.4` |
+| Versione | `0.5.5` |
 | Maturità | Funzionale |
-| Test | 9.319 controlli in 14 programmi (`ctest`) |
+| Test | 10.527 controlli in 14 programmi (`ctest`) |
 | Tecnologia | C++17 (host-tested core); ESP-IDF 5.5.5 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
 | Su hardware reale | Ancora nessuno: nessuna scheda montata né inverter o batteria collegati (solo test su computer, la compilazione e il pannello in un browser) |
 
@@ -95,7 +95,7 @@ ARMOR-SOLAR/
 
 ```bash
 cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console && build/host/test_release      # 9,319 checks, -Werror
+build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console && build/host/test_release      # 10,527 checks, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
 tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin
