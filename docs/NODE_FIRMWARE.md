@@ -53,7 +53,7 @@ Its USB-C socket is the chip's native USB (the log and the flashing). The pin ma
 | 0, 3, 45, 46 | Strapping pins: usable with care, as on the other board |
 | the rest (1, 2, 15 to 18, 21, 38 to 44, 47, 48) | Free |
 
-The defaults of the ports move to free pins (1 to 3: UART1 and UART2 on 16/15 and 18/17, UART0 on the SD pins 4/5; 4 to 9: emulated on 1/2, 21/47, 38/39, 40/41, 42/48 and 43/44). **The tenth port has no free pair left and sits on the strapping pins 3 and 46**: leave
+The defaults of the ports move to free pins (1 to 3: UART1 and UART2 on 16/15 and 18/17, UART0 on the SD pins 4/5; 4 to 9: emulated on 1/2, 21/47, 38/39, 40/41, 42/48 and 43/44). **Port 9 sits on GPIO 43 and 44, UART0's pair: the chip's boot ROM prints its start-up message there at every restart (about a kilobyte, even with the console on the USB), so whatever is wired to port 9 receives it; a piece of equipment that does not tolerate that is better on another pair (change the pins of port 9 in the panel).** **The tenth port has no free pair left and sits on the strapping pins 3 and 46**: leave
 it off unless you need it, and only wire equipment whose idle level does not disturb the boot. The emulated ports' interrupt service is not IRAM-safe on this board (the W5500's handler shares it), so an edge that arrives while the
 flash is being written (a setting saved, an update) may be delayed: a reading in that instant can be lost, the next one is fine.
 

@@ -93,6 +93,8 @@ struct EdgeRecord {
 // What the interrupts share with the port's task: a ring of edges filled by the RX pin's interrupt, and the bits of the message being sent.
 struct SoftShared {
   static constexpr std::size_t kRing = 1024;
+  // A write to the flash stops the task that works out the bytes for a while (the interrupt still runs, from the chip's own memory): the ring must outlast it at the fastest speed.
+  static_assert(softuart::max_stall_ms(softuart::kMaxBaud, kRing) >= 50, "the edge ring must last through a flash write at the fastest emulated speed");
   // The interrupts read and write the ring while a flash write has the cache off, when the external RAM cannot be reached: it is taken from the chip's own memory (a ring of 16 KB in a
   // plain allocation would be served from the external RAM, where this board's heap puts anything over 16 KB).
   EdgeRecord* ring = nullptr;

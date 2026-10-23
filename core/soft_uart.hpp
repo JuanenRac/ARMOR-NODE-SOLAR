@@ -18,6 +18,13 @@ namespace armor::softuart {
 constexpr unsigned kMaxBaud = 19200;
 constexpr std::size_t kFrameBits = 10;   // start, eight data bits, stop
 
+// How long the task that works out the bytes may stop (a write to the flash keeps the cache off, and every task that runs from the flash with it) before the ring the interrupt fills
+// with edges overflows. The worst line changes level at every bit (the byte 0x55 sent without a gap: one edge per bit), so the edges arrive as fast as the baud rate says, and a ring
+// of `slots` places (one is always kept empty) lasts (slots - 1) bits. Real traffic changes level about every second bit and lasts twice as long.
+constexpr unsigned max_stall_ms(unsigned baud, std::size_t slots) { return baud == 0 || slots < 2 ? 0 : static_cast<unsigned>((slots - 1) * 1000ULL / baud); }
+// The other way round: the places a ring needs to ride out a stall of `stall_ms` on a line of `baud`.
+constexpr std::size_t slots_needed(unsigned baud, unsigned stall_ms) { return static_cast<std::size_t>((static_cast<unsigned long long>(baud) * stall_ms + 999ULL) / 1000ULL) + 1; }
+
 // The bits of one byte as they go on the line: false is a low level. The start bit first, then the data least significant bit first, then the stop bit.
 constexpr std::array<bool, kFrameBits> frame_bits(std::uint8_t byte) {
   std::array<bool, kFrameBits> bits{};

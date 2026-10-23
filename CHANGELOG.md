@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+- **A stress test of the emulated serial ports against writes to the flash** (`tests/test_uart_stress.cpp`): streams at 2400, 9600 and 19200 baud, the worst a line can do (a level change at every bit) and ordinary traffic, edges moved by a tenth of a bit, the edge ring filling while the task that works out the bytes is stopped for tens of milliseconds, and the recovery after a stall longer than the ring. The time the ring outlasts is now a function in `core/soft_uart.hpp` (`max_stall_ms`, `slots_needed`) and the firmware refuses to build with a ring that would not last 50 ms at the fastest emulated speed.
+- **The node guide says what is on GPIO 43 and 44 of the Ethernet board** (the default pair of port 9): UART0's pins, where the chip's boot ROM prints about a kilobyte at every restart.
+
 ## [0.5.5] - Wrong passwords per minute as a setting, the broker certificate from a file and one table of status codes
 
 - **Fixed: a node with stored settings no longer restarts in a loop at power-up.** The start-up code read the stored settings and the copy made before the last update on the stack of the main task (about 3 KB each, plus the reader's own copy); with settings stored the 16 KB stack overflowed and the node restarted again and again before it could start the network. They now live on the heap.
