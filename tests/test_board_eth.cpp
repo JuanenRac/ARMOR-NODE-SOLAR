@@ -43,7 +43,9 @@ static void test_profile_and_pins() {
   // the microSD socket, the strapping pins and the boot button come with a warning; the others are free
   for (int gpio = 4; gpio <= 7; ++gpio) CHECK(board::assignable(gpio) && std::string(board::pin_info(gpio).note) == "sdcard");
   CHECK(std::string(board::pin_info(0).note) == "boot" && std::string(board::pin_info(45).note) == "strapping" && std::string(board::pin_info(3).note) == "strapping");
-  for (int gpio : {1, 2, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 43, 44, 47, 48}) CHECK(board::assignable(gpio) && board::pin_info(gpio).use == board::PinUse::kFree);
+  for (int gpio : {1, 2, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 47, 48}) CHECK(board::assignable(gpio) && board::pin_info(gpio).use == board::PinUse::kFree);
+  // GPIO 43 and 44 are UART0: the boot ROM prints there at every reset, so the pin is usable but marked
+  for (int gpio : {43, 44}) CHECK(board::assignable(gpio) && board::pin_info(gpio).use == board::PinUse::kCaution && std::string(board::pin_info(gpio).note) == "rom_log");
   CHECK(board::kPortCount == 10 && board::kHardwarePorts + board::kSoftPorts == board::kPortCount);
 }
 

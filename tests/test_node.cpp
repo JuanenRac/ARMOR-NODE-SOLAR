@@ -155,6 +155,13 @@ static void test_settings_document() {
   CHECK(!config::load("{\"system\":{\"login_limit_per_minute\":121}}", s, edited, problems) && has(problems, "system.login_limit_per_minute", "range"));
   problems.clear();
   { config::Settings zero = s; zero.login_limit_per_minute = 0; config::Settings back; CHECK(config::load(config::to_json(zero, true), s, back, problems) && back.login_limit_per_minute == 0); }
+  // sealing the stored secrets is a setting: off until it says otherwise, read from "security", refused when it is not a flag, and written back
+  problems.clear();
+  CHECK(!s.seal_secrets);
+  CHECK(!config::load("{\"security\":{\"seal_secrets\":\"yes\"}}", s, edited, problems) && has(problems, "security.seal_secrets", "invalid"));
+  problems.clear();
+  CHECK(config::load("{\"security\":{\"seal_secrets\":true}}", s, edited, problems) && edited.seal_secrets);
+  { config::Settings on = edited; config::Settings back; problems.clear(); CHECK(config::to_json(on, true).find("\"security\":{\"seal_secrets\":true}") != std::string::npos && config::load(config::to_json(on, true), s, back, problems) && back.seal_secrets); }
 }
 
 // ---- the network -------------------------------------------------------------------------------------------------------------------------
