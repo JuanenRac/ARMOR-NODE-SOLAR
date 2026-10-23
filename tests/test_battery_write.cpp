@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - host tests of writing to a Pylontech battery: the typed operations and their ranges, the preconditions, the one-time token, the XMODEM-1K sender, the chip and image checks and
+// ARMOR-NODE-SOLAR - host tests of writing to a Pylontech battery: the typed operations and their ranges, the preconditions, the one-time token, the XMODEM-1K sender, the chip and image checks and
 // every operation run against the simulated console (battery_bench.hpp). Nothing has been tried on a real battery; the service password in these tests is a made-up value.
 #include <algorithm>
 #include <cstdio>

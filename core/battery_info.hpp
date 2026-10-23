@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - what a Pylontech battery says about itself (the console's `info` text), which chip it has, and whether a firmware image fits it.
+// ARMOR-NODE-SOLAR - what a Pylontech battery says about itself (the console's `info` text), which chip it has, and whether a firmware image fits it.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // The identity comes from `info`: "Device name", "Board" (present only on the batteries with the newer chip: NF4.E2 or NF4.E3), "Soft  version", "Barcode" (the serial number), "Specification"

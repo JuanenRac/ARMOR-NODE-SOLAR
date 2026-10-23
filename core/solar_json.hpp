@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the messages a gateway node publishes for an inverter and for a battery stack (contract version 0, see docs/SOLAR_MESSAGES.md).
+// ARMOR-NODE-SOLAR - the messages a gateway node publishes for an inverter and for a battery stack (contract version 0, see docs/SOLAR_MESSAGES.md).
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 //   armor/solar/<node>/<device>/state     one message per device, every few seconds and on a change; JSON, no retained flag.

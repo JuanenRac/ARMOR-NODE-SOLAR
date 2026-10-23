@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - host tests of asking a Pylontech battery's console one question: which questions may be asked, and how an answer (or its absence) is taken.
+// ARMOR-NODE-SOLAR - host tests of asking a Pylontech battery's console one question: which questions may be asked, and how an answer (or its absence) is taken.
 // The console is a stand-in written from the public descriptions of its text; no real battery has been asked.
 #include <cstdio>
 #include <string>

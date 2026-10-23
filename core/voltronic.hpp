@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the serial protocol of Voltronic and MPP Solar inverters (Axpert, PIP, InfiniSolar and the many clones that use it).
+// ARMOR-NODE-SOLAR - the serial protocol of Voltronic and MPP Solar inverters (Axpert, PIP, InfiniSolar and the many clones that use it).
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // Source: the public "communication protocol" document of these inverters, written from what it says; NOTHING here has been connected to an inverter.

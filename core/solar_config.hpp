@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the settings of a solar gateway node: what the web panel edits, what is stored in flash and what the firmware obeys.
+// ARMOR-NODE-SOLAR - the settings of a solar gateway node: what the web panel edits, what is stored in flash and what the firmware obeys.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // One document (JSON) holds everything that differs from node to node, so the same firmware image serves every node and nothing secret has to be
@@ -51,7 +51,7 @@ struct IpSettings {
 
 struct AccessPoint {
   bool enabled = false;
-  std::string ssid = "ARMOR-SOLAR";
+  std::string ssid = "ARMOR-NODE-SOLAR";
   WifiSecurity security = WifiSecurity::kWpa2;
   std::string password;
   int channel = 0;  // 0: one of 1, 6 or 11 chosen from the node's MAC

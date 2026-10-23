@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - what a serial port does with the equipment on it: when to ask, what to ask, how to read the answers and when a reading is whole.
+// ARMOR-NODE-SOLAR - what a serial port does with the equipment on it: when to ask, what to ask, how to read the answers and when a reading is whole.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // One Poller per port. It touches no hardware: the firmware feeds it the bytes that arrive and the time, and sends the bytes it returns, so the whole

@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - host tests of what the inverter parsers do with bad input: a reply that was damaged on the wire, cut short, shifted or full of absurd numbers.
+// ARMOR-NODE-SOLAR - host tests of what the inverter parsers do with bad input: a reply that was damaged on the wire, cut short, shifted or full of absurd numbers.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 // The replies are typical ones of the public documents of these protocols, written by hand and then damaged on purpose; no inverter was read.
 #include <cstdio>

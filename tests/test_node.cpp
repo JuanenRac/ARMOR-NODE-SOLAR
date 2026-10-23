@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - host tests of the node: its settings, its network plan, the emulated UART and what a port does with the equipment on it.
+// ARMOR-NODE-SOLAR - host tests of the node: its settings, its network plan, the emulated UART and what a port does with the equipment on it.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 // The equipment is a stand-in written from the public documents of the protocols; no real inverter or battery has been read.
 #include <cstdio>
@@ -165,7 +165,7 @@ static void test_network_plan() {
   CHECK(plan.layout == netplan::Layout::kSetupAp && plan.ap.setup && plan.ap.ssid == "ARMOR-SETUP-A1B2C3" && plan.ap.password == "CODE1234" && !plan.station);
   plan = netplan::plan_network(s, false, "", "a1b2c3", 5);
   CHECK(plan.layout == netplan::Layout::kStation && plan.station && !plan.ap.enabled && plan.hostname == "armor-solar-a1b2c3");
-  s.ap.enabled = true; s.ap.password = "otra-clave-larga"; s.ap.ssid = "ARMOR-SOLAR-A1B2C3";
+  s.ap.enabled = true; s.ap.password = "otra-clave-larga"; s.ap.ssid = "ARMOR-NODE-SOLAR-A1B2C3";
   plan = netplan::plan_network(s, false, "", "a1b2c3", 5);
   CHECK(plan.layout == netplan::Layout::kStationWithAp && plan.ap.channel == 11);     // 5 % 3 = 2 -> channel 11
   s.sta.enabled = false;

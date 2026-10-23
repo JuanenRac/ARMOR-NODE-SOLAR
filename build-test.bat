@@ -1,4 +1,4 @@
 @echo off
-REM ARMOR-SOLAR non-mutating build-test launcher. GPL-3.0-or-later.
+REM ARMOR-NODE-SOLAR non-mutating build-test launcher. GPL-3.0-or-later.
 call "%~dp0..\ARMOR-COMMON\scripts\armor-project.bat" build-test "%~dp0."
 exit /b %ERRORLEVEL%

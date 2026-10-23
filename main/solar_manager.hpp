@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the ports at work: one task per enabled port opens it, asks its equipment (core/poller.hpp) and hands every whole reading to the broker link.
+// ARMOR-NODE-SOLAR - the ports at work: one task per enabled port opens it, asks its equipment (core/poller.hpp) and hands every whole reading to the broker link.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #pragma once
 #include <cstddef>

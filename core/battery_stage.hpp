@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the place where a firmware image waits on the node until it is sent to a battery: it arrives in small pieces (an MQTT message is small), each checked, and the whole is accepted
+// ARMOR-NODE-SOLAR - the place where a firmware image waits on the node until it is sent to a battery: it arrives in small pieces (an MQTT message is small), each checked, and the whole is accepted
 // only when its size and CRC-32 are what the sender said. It touches no hardware and decides nothing about whether an image fits a battery (battery_info.hpp does).
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #pragma once

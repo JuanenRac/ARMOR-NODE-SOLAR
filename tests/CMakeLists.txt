@@ -1,4 +1,4 @@
-# ARMOR-SOLAR host tests: the protocol library, built with any C++17 compiler.
+# ARMOR-NODE-SOLAR host tests: the protocol library, built with any C++17 compiler.
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 cmake_minimum_required(VERSION 3.16)
 project(armor_solar_host_tests CXX)

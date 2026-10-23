@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the node's side of the battery maintenance: the orders to write to a Pylontech battery, arrived over the broker, checked and carried out through the port's console.
+// ARMOR-NODE-SOLAR - the node's side of the battery maintenance: the orders to write to a Pylontech battery, arrived over the broker, checked and carried out through the port's console.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #pragma once
 #include "core/solar_config.hpp"

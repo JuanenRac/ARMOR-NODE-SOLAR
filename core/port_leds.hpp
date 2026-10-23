@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - one LED per port, the first eight driven by a 74HC595: what each one shows, and the bits that make it.
+// ARMOR-NODE-SOLAR - one LED per port, the first eight driven by a 74HC595: what each one shows, and the bits that make it.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // A port that is read correctly gives its LED one short pulse; a port that does not answer, or answers wrongly, makes it blink fast for a moment (so a failing port can be told at

@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the node's side of the battery maintenance (see battery_maintenance.hpp, core/battery_ops.hpp and docs/BATTERY_MAINTENANCE.md).
+// ARMOR-NODE-SOLAR - the node's side of the battery maintenance (see battery_maintenance.hpp, core/battery_ops.hpp and docs/BATTERY_MAINTENANCE.md).
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // An order arrives as a JSON message on the broker. Writing is two steps, like the switching of the electrical node: `arm` reads the battery (identity, state), checks every precondition and

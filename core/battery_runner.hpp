@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - runs a plan (battery_ops.hpp) on a Pylontech battery's console, line by line, and says how it went.
+// ARMOR-NODE-SOLAR - runs a plan (battery_ops.hpp) on a Pylontech battery's console, line by line, and says how it went.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // Like the read-only console probe, it touches no hardware: the firmware sends what `next_tx` returns and gives `on_rx` what arrives. Each step is sent once and waits for the battery's prompt;

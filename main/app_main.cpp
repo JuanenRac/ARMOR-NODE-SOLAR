@@ -1,5 +1,5 @@
 /*
- * ARMOR-SOLAR - ESP32-S3 solar gateway node (ESP32-S3-WROOM-1 N16R8 on Wi-Fi, or the Waveshare ESP32-S3-ETH on its cable): reads solar inverters and batteries through up to ten serial ports and
+ * ARMOR-NODE-SOLAR - ESP32-S3 solar gateway node (ESP32-S3-WROOM-1 N16R8 on Wi-Fi, or the Waveshare ESP32-S3-ETH on its cable): reads solar inverters and batteries through up to ten serial ports and
  * publishes their readings to the A.R.M.O.R. server.
  * Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
  *

@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the PI18 serial protocol of Voltronic / MPP Solar hybrid inverters (InfiniSolar V, LV5048 Hybrid, SunGoldPower, Axioma and the many clones that answer ^P005GS).
+// ARMOR-NODE-SOLAR - the PI18 serial protocol of Voltronic / MPP Solar hybrid inverters (InfiniSolar V, LV5048 Hybrid, SunGoldPower, Axioma and the many clones that answer ^P005GS).
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // Source: the protocols as implemented by the mpp-solar project (MIT) and the esphome-pipsolar project (Apache 2.0), with the sample replies they publish as the test vectors.

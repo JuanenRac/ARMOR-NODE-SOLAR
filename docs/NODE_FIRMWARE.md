@@ -42,7 +42,7 @@ The log comes out of the **USB & OTG** socket (the console is moved to the nativ
 
 ### The Waveshare ESP32-S3-ETH board (`s3-eth`)
 
-Its USB-C socket is the chip's native USB (the log and the flashing). The pin map is ARMOR-RADAR's, for the same board:
+Its USB-C socket is the chip's native USB (the log and the flashing). The pin map is ARMOR-NODE-RADAR's, for the same board:
 
 | GPIO | Use |
 | --- | --- |
@@ -57,7 +57,7 @@ The defaults of the ports move to free pins (1 to 3: UART1 and UART2 on 16/15 an
 it off unless you need it, and only wire equipment whose idle level does not disturb the boot. The emulated ports' interrupt service is not IRAM-safe on this board (the W5500's handler shares it), so an edge that arrives while the
 flash is being written (a setting saved, an update) may be delayed: a reading in that instant can be lost, the next one is fine.
 
-**Ethernet:** the address comes from DHCP unless you fix one in *Network* (address, mask, gateway and DNS are checked together). The node's own Wi-Fi network (kept by the set-up, `ARMOR-SOLAR-xxxxxx`, the setup code as its password) is a separate
+**Ethernet:** the address comes from DHCP unless you fix one in *Network* (address, mask, gateway and DNS are checked together). The node's own Wi-Fi network (kept by the set-up, `ARMOR-NODE-SOLAR-xxxxxx`, the setup code as its password) is a separate
 network for reaching the node from a phone; it is not joined to the cable. A node that is being set up is reachable through the cable and through the set-up network at once.
 
 ## The ten ports
@@ -142,7 +142,7 @@ if the equipment shares its ground with a battery bank, with a common ground on 
 2. A node with no user opens the Wi-Fi **ARMOR-SETUP-xxxxxx** (the password is the setup code) and shows the code on its USB console every 15 seconds. Join it,
    open `http://192.168.4.1/`, enter the code, create the administrator and, if you want, the Wi-Fi network the node is to join. The node restarts.
    On the Waveshare board the cable works too: plug it in and open the address DHCP gave the node (its MAC is on the console); there is no Wi-Fi to give in the set-up.
-3. After the setup the node keeps its own Wi-Fi **ARMOR-SOLAR-xxxxxx** (its password is the setup code; change it in the Wi-Fi page) so it can always be reached, and
+3. After the setup the node keeps its own Wi-Fi **ARMOR-NODE-SOLAR-xxxxxx** (its password is the setup code; change it in the Wi-Fi page) so it can always be reached, and
    joins the network you gave it. Holding BOOT for 8 seconds within 30 seconds of power-up erases the settings and the users.
 4. In the panel: **Serial ports** (enable and set each port, save, restart), **Broker** (the address and the identity), **Readings** (the last reading of every port).
 5. On the broker: `sudo scripts/mqtt_identity.sh add solar-node <node id>` (ARMOR-DEVOPS) makes the node's identity, which may write `armor/solar/<node id>/#` and

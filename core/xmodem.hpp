@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - XMODEM-1K with a 16-bit CRC, the way the bootloader of a Pylontech battery receives a firmware image after the console's `updata` command.
+// ARMOR-NODE-SOLAR - XMODEM-1K with a 16-bit CRC, the way the bootloader of a Pylontech battery receives a firmware image after the console's `updata` command.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // The receiver (the battery's bootloader) asks for CRC mode with the character 'C'; the sender answers with packets of 1024 bytes: STX, the block number (1, 2, ... wrapping past 255),

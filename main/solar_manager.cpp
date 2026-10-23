@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the ports at work.
+// ARMOR-NODE-SOLAR - the ports at work.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // One task per enabled port: it opens the port, asks its equipment whenever the poller says so, feeds the poller what arrives and hands every whole reading to

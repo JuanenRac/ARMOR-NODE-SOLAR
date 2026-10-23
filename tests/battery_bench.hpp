@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - a simulated Pylontech battery console for the tests: a stand-in that answers the way the real console's logs show (the echo of the line, "@", the text, "Command completed
+// ARMOR-NODE-SOLAR - a simulated Pylontech battery console for the tests: a stand-in that answers the way the real console's logs show (the echo of the line, "@", the text, "Command completed
 // successfully", "$$", the prompt), including the two modes (`pylon>` and, after `login`, `pylon_debug>`), "Invalid command or fail to excute.", "Unknown command" and the bootloader's
 // XMODEM-1K handshake. NOTHING in the tests has been tried on a real battery: this is the bench the operations are checked against until the owner tries them on a spare one.
 // The service password used here is a dummy value made up for the tests.

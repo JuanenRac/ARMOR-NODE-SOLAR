@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ARMOR-SOLAR - guard on the status codes of the panel's server. Nothing is compiled: core/http_status.hpp is the one table, and this fails when
+# ARMOR-NODE-SOLAR - guard on the status codes of the panel's server. Nothing is compiled: core/http_status.hpp is the one table, and this fails when
 #   1. the server (main/web_server.cpp, main/api_shared.cpp) answers with a code that is not in the table, which would go out as a 500 with the right body;
 #   2. the stand-in node the panel is tried against (tools/panel_mock.mjs) answers with a code that is not in the table, so a page could be tried against an answer the node never gives;
 #   3. a code in the table has no status line (the table and the switch must say the same).

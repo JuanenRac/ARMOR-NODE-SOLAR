@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the typed operations that WRITE to a Pylontech battery through its console: what each one is, which values it accepts, the exact lines it sends, what must be true before it
+// ARMOR-NODE-SOLAR - the typed operations that WRITE to a Pylontech battery through its console: what each one is, which values it accepts, the exact lines it sends, what must be true before it
 // starts and what is read back afterwards. Nothing here is a free command: an operation is built from a name and checked values, never from the person's text (except the expert console, which
 // is checked word by word against a block list). It touches no hardware; the runner (battery_runner.hpp) sends what a plan says.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
