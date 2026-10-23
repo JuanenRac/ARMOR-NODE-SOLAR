@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the LEDs of the ports: the task that shifts the pattern of core/port_leds.hpp out to the 74HC595.
+// ARMOR-NODE-SOLAR - the LEDs of the ports: the task that shifts the pattern of core/port_leds.hpp out to the 74HC595.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 // Nothing here has run on a board.
 #include "port_leds_hw.hpp"

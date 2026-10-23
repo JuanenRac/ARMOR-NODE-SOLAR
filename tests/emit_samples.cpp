@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - prints the messages a node would publish, one per line ("armor/solar/<node>/<device>/state <json>"), for tests/check_samples.py.
+// ARMOR-NODE-SOLAR - prints the messages a node would publish, one per line ("armor/solar/<node>/<device>/state <json>"), for tests/check_samples.py.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #include <cstdio>
 #include <string>

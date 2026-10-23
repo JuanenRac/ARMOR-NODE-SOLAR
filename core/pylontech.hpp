@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - Pylontech batteries (US2000, US3000, US5000 and the C versions): the text of the console, and the frames of the RS485 protocol.
+// ARMOR-NODE-SOLAR - Pylontech batteries (US2000, US3000, US5000 and the C versions): the text of the console, and the frames of the RS485 protocol.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // Sources: what the batteries print on their console port and the public description of their RS485 frame; NOTHING here has been connected to a battery.

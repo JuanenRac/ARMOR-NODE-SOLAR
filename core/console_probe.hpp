@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - asking a Pylontech battery's console one question from the panel, and only a question that reads.
+// ARMOR-NODE-SOLAR - asking a Pylontech battery's console one question from the panel, and only a question that reads.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // The console of a Pylontech battery has commands that read (the table of the modules, the cells, the identity, the history) and commands that change things. The panel may

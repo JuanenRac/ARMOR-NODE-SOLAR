@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the arithmetic of an emulated (software) UART: turning the times of the edges of a line into bytes, and a byte into the bits to send.
+// ARMOR-NODE-SOLAR - the arithmetic of an emulated (software) UART: turning the times of the edges of a line into bytes, and a byte into the bits to send.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // The chip has three hardware UARTs; the node gets more serial ports by timing the line in software. Receiving does not need a fast loop: an interrupt

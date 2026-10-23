@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - a group of ports that share one hardware UART through a multiplexer (the "mux" profile of the base board): who has the line, and for how long.
+// ARMOR-NODE-SOLAR - a group of ports that share one hardware UART through a multiplexer (the "mux" profile of the base board): who has the line, and for how long.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // One UART, one 74HC4052 in front of it, up to four ports behind it, each with its own Poller. Only one of them can talk at a time: the group gives the line to a port whose

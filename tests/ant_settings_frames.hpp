@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - request frames of the ANT-BMS settings registers captured by the esphome-ant-bms project (Apache License 2.0): the test vectors of ant::settings_request.
+// ARMOR-NODE-SOLAR - request frames of the ANT-BMS settings registers captured by the esphome-ant-bms project (Apache License 2.0): the test vectors of ant::settings_request.
 // Generated once from that project's tests; data only.
 #pragma once
 #include <array>

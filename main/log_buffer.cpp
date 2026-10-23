@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the last few kilobytes of the node's log, so the panel can show what the console would.
+// ARMOR-NODE-SOLAR - the last few kilobytes of the node's log, so the panel can show what the console would.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #include "log_buffer.hpp"
 

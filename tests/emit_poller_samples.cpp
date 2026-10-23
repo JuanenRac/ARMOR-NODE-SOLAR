@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - prints the messages a node's PORTS make from stand-in equipment, one per line ("armor/solar/<node>/<device>/state <json>"), for tests/check_samples.py.
+// ARMOR-NODE-SOLAR - prints the messages a node's PORTS make from stand-in equipment, one per line ("armor/solar/<node>/<device>/state <json>"), for tests/check_samples.py.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 // It is the proof that what the node publishes through the whole chain (request, answer, check, reading, message) is accepted by ARMOR-COMMON's contract.
 #include <cstdio>

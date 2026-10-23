@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - READING the settings of an ANT-BMS (the newer protocol): its model and version, and its protection, warning, balancing and capacity registers.
+// ARMOR-NODE-SOLAR - READING the settings of an ANT-BMS (the newer protocol): its model and version, and its protection, warning, balancing and capacity registers.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // READ ONLY, on purpose. The only request built here is function 0x02 (read) with an address; the write frames (0x51, 0x23, the passwords) exist in the BMS but are not

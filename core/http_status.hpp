@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the status line of each answer the panel's server gives.
+// ARMOR-NODE-SOLAR - the status line of each answer the panel's server gives.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // One table for the firmware and for the tests: a code the panel sends that is missing here would go out as a 500 with the right body, which a browser reads as a server fault.

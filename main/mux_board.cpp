@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the base board with multiplexers.
+// ARMOR-NODE-SOLAR - the base board with multiplexers.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // One hardware UART per group, on the group's own TX and RX pins, and the select pins of the 74HC4052 in front of it: choosing a channel is setting S0 and S1 (S1 is tied to

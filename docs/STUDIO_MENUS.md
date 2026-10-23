@@ -15,7 +15,7 @@ the gateway firmware that reads the real devices, and the Android tab. This page
 
 ## What has to exist first
 
-1. **The gateway firmware (not built yet)** on a node (the same family as ARMOR-RADAR): reads the serial ports with this library and publishes the messages.
+1. **The gateway firmware (not built yet)** on a node (the same family as ARMOR-NODE-RADAR): reads the serial ports with this library and publishes the messages.
 2. **The contract (done):** the two messages move into ARMOR-COMMON with a schema and conformance vectors.
 3. **The server (done):** reads `armor/solar/#`, keeps the latest state of every device and a history of the numbers (a small time series with a retention), exposes
    `/api/v1/solar/*` to Studio and the phone, and raises the alarms.

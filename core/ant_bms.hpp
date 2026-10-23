@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the ANT-BMS battery management system, over its serial (UART) port at 19200 baud, 8N1.
+// ARMOR-NODE-SOLAR - the ANT-BMS battery management system, over its serial (UART) port at 19200 baud, 8N1.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // Two protocols exist on the same connector, and which one a BMS speaks depends on its firmware, so the node knows both and finds out which answers:

@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the base board with multiplexers: a hardware UART and the two select pins of the 74HC4052 in front of it, as one MuxLine (core/mux_group.hpp).
+// ARMOR-NODE-SOLAR - the base board with multiplexers: a hardware UART and the two select pins of the 74HC4052 in front of it, as one MuxLine (core/mux_group.hpp).
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #pragma once
 #include <cstddef>

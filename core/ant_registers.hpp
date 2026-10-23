@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the settings registers of an ANT-BMS of the newer protocol that can be READ (function 0x02): address, name, scale, unit, and how many bytes the register holds.
+// ARMOR-NODE-SOLAR - the settings registers of an ANT-BMS of the newer protocol that can be READ (function 0x02): address, name, scale, unit, and how many bytes the register holds.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 // The table follows the esphome-ant-bms project (Apache License 2.0), which lists the registers and their scales; its captured request frames are the test vectors
 // (tests/ant_settings_frames.hpp). Generated once from that table, not edited. READ ONLY: nothing here builds a request that writes.

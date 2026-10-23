@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - host tests: the Voltronic / MPP Solar protocol, the Pylontech console and frames, and the messages.
+// ARMOR-NODE-SOLAR - host tests: the Voltronic / MPP Solar protocol, the Pylontech console and frames, and the messages.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 // The replies below are typical ones of the public documents of these devices, written by hand; no real device has been read.
 #include <cstdio>

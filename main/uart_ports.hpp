@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the node's serial ports: three hardware UARTs and seven emulated ones, behind one small interface.
+// ARMOR-NODE-SOLAR - the node's serial ports: three hardware UARTs and seven emulated ones, behind one small interface.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #pragma once
 #include <cstddef>

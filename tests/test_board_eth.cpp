@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - host tests of the s3-eth board profile (the Waveshare ESP32-S3-ETH): its pin table, the ports' default pins, the Ethernet settings and the layouts
+// ARMOR-NODE-SOLAR - host tests of the s3-eth board profile (the Waveshare ESP32-S3-ETH): its pin table, the ports' default pins, the Ethernet settings and the layouts
 // of its network. It is built with ARMOR_BOARD_S3_ETH defined (tests/CMakeLists.txt); test_node.cpp covers the s3-wifi profile.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #include <cstdio>
@@ -112,7 +112,7 @@ static void test_layouts() {
   plan = netplan::plan_network(s, false, "", "a1b2c3", 5);
   CHECK(plan.layout == netplan::Layout::kEthernet && plan.wired && !plan.station && !plan.ap.enabled && std::string(netplan::to_text(plan.layout)) == "ethernet");
   // the cable and an access point of its own
-  s.ap.enabled = true; s.ap.ssid = "ARMOR-SOLAR-A1B2C3"; s.ap.password = "otra-clave-larga";
+  s.ap.enabled = true; s.ap.ssid = "ARMOR-NODE-SOLAR-A1B2C3"; s.ap.password = "otra-clave-larga";
   plan = netplan::plan_network(s, false, "", "a1b2c3", 5);
   CHECK(plan.layout == netplan::Layout::kEthernetWithAp && plan.ap.enabled && plan.ap.channel == 11 && std::string(netplan::to_text(plan.layout)) == "ethernet+ap");
   // a station is ignored while the cable is the way in, even if the settings still hold one

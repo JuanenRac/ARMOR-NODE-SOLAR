@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - host tests of the optional readings of an inverter in the standard dialect: the second PV input (QPIGS2) and the units of a parallel system (QPGS0...).
+// ARMOR-NODE-SOLAR - host tests of the optional readings of an inverter in the standard dialect: the second PV input (QPIGS2) and the units of a parallel system (QPGS0...).
 // The replies are the ones the public mpp-solar project lists as examples; no real inverter has been read, and no inverter with two inputs or in parallel has been met.
 #include <cstdio>
 #include <map>

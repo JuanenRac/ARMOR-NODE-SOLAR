@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - host tests of the mux profile (the base board with multiplexers in front of the UARTs) and of reading the cells of a stack in rotation:
+// ARMOR-NODE-SOLAR - host tests of the mux profile (the base board with multiplexers in front of the UARTs) and of reading the cells of a stack in rotation:
 // the settings of the profile, who has the line and for how long, the LEDs, and the rotation. The equipment is a stand-in written from the public descriptions of the
 // protocols; no real inverter or battery has been read, and no multiplexer has switched.
 #include <cstdio>

@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - the node's serial ports.
+// ARMOR-NODE-SOLAR - the node's serial ports.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 //
 // Hardware ports use the chip's UART drivers with the pins of the settings (any GPIO, through the chip's matrix); a port with a driver-enable pin runs in the

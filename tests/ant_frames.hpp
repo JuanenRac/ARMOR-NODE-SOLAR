@@ -1,4 +1,4 @@
-// ARMOR-SOLAR - status frames captured from real ANT-BMS units, as published by the esphome-ant-bms project (Apache License 2.0) with its tests and its docs/pdus captures.
+// ARMOR-NODE-SOLAR - status frames captured from real ANT-BMS units, as published by the esphome-ant-bms project (Apache License 2.0) with its tests and its docs/pdus captures.
 // They are the test vectors of the ANT-BMS decoder (core/ant_bms.hpp): the two protocols, four models. Data only; generated once, not edited.
 #pragma once
 #include <cstdint>
