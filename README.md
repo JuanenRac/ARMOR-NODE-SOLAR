@@ -41,6 +41,25 @@
 | Stack | C++17 (host-tested core); ESP-IDF 5.5.5 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
 | On real hardware | None yet: no board built and no inverter or battery connected (host tests, the build and the panel in a browser only) |
 
+## 🚦 Project status
+
+Each line is one part of this repository and the light says how far it is today. It is written from what the repository can show (tests, builds, runs), not from what is planned.
+
+🟢 Done and verified · 🟡 Works, with known limits · 🟠 Partly done or not verified yet · 🔴 Not done or not working
+
+| Area | State | What it means here |
+|---|---|---|
+| Software | 🟢 Done and verified | The firmware builds in the ESP-IDF 5.5.5 container for both boards (Wi-Fi and Ethernet). |
+| Tests | 🟢 Done and verified | 10,527 checks in 14 host programs pass (`ctest`): the settings, the exchange with each kind of equipment, the emulated UART, the Bluetooth channel and the release checks. |
+| Protocols and data | 🟡 Works, with known limits | The Voltronic, Pylontech and ANT-BMS frames, checksums and readings are checked against the documented frames and recorded samples; none has talked to a real inverter or battery yet. |
+| Interface | 🟡 Works, with known limits | The web panel is exercised in a browser against a mock of the node, not on a board. |
+| Hardware | 🔴 Not done or not working | No board built and no inverter or battery connected: nothing has run on real equipment yet. |
+| Security | 🟡 Works, with known limits | The set-up code, the login with a limit on wrong passwords, the Bluetooth PIN and the signed updates are tested on the host; there has been no independent review. |
+| Updates | 🟠 Partly done or not verified yet | The hash and Ed25519 signature checks and the rollback logic pass on the host; an update over the air has never been run on a board. |
+| Writing to equipment | 🟠 Partly done or not verified yet | Writing to Pylontech batteries is off by default and has only been tested against a simulator. |
+| Integration | 🟢 Done and verified | The messages of the node are validated against the shared schemas and conformance vectors of ARMOR-COMMON. |
+| Documentation | 🟢 Done and verified | Eight languages, the firmware guide, the wiring notes and the changelog are up to date. |
+
 ## 🎯 Overview
 
 * **Two boards, one firmware:** an ESP32-S3-WROOM-1 N16R8 on Wi-Fi (the default) and the Waveshare ESP32-S3-ETH on its Ethernet cable (DHCP or a fixed address; its own Wi-Fi network is kept to reach it from a phone). The image is chosen when it is built (`tools/build_node.sh generic s3-wifi` or `generic s3-eth`); the pin table, the default pins of the ports and the way in follow the board, and an image is only for its own board. Both build and are host-tested; neither has run on a board.

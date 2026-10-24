@@ -41,6 +41,25 @@
 | Tecnologia | C++17 (host-tested core); ESP-IDF 5.5.5 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
 | Su hardware reale | Ancora nessuno: nessuna scheda montata né inverter o batteria collegati (solo test su computer, la compilazione e il pannello in un browser) |
 
+## 🚦 Stato del progetto
+
+Ogni riga è una parte di questo repository e il semaforo dice a che punto è oggi. È scritta in base a ciò che il repository può mostrare (test, compilazioni, esecuzioni), non a ciò che è previsto.
+
+🟢 Fatto e verificato · 🟡 Funziona, con limiti noti · 🟠 Fatto a metà o non ancora verificato · 🔴 Non fatto o non funzionante
+
+| Area | Stato | Cosa significa qui |
+|---|---|---|
+| Software | 🟢 Fatto e verificato | Il firmware compila nel contenitore ESP-IDF 5.5.5 per entrambe le schede (Wi-Fi ed Ethernet). |
+| Test | 🟢 Fatto e verificato | Superano 10.527 controlli in 14 programmi host (`ctest`): le impostazioni, lo scambio con ogni tipo di apparecchiatura, la UART emulata, il canale Bluetooth e i controlli di versione. |
+| Protocolli e dati | 🟡 Funziona, con limiti noti | I frame, i checksum e le letture di Voltronic, Pylontech e ANT-BMS sono verificati contro i frame documentati e campioni registrati; nessuno ha ancora parlato con un inverter o una batteria reali. |
+| Interfaccia | 🟡 Funziona, con limiti noti | Il pannello web è stato provato in un browser contro una simulazione del nodo, non su una scheda. |
+| Hardware | 🔴 Non fatto o non funzionante | Nessuna scheda costruita e nessun inverter o batteria collegati: nulla ha ancora funzionato su apparecchiature reali. |
+| Sicurezza | 🟡 Funziona, con limiti noti | Il codice di configurazione, l'accesso con limite di password errate, il PIN Bluetooth e gli aggiornamenti firmati sono testati sull'host; non c'è stata una revisione indipendente. |
+| Aggiornamenti | 🟠 Fatto a metà o non ancora verificato | I controlli di hash e firma Ed25519 e la logica di ripristino passano sull'host; un aggiornamento via etere non è mai stato eseguito su una scheda. |
+| Scrittura sulle apparecchiature | 🟠 Fatto a metà o non ancora verificato | La scrittura sulle batterie Pylontech è disattivata per impostazione predefinita ed è stata provata solo contro un simulatore. |
+| Integrazione | 🟢 Fatto e verificato | I messaggi del nodo sono validati contro gli schemi condivisi e i vettori di conformità di ARMOR-COMMON. |
+| Documentazione | 🟢 Fatto e verificato | Otto lingue, la guida del firmware, le note di cablaggio e il registro delle modifiche sono aggiornati. |
+
 ## 🎯 Panoramica
 
 * **Due schede, un solo firmware:** una ESP32-S3-WROOM-1 N16R8 via Wi-Fi (predefinita) e la Waveshare ESP32-S3-ETH sul suo cavo Ethernet (DHCP o indirizzo fisso; tiene la propria rete Wi-Fi per raggiungerla da un telefono). L'immagine si sceglie in compilazione (`tools/build_node.sh generic s3-wifi` o `generic s3-eth`); la tabella dei pin, i pin predefiniti delle porte e l'accesso seguono la scheda, e un'immagine vale solo per la sua scheda. Entrambe compilano e sono testate sul computer; nessuna ha girato su una scheda.
