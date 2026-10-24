@@ -49,16 +49,16 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 
 | Domaine | État | Ce que cela veut dire ici |
 |---|---|---|
-| Logiciel | 🟢 Fait et vérifié | Le firmware compile dans le conteneur ESP-IDF 5.5.5 pour les deux cartes (Wi-Fi et Ethernet). |
-| Tests | 🟢 Fait et vérifié | 10 527 vérifications dans 14 programmes d'hôte réussissent (`ctest`) : les réglages, l'échange avec chaque type d'équipement, l'UART émulée, le canal Bluetooth et les contrôles de version. |
-| Protocoles et données | 🟡 Fonctionne, avec des limites connues | Les trames, sommes de contrôle et lectures de Voltronic, Pylontech et ANT-BMS sont vérifiées par rapport aux trames documentées et à des échantillons enregistrés ; aucun n'a encore parlé à un vrai onduleur ou à une vraie batterie. |
-| Interface | 🟡 Fonctionne, avec des limites connues | Le panneau web a été essayé dans un navigateur contre une simulation du nœud, pas sur une carte. |
-| Matériel | 🔴 Pas fait ou ne fonctionne pas | Aucune carte construite ni onduleur ou batterie connectés : rien n'a encore tourné sur de vrais équipements. |
-| Sécurité | 🟡 Fonctionne, avec des limites connues | Le code de configuration, la connexion avec une limite de mots de passe erronés, le PIN Bluetooth et les mises à jour signées sont testés sur l'hôte ; il n'y a pas eu de revue indépendante. |
-| Mises à jour | 🟠 À moitié fait ou pas encore vérifié | Les contrôles de hash et de signature Ed25519 et la logique de retour arrière réussissent sur l'hôte ; une mise à jour par voie hertzienne n'a jamais été exécutée sur une carte. |
-| Écriture sur les équipements | 🟠 À moitié fait ou pas encore vérifié | L'écriture sur les batteries Pylontech est désactivée par défaut et n'a été testée que contre un simulateur. |
-| Intégration | 🟢 Fait et vérifié | Les messages du nœud sont validés par rapport aux schémas partagés et aux vecteurs de conformité d'ARMOR-COMMON. |
-| Documentation | 🟢 Fait et vérifié | Huit langues, le guide du firmware, les notes de câblage et le journal des modifications sont à jour. |
+| Logiciel | 🟢 | Le firmware compile dans le conteneur ESP-IDF 5.5.5 pour les deux cartes (Wi-Fi et Ethernet). |
+| Tests | 🟢 | 10 527 vérifications dans 14 programmes d'hôte réussissent (`ctest`) : les réglages, l'échange avec chaque type d'équipement, l'UART émulée, le canal Bluetooth et les contrôles de version. |
+| Protocoles et données | 🟡 | Les trames, sommes de contrôle et lectures de Voltronic, Pylontech et ANT-BMS sont vérifiées par rapport aux trames documentées et à des échantillons enregistrés ; aucun n'a encore parlé à un vrai onduleur ou à une vraie batterie. |
+| Interface | 🟡 | Le panneau web a été essayé dans un navigateur contre une simulation du nœud, pas sur une carte. |
+| Matériel | 🔴 | Aucune carte construite ni onduleur ou batterie connectés : rien n'a encore tourné sur de vrais équipements. |
+| Sécurité | 🟡 | Le code de configuration, la connexion avec une limite de mots de passe erronés, le PIN Bluetooth et les mises à jour signées sont testés sur l'hôte ; il n'y a pas eu de revue indépendante. |
+| Mises à jour | 🟠 | Les contrôles de hash et de signature Ed25519 et la logique de retour arrière réussissent sur l'hôte ; une mise à jour par voie hertzienne n'a jamais été exécutée sur une carte. |
+| Écriture sur les équipements | 🟠 | L'écriture sur les batteries Pylontech est désactivée par défaut et n'a été testée que contre un simulateur. |
+| Intégration | 🟢 | Les messages du nœud sont validés par rapport aux schémas partagés et aux vecteurs de conformité d'ARMOR-COMMON. |
+| Documentation | 🟢 | Huit langues, le guide du firmware, les notes de câblage et le journal des modifications sont à jour. |
 
 ## 🎯 Présentation
 

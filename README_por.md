@@ -49,16 +49,16 @@ Cada linha é uma parte deste repositório e a luz diz até onde chega hoje. É 
 
 | Área | Estado | O que significa aqui |
 |---|---|---|
-| Software | 🟢 Feito e verificado | O firmware compila no contentor ESP-IDF 5.5.5 para as duas placas (Wi-Fi e Ethernet). |
-| Testes | 🟢 Feito e verificado | Passam 10.527 verificações em 14 programas de anfitrião (`ctest`): as definições, a troca com cada tipo de equipamento, a UART emulada, o canal Bluetooth e as verificações de versão. |
-| Protocolos e dados | 🟡 Funciona, com limites conhecidos | As tramas, somas de verificação e leituras de Voltronic, Pylontech e ANT-BMS são verificadas contra as tramas documentadas e amostras gravadas; nenhum falou ainda com um inversor ou uma bateria reais. |
-| Interface | 🟡 Funciona, com limites conhecidos | O painel web foi exercitado num navegador contra uma simulação do nó, não numa placa. |
-| Hardware | 🔴 Por fazer ou a não funcionar | Nenhuma placa construída nem inversor ou bateria ligados: nada funcionou ainda em equipamentos reais. |
-| Segurança | 🟡 Funciona, com limites conhecidos | O código de configuração, o acesso com limite de palavras-passe erradas, o PIN Bluetooth e as atualizações assinadas estão testados no anfitrião; não houve revisão independente. |
-| Atualizações | 🟠 Feito a meio ou ainda por verificar | As verificações de hash e de assinatura Ed25519 e a lógica de retrocesso passam no anfitrião; uma atualização pelo ar nunca foi executada numa placa. |
-| Escrita nos equipamentos | 🟠 Feito a meio ou ainda por verificar | A escrita nas baterias Pylontech está desativada por predefinição e só foi testada contra um simulador. |
-| Integração | 🟢 Feito e verificado | As mensagens do nó são validadas contra os esquemas partilhados e os vetores de conformidade do ARMOR-COMMON. |
-| Documentação | 🟢 Feito e verificado | Oito idiomas, o guia do firmware, as notas de cablagem e o registo de alterações estão atualizados. |
+| Software | 🟢 | O firmware compila no contentor ESP-IDF 5.5.5 para as duas placas (Wi-Fi e Ethernet). |
+| Testes | 🟢 | Passam 10.527 verificações em 14 programas de anfitrião (`ctest`): as definições, a troca com cada tipo de equipamento, a UART emulada, o canal Bluetooth e as verificações de versão. |
+| Protocolos e dados | 🟡 | As tramas, somas de verificação e leituras de Voltronic, Pylontech e ANT-BMS são verificadas contra as tramas documentadas e amostras gravadas; nenhum falou ainda com um inversor ou uma bateria reais. |
+| Interface | 🟡 | O painel web foi exercitado num navegador contra uma simulação do nó, não numa placa. |
+| Hardware | 🔴 | Nenhuma placa construída nem inversor ou bateria ligados: nada funcionou ainda em equipamentos reais. |
+| Segurança | 🟡 | O código de configuração, o acesso com limite de palavras-passe erradas, o PIN Bluetooth e as atualizações assinadas estão testados no anfitrião; não houve revisão independente. |
+| Atualizações | 🟠 | As verificações de hash e de assinatura Ed25519 e a lógica de retrocesso passam no anfitrião; uma atualização pelo ar nunca foi executada numa placa. |
+| Escrita nos equipamentos | 🟠 | A escrita nas baterias Pylontech está desativada por predefinição e só foi testada contra um simulador. |
+| Integração | 🟢 | As mensagens do nó são validadas contra os esquemas partilhados e os vetores de conformidade do ARMOR-COMMON. |
+| Documentação | 🟢 | Oito idiomas, o guia do firmware, as notas de cablagem e o registo de alterações estão atualizados. |
 
 ## 🎯 Visão geral
 

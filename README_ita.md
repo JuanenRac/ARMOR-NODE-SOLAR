@@ -49,16 +49,16 @@ Ogni riga è una parte di questo repository e il semaforo dice a che punto è og
 
 | Area | Stato | Cosa significa qui |
 |---|---|---|
-| Software | 🟢 Fatto e verificato | Il firmware compila nel contenitore ESP-IDF 5.5.5 per entrambe le schede (Wi-Fi ed Ethernet). |
-| Test | 🟢 Fatto e verificato | Superano 10.527 controlli in 14 programmi host (`ctest`): le impostazioni, lo scambio con ogni tipo di apparecchiatura, la UART emulata, il canale Bluetooth e i controlli di versione. |
-| Protocolli e dati | 🟡 Funziona, con limiti noti | I frame, i checksum e le letture di Voltronic, Pylontech e ANT-BMS sono verificati contro i frame documentati e campioni registrati; nessuno ha ancora parlato con un inverter o una batteria reali. |
-| Interfaccia | 🟡 Funziona, con limiti noti | Il pannello web è stato provato in un browser contro una simulazione del nodo, non su una scheda. |
-| Hardware | 🔴 Non fatto o non funzionante | Nessuna scheda costruita e nessun inverter o batteria collegati: nulla ha ancora funzionato su apparecchiature reali. |
-| Sicurezza | 🟡 Funziona, con limiti noti | Il codice di configurazione, l'accesso con limite di password errate, il PIN Bluetooth e gli aggiornamenti firmati sono testati sull'host; non c'è stata una revisione indipendente. |
-| Aggiornamenti | 🟠 Fatto a metà o non ancora verificato | I controlli di hash e firma Ed25519 e la logica di ripristino passano sull'host; un aggiornamento via etere non è mai stato eseguito su una scheda. |
-| Scrittura sulle apparecchiature | 🟠 Fatto a metà o non ancora verificato | La scrittura sulle batterie Pylontech è disattivata per impostazione predefinita ed è stata provata solo contro un simulatore. |
-| Integrazione | 🟢 Fatto e verificato | I messaggi del nodo sono validati contro gli schemi condivisi e i vettori di conformità di ARMOR-COMMON. |
-| Documentazione | 🟢 Fatto e verificato | Otto lingue, la guida del firmware, le note di cablaggio e il registro delle modifiche sono aggiornati. |
+| Software | 🟢 | Il firmware compila nel contenitore ESP-IDF 5.5.5 per entrambe le schede (Wi-Fi ed Ethernet). |
+| Test | 🟢 | Superano 10.527 controlli in 14 programmi host (`ctest`): le impostazioni, lo scambio con ogni tipo di apparecchiatura, la UART emulata, il canale Bluetooth e i controlli di versione. |
+| Protocolli e dati | 🟡 | I frame, i checksum e le letture di Voltronic, Pylontech e ANT-BMS sono verificati contro i frame documentati e campioni registrati; nessuno ha ancora parlato con un inverter o una batteria reali. |
+| Interfaccia | 🟡 | Il pannello web è stato provato in un browser contro una simulazione del nodo, non su una scheda. |
+| Hardware | 🔴 | Nessuna scheda costruita e nessun inverter o batteria collegati: nulla ha ancora funzionato su apparecchiature reali. |
+| Sicurezza | 🟡 | Il codice di configurazione, l'accesso con limite di password errate, il PIN Bluetooth e gli aggiornamenti firmati sono testati sull'host; non c'è stata una revisione indipendente. |
+| Aggiornamenti | 🟠 | I controlli di hash e firma Ed25519 e la logica di ripristino passano sull'host; un aggiornamento via etere non è mai stato eseguito su una scheda. |
+| Scrittura sulle apparecchiature | 🟠 | La scrittura sulle batterie Pylontech è disattivata per impostazione predefinita ed è stata provata solo contro un simulatore. |
+| Integrazione | 🟢 | I messaggi del nodo sono validati contro gli schemi condivisi e i vettori di conformità di ARMOR-COMMON. |
+| Documentazione | 🟢 | Otto lingue, la guida del firmware, le note di cablaggio e il registro delle modifiche sono aggiornati. |
 
 ## 🎯 Panoramica
 

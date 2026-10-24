@@ -49,16 +49,16 @@ Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heut
 
 | Bereich | Stand | Was das hier bedeutet |
 |---|---|---|
-| Software | 🟢 Fertig und überprüft | Die Firmware wird im ESP-IDF-5.5.5-Container für beide Platinen (WLAN und Ethernet) gebaut. |
-| Tests | 🟢 Fertig und überprüft | 10.527 Prüfungen in 14 Host-Programmen bestehen (`ctest`): die Einstellungen, der Austausch mit jeder Geräteart, die emulierte UART, der Bluetooth-Kanal und die Versionsprüfungen. |
-| Protokolle und Daten | 🟡 Funktioniert, mit bekannten Grenzen | Die Telegramme, Prüfsummen und Messwerte von Voltronic, Pylontech und ANT-BMS werden gegen die dokumentierten Telegramme und aufgezeichnete Beispiele geprüft; keines hat bisher mit einem echten Wechselrichter oder einer echten Batterie gesprochen. |
-| Oberfläche | 🟡 Funktioniert, mit bekannten Grenzen | Das Web-Panel wurde in einem Browser gegen eine Nachbildung des Knotens erprobt, nicht auf einer Platine. |
-| Hardware | 🔴 Nicht gemacht oder funktioniert nicht | Keine Platine gebaut und kein Wechselrichter oder keine Batterie angeschlossen: Bisher lief nichts auf echten Geräten. |
-| Sicherheit | 🟡 Funktioniert, mit bekannten Grenzen | Der Einrichtungscode, die Anmeldung mit Begrenzung falscher Passwörter, die Bluetooth-PIN und die signierten Aktualisierungen sind auf dem Host getestet; es gab keine unabhängige Prüfung. |
-| Aktualisierungen | 🟠 Teilweise fertig oder noch nicht überprüft | Die Hash- und Ed25519-Signaturprüfungen und die Rückfalllogik bestehen auf dem Host; eine Aktualisierung über die Luft wurde nie auf einer Platine ausgeführt. |
-| Schreiben auf Geräte | 🟠 Teilweise fertig oder noch nicht überprüft | Das Schreiben auf Pylontech-Batterien ist standardmäßig aus und wurde nur gegen einen Simulator getestet. |
-| Integration | 🟢 Fertig und überprüft | Die Nachrichten des Knotens werden gegen die gemeinsamen Schemas und Konformitätsvektoren von ARMOR-COMMON geprüft. |
-| Dokumentation | 🟢 Fertig und überprüft | Acht Sprachen, die Firmware-Anleitung, die Verdrahtungshinweise und das Änderungsprotokoll sind aktuell. |
+| Software | 🟢 | Die Firmware wird im ESP-IDF-5.5.5-Container für beide Platinen (WLAN und Ethernet) gebaut. |
+| Tests | 🟢 | 10.527 Prüfungen in 14 Host-Programmen bestehen (`ctest`): die Einstellungen, der Austausch mit jeder Geräteart, die emulierte UART, der Bluetooth-Kanal und die Versionsprüfungen. |
+| Protokolle und Daten | 🟡 | Die Telegramme, Prüfsummen und Messwerte von Voltronic, Pylontech und ANT-BMS werden gegen die dokumentierten Telegramme und aufgezeichnete Beispiele geprüft; keines hat bisher mit einem echten Wechselrichter oder einer echten Batterie gesprochen. |
+| Oberfläche | 🟡 | Das Web-Panel wurde in einem Browser gegen eine Nachbildung des Knotens erprobt, nicht auf einer Platine. |
+| Hardware | 🔴 | Keine Platine gebaut und kein Wechselrichter oder keine Batterie angeschlossen: Bisher lief nichts auf echten Geräten. |
+| Sicherheit | 🟡 | Der Einrichtungscode, die Anmeldung mit Begrenzung falscher Passwörter, die Bluetooth-PIN und die signierten Aktualisierungen sind auf dem Host getestet; es gab keine unabhängige Prüfung. |
+| Aktualisierungen | 🟠 | Die Hash- und Ed25519-Signaturprüfungen und die Rückfalllogik bestehen auf dem Host; eine Aktualisierung über die Luft wurde nie auf einer Platine ausgeführt. |
+| Schreiben auf Geräte | 🟠 | Das Schreiben auf Pylontech-Batterien ist standardmäßig aus und wurde nur gegen einen Simulator getestet. |
+| Integration | 🟢 | Die Nachrichten des Knotens werden gegen die gemeinsamen Schemas und Konformitätsvektoren von ARMOR-COMMON geprüft. |
+| Dokumentation | 🟢 | Acht Sprachen, die Firmware-Anleitung, die Verdrahtungshinweise und das Änderungsprotokoll sind aktuell. |
 
 ## 🎯 Überblick
 

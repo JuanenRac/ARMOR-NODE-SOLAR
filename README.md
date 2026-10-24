@@ -49,16 +49,16 @@ Each line is one part of this repository and the light says how far it is today.
 
 | Area | State | What it means here |
 |---|---|---|
-| Software | 🟢 Done and verified | The firmware builds in the ESP-IDF 5.5.5 container for both boards (Wi-Fi and Ethernet). |
-| Tests | 🟢 Done and verified | 10,527 checks in 14 host programs pass (`ctest`): the settings, the exchange with each kind of equipment, the emulated UART, the Bluetooth channel and the release checks. |
-| Protocols and data | 🟡 Works, with known limits | The Voltronic, Pylontech and ANT-BMS frames, checksums and readings are checked against the documented frames and recorded samples; none has talked to a real inverter or battery yet. |
-| Interface | 🟡 Works, with known limits | The web panel is exercised in a browser against a mock of the node, not on a board. |
-| Hardware | 🔴 Not done or not working | No board built and no inverter or battery connected: nothing has run on real equipment yet. |
-| Security | 🟡 Works, with known limits | The set-up code, the login with a limit on wrong passwords, the Bluetooth PIN and the signed updates are tested on the host; there has been no independent review. |
-| Updates | 🟠 Partly done or not verified yet | The hash and Ed25519 signature checks and the rollback logic pass on the host; an update over the air has never been run on a board. |
-| Writing to equipment | 🟠 Partly done or not verified yet | Writing to Pylontech batteries is off by default and has only been tested against a simulator. |
-| Integration | 🟢 Done and verified | The messages of the node are validated against the shared schemas and conformance vectors of ARMOR-COMMON. |
-| Documentation | 🟢 Done and verified | Eight languages, the firmware guide, the wiring notes and the changelog are up to date. |
+| Software | 🟢 | The firmware builds in the ESP-IDF 5.5.5 container for both boards (Wi-Fi and Ethernet). |
+| Tests | 🟢 | 10,527 checks in 14 host programs pass (`ctest`): the settings, the exchange with each kind of equipment, the emulated UART, the Bluetooth channel and the release checks. |
+| Protocols and data | 🟡 | The Voltronic, Pylontech and ANT-BMS frames, checksums and readings are checked against the documented frames and recorded samples; none has talked to a real inverter or battery yet. |
+| Interface | 🟡 | The web panel is exercised in a browser against a mock of the node, not on a board. |
+| Hardware | 🔴 | No board built and no inverter or battery connected: nothing has run on real equipment yet. |
+| Security | 🟡 | The set-up code, the login with a limit on wrong passwords, the Bluetooth PIN and the signed updates are tested on the host; there has been no independent review. |
+| Updates | 🟠 | The hash and Ed25519 signature checks and the rollback logic pass on the host; an update over the air has never been run on a board. |
+| Writing to equipment | 🟠 | Writing to Pylontech batteries is off by default and has only been tested against a simulator. |
+| Integration | 🟢 | The messages of the node are validated against the shared schemas and conformance vectors of ARMOR-COMMON. |
+| Documentation | 🟢 | Eight languages, the firmware guide, the wiring notes and the changelog are up to date. |
 
 ## 🎯 Overview
 
