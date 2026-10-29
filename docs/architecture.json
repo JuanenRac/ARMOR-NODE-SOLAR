@@ -1,0 +1,209 @@
+{
+  "repo": "ARMOR-NODE-SOLAR",
+  "ecosystem": "armor",
+  "tagline": "Reads the inverter and the batteries of a solar installation and says what they say, never writing to the inverter, and to a battery only behind three locks.",
+  "description": "The firmware of ARMOR-NODE-SOLAR talks to Voltronic inverters, Pylontech batteries and ANT-BMS batteries through ten serial ports, turns what they say into the messages ARMOR-COMMON accepts and serves a web panel. It has never run on a board and no inverter or battery has been connected.",
+  "columns": [
+    "WHAT IS CONNECTED",
+    "THIS FIRMWARE",
+    "WHO IT TALKS TO"
+  ],
+  "nodes": [
+    {
+      "id": "equip",
+      "column": 0,
+      "level": "untested",
+      "title": "Inverters, batteries",
+      "lines": [
+        "Voltronic RS232 2400, Pylontech",
+        "console 115200, ANT-BMS 19200;",
+        "none has been connected"
+      ]
+    },
+    {
+      "id": "people",
+      "column": 0,
+      "level": "external",
+      "title": "Browser, phone",
+      "lines": [
+        "the panel, and the set-up over",
+        "Bluetooth from the app"
+      ]
+    },
+    {
+      "id": "ports",
+      "column": 1,
+      "level": "tested",
+      "title": "ports, mux board",
+      "lines": [
+        "10 ports: 3 hardware UARTs and",
+        "7 emulated; the mux profile adds",
+        "74HC4052 groups and port LEDs"
+      ],
+      "code": [
+        "main/uart_ports.cpp",
+        "main/mux_board.cpp",
+        "core/soft_uart.hpp"
+      ]
+    },
+    {
+      "id": "proto",
+      "column": 1,
+      "level": "tested",
+      "title": "protocol decoders",
+      "lines": [
+        "Voltronic (PI30, REVO, PI18),",
+        "Pylontech console, ANT-BMS;",
+        "frames and CRC with real samples"
+      ],
+      "code": [
+        "core/voltronic.hpp",
+        "core/pylontech.hpp",
+        "core/ant_bms.hpp"
+      ]
+    },
+    {
+      "id": "write",
+      "column": 1,
+      "level": "config",
+      "title": "battery_maintenance",
+      "lines": [
+        "typed operations on a Pylontech",
+        "battery, in two steps; off by",
+        "default, three locks"
+      ],
+      "code": [
+        "main/battery_maintenance.cpp",
+        "core/battery_ops.hpp"
+      ]
+    },
+    {
+      "id": "json",
+      "column": 1,
+      "level": "contract",
+      "title": "solar_json, mqtt_link",
+      "lines": [
+        "one message per inverter or",
+        "battery stack, accepted by",
+        "the contract; absurd values named"
+      ],
+      "code": [
+        "core/solar_json.hpp",
+        "main/mqtt_link.cpp"
+      ]
+    },
+    {
+      "id": "web",
+      "column": 1,
+      "level": "tested",
+      "title": "web_server, panel/",
+      "lines": [
+        "panel in eight languages, logins,",
+        "own HTTPS certificate, private",
+        "networks only by default"
+      ],
+      "code": [
+        "main/web_server.cpp",
+        "core/auth.hpp",
+        "panel/text.js"
+      ]
+    },
+    {
+      "id": "ota",
+      "column": 1,
+      "level": "contract",
+      "title": "github_update, ble",
+      "lines": [
+        "signed updates with rollback;",
+        "Bluetooth set-up with a PIN;",
+        "never run on a board"
+      ],
+      "code": [
+        "main/github_update.cpp",
+        "main/ble_provision.cpp"
+      ]
+    },
+    {
+      "id": "server",
+      "column": 2,
+      "level": "external",
+      "title": "Broker, ARMOR-SERVER",
+      "lines": [
+        "armor/solar/<node>/state",
+        "and the maintenance topics"
+      ]
+    },
+    {
+      "id": "github",
+      "column": 2,
+      "level": "external",
+      "title": "GitHub releases",
+      "lines": [
+        "the signed image of each",
+        "version, one per board"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "equip",
+      "to": "ports",
+      "label": "serial",
+      "level": "untested"
+    },
+    {
+      "from": "people",
+      "to": "web",
+      "label": "",
+      "level": "tested"
+    },
+    {
+      "from": "ports",
+      "to": "proto",
+      "label": "",
+      "level": "tested"
+    },
+    {
+      "from": "proto",
+      "to": "json",
+      "label": "",
+      "level": "tested"
+    },
+    {
+      "from": "write",
+      "to": "json",
+      "label": "",
+      "level": "config"
+    },
+    {
+      "from": "write",
+      "to": "web",
+      "label": "",
+      "level": "config"
+    },
+    {
+      "from": "json",
+      "to": "ota",
+      "label": "",
+      "level": "contract"
+    },
+    {
+      "from": "web",
+      "to": "ota",
+      "label": "",
+      "level": "tested"
+    },
+    {
+      "from": "json",
+      "to": "server",
+      "label": "MQTT",
+      "level": "contract"
+    },
+    {
+      "from": "ota",
+      "to": "github",
+      "label": "HTTPS",
+      "level": "contract"
+    }
+  ]
+}

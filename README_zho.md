@@ -18,16 +18,17 @@
 ### 太阳能网关节点：通过最多十个串口读取逆变器和电池（ESP32-S3 固件、其网页面板和协议库）
 
 <p align="center">
-  <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
+  <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
+  <img src="https://img.shields.io/badge/Tests-11824%20checks-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.5.9-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
 ---
 
-**诚实性检查 - 今天真正能运行的部分:** 固件可在 ESP-IDF 5.5.5 容器中构建，其核心（设置、与每种设备的交互、模拟 UART 的运算、蓝牙通道、版本和签名检查：14 个测试程序中的 10,527 项检查）在计算机上用替身设备测试，它生成的消息被 ARMOR-COMMON 接受，面板已在浏览器中对照替身节点验证。**它从未在板上运行，也没有连接过任何逆变器或电池**：Wi-Fi、TLS 上的面板、更新、硬件和模拟 UART 以及协议格式（根据公开文档和记忆编写）都未经尝试。其测试中的 ANT-BMS 帧由其他人在自己的设备上捕获：本项目自己还没有读取过任何一帧。
+**诚实性检查 - 今天真正能运行的部分：** 固件可在 ESP-IDF 5.5.5 容器中构建，其核心（设置、与每种设备的交互、模拟 UART 的运算、蓝牙通道、版本和签名检查：18 个测试程序中的 11,824 项检查）在计算机上用替身设备测试，它生成的消息被 ARMOR-COMMON 接受，面板已在浏览器中对照替身节点验证。**它从未在板上运行，也没有连接过任何逆变器或电池**：Wi-Fi、TLS 上的面板、更新、硬件和模拟 UART 以及协议格式（根据公开文档和记忆编写）都未经尝试。其测试中的 ANT-BMS 帧由其他人在自己的设备上捕获：本项目自己还没有读取过任何一帧。
 
 ---
 
@@ -37,9 +38,15 @@
 |---|---|
 | 版本 | `0.5.9` |
 | 成熟度 | 可用 |
-| 测试 | 14 个程序中的 10,527 项检查（`ctest`） |
-| 技术栈 | C++17 (host-tested core); ESP-IDF 5.5.5 firmware for the ESP32-S3-WROOM-1 N16R8 (Wi-Fi) and the Waveshare ESP32-S3-ETH (Ethernet); JavaScript web panel |
+| 角色 | ESP32-S3 太阳能现场节点：逆变器和电池（家族：Field Nodes，上级：ARMOR-COMMON） |
+| 技术栈 | C++17, ESP-IDF 5.5.5, ESP32-S3 |
+| 测试 | 11824 项检查（18 个主机程序和 6 项 Python 检查，`ctest`） |
+| 设备 | Voltronic / MPP Solar 逆变器、Pylontech 电池、ANT-BMS；10 个串口 |
+| 运行位置 | ESP32-S3-WROOM-1 N16R8 或 Waveshare ESP32-S3-ETH；主机测试可在任何计算机上运行 |
 | 真实硬件 | 暂无：没有制作板子，也没有连接逆变器或电池（仅有计算机测试、构建和浏览器中的面板） |
+| 许可证 | GPL-3.0-or-later |
+
+**跳转到：** [概述](#-概述) · [架构](#-架构) · [安全](#-安全与防护) · [接口](#-接口) · [配置](#-配置) · [快速开始](#-快速开始) · [测试](#-测试) · [故障排除](#-故障排除) · [结构](#-仓库结构) · [相关项目](#-相关项目)
 
 ## 🚦 项目状态
 
@@ -50,7 +57,7 @@
 | 领域 | 状态 | 在这里的含义 |
 |---|---|---|
 | 软件 | 🟢 | 固件可在 ESP-IDF 5.5.5 容器中为两块板（Wi-Fi 和以太网）构建。 |
-| 测试 | 🟢 | 14 个主机程序中的 10,527 项检查通过（`ctest`）：设置、与各类设备的交换、模拟 UART、蓝牙通道和版本检查。 |
+| 测试 | 🟢 | 18 个主机程序中的 11,824 项检查通过（`ctest`）：设置、与各类设备的交换、模拟 UART、蓝牙通道和版本检查。 |
 | 协议与数据 | 🟡 | Voltronic、Pylontech 和 ANT-BMS 的帧、校验和与读数已对照文档中的帧和录制的样本检查；目前还没有与真实的逆变器或电池通信过。 |
 | 界面 | 🟡 | 网页面板已在浏览器中对节点的模拟进行过测试，尚未在板子上测试。 |
 | 硬件 | 🔴 | 尚未制作板子，也没有连接逆变器或电池：还没有在真实设备上运行过。 |
@@ -85,6 +92,23 @@
 * **无需线缆的诊断：** 在一次不干净的启动之后（崩溃、看门狗、电源跌落、内存分配失败），健康报告会在十分钟内说明原因；崩溃会留下核心转储（core dump），可在面板中查看、下载或删除；已保存的设置会在每次固件安装前被复制，并在更新损坏它们时恢复；管理员还可以通过服务器，用一次性令牌向节点索取诊断包或其日志。
 * **可选的已存储机密封存:** 默认关闭(`security.seal_secrets`,或服务器的 `nodes.nvs_encryption`)。开启后,节点保存的密码、令牌、密钥、PIN 和密码哈希会用 ChaCha20-Poly1305 封存,其余内容仍可读取;开启或关闭时会无损重写,即使节点中途停止也不会丢失。不会烧写 eFuse,闪存也不加密:密钥在同一芯片的一个分区中,因此**不能**防范持有电路板的人;在该分区出现之前安装的节点会保持原样,直到用新的分区表重新烧录。
 
+## 🧩 在 A.R.M.O.R. 中的角色
+
+ARMOR-NODE-SOLAR 是住宅太阳能设备与家族之间的网关。它通过最多十个串口读取逆变器和电池，并把读到的内容发布给 [ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)，由后者保存历史、合计和报警；[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO) 的*逆变器*和*电池*菜单以及 [ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL) 的太阳能界面显示这些内容。它只读取：从不向任何设备写入设置。
+
+| 名称 | 方式 | 用途 |
+|---|---|---|
+| ARMOR-SERVER | MQTT `armor/solar/<node>/<device>/state` | 每个逆变器或电池组接收一条消息；下达电池维护命令 |
+| ARMOR-STUDIO | 菜单、面板链接 | 显示逆变器和电池并打开节点面板 |
+| ARMOR-ANDROID-CONTROL | Bluetooth | 在现场设置节点并显示能源界面 |
+| ARMOR-COMMON | 太阳能合约 | 消息按其模式校验；公共固件由此复制 |
+
+## 🏛️ 架构
+
+<p align="center">
+  <img src="images/architecture.svg" alt="ARMOR-NODE-SOLAR 的架构：谁调用它、它包含什么、它依赖什么" width="100%">
+</p>
+
 ## 🖼️ 屏幕截图
 
 在测试台上以 1920×1080 截取，使用示例数据，背后没有真实的安装。
@@ -94,73 +118,184 @@
 <tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="读数：节点此刻读取到的内容，以及每个数值的时效。" width="100%"><br><sub>读数：节点此刻读取到的内容，以及每个数值的时效。</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="网络：节点的以太网或 Wi-Fi 地址设置，在其自带的网页面板中配置。" width="100%"><br><sub>网络：节点的以太网或 Wi-Fi 地址设置，在其自带的网页面板中配置。</sub></td></tr>
 </table>
 
-## 🧩 在 A.R.M.O.R. 中的角色
+## 🔒 安全与防护
 
-ARMOR-NODE-SOLAR 是住宅太阳能设备与家族之间的网关。它通过最多十个串口读取逆变器和电池，并把读到的内容发布给 [ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)，由后者保存历史、合计和报警；[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO) 的*逆变器*和*电池*菜单以及 [ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL) 的太阳能界面显示这些内容。它只读取：从不向任何设备写入设置。
+| 威胁 | 防御 |
+|---|---|
+| 明文或编译进固件的密码 | PBKDF2-HMAC-SHA256，10 000 轮；固件中没有密码（没有用户的节点会进入设置）；最多 4 个用户（管理员或查看者），8 到 64 个字符；最多 6 个会话，空闲 30 分钟 |
+| 接管刚刷写的节点 | 设置需要启动码：构建时的码（`CONFIG_ARMOR_SETUP_CODE`），或保存在闪存中并显示在 USB 控制台上的随机码；有机群密钥时为 `HMAC-SHA256(密钥, MAC)`；它也是设置用 Wi-Fi 的密钥（WPA2，绝不桥接） |
+| 从互联网访问面板 | 默认只响应家庭的私有网络（10/8、172.16/12、192.168/16、169.254/16、127/8，以及某些 VPN 使用的 100.64/10）；设置 `web.admin_sources` 可列出其他 IPv4 地址和网络（8 项，120 个字符）；除公开身份 `GET /api/v1/session` 外，其余一律拒绝；会把保存者自己锁在外面的列表会被拒绝 |
+| 通过 HTTP 明文访问面板 | 在 443 端口提供 HTTPS，证书由节点自己生成（自签名、存于闪存，显示 SHA-256 指纹以便比对）；面板可设为 http、https 或两者；会话 Cookie 始终为 HttpOnly 和 SameSite=Strict（TLS 下还有 Secure） |
+| 来自 GitHub 的伪造固件 | 只有 SHA-256 匹配且带有维护者密钥有效 Ed25519 签名的镜像才会被安装（`no_checksum`、`no_signature`、`bad_signature`、`checksum_mismatch`、`wrong_firmware`、`not_newer`、`version_mismatch` 会拒绝）；管理员手动上传不做校验：这是明确的限制 |
+| 劫持蓝牙设置 | 由设置码派生的 6 位 PIN，显示在 USB 控制台并对管理员可见；手机必须先输入才能写入设置；设置窗口时长为 `CONFIG_ARMOR_BLE_SETUP_MINUTES`（默认 10，范围 1 到 120） |
+| 造成危害的远程命令 | 两步操作，使用与该操作绑定的一次性令牌；只有服务器能向代理写入这些主题；暂停最长一小时；远程命令没有恢复出厂、擦除和深度睡眠 |
+| 拿到电路板的人读取存储的机密 | 可选（默认关闭，开关为 `security.seal_secrets` 或服务器的 `nodes.nvs_encryption`）：用 ChaCha20-Poly1305 保护密码、令牌、密钥、PIN 和哈希。它不加密闪存也不烧写 eFuse：密钥位于同一芯片的分区中，因此无法防御拿到电路板的人 |
+| 与代理的明文连接 | 可选 TLS（`mqtts://`），使用所有者自己的证书颁发机构（PEM 最大 2 KB）并检查名称；默认关闭。握手只在主机测试中运行过，没有在电路板上运行 |
+| 因错误或攻击者而写入电池 | 三道锁：节点设置 `battery.write_enabled`（管理员）加电池的服务密码，服务器的 `ARMOR_BATTERY_WRITE=1`，以及代理对 `armor/solar/<节点>/maintenance/command` 和 `.../result` 的访问列表 |
+| 被重放或窃取的写入命令 | 两步（先布防，再用一次性令牌执行），布防窗口 120 秒，对同一端口的两次写入间隔 30 秒，10 分钟内失败 3 次则锁定 5 分钟；需要再次输入电池序列号，电池必须空闲且无严重报警，固件镜像保留 30 分钟并经过校验 |
+| 向逆变器或 ANT-BMS 写入 | 逆变器（设置会改变住宅的供电方式）和 ANT-BMS（可能在负载下断开电池）的写入命令甚至无法构造 |
+| 荒谬的数值被当作真实值显示 | 不可能的数值会被限制在合约上限并在 `clamped` 中列出，服务器据此将其显示为非真实值；REVO 逆变器没有告警查询，所以其消息写 `warnings_known: false`，而不是声称没有告警 |
 
-## 📂 仓库结构
+从未从真实逆变器或电池读取过任何帧；格式依据公开文档和记忆编写，测试中的 ANT-BMS 帧由他人捕获。请阅读 [docs/BATTERY_MAINTENANCE.md](docs/BATTERY_MAINTENANCE.md) 和 [SECURITY.md](SECURITY.md)。
 
-```text
-ARMOR-NODE-SOLAR/
-├── main/    the ESP-IDF component: app_main, solar_manager (one task per port, or per group in the mux profile), uart_ports, mux_board, port_leds_hw, network, web_server, api_shared, mqtt_link, node_store, tls_cert, ble_provision, board_ethernet
-├── core/    voltronic, voltronic_pi18, pylontech, ant_bms, ant_registers, ant_settings, solar_json + solar_config, poller, soft_uart, netplan, auth, board_s3, ble_frame, ble_dispatch, mux_group, port_leds, console_probe, json (no hardware in them)
-├── panel/   the web panel: index.html, app.js, text.js (8 languages), style.css
-├── tools/   build_node.sh, check_sdkconfig.py, pack_panel.py, panel_mock.mjs, panel_browser_test.mjs, the shared CI checks (armor_ci_validate.py, armor_project_tool.py, _armor_readme_parity.py)
-├── secrets/ node.conf.example (the real files are git-ignored)
-├── CMakeLists.txt, partitions.csv, sdkconfig.defaults, sdkconfig.board.*   the ESP-IDF project, the flash layout and the settings of each board (s3-eth, s3-wifi)
-├── tests/   test_solar.cpp, test_node.cpp, test_mqtt_tls.cpp, test_board_eth.cpp, test_ble.cpp, test_mux.cpp, test_parallel.cpp, test_console.cpp, emit_samples.cpp, emit_poller_samples.cpp, check_samples.py (+ the ANT-BMS frames)
-├── docs/    NODE_FIRMWARE, NODE_HARDWARE, BLE_PROVISIONING, PROTOCOLS, SOLAR_MESSAGES, STUDIO_MENUS, BATTERY_MAINTENANCE, BATTERY_BENCH_TEST_PLAN, BENCH_TESTS, SETUP_CODE
-└── images/  brand assets
-```
+## 🔌 接口
 
-## 🛠️ 开发环境
+| 部分 | 作用 |
+|---|---|
+| MQTT | `armor/solar/<节点>/<设备>/state`（每个逆变器或电池组一条消息，类型为 ARMOR-COMMON 合约中的 `inverter` 或 `battery`）、`armor/solar/<节点>/maintenance/{command,result}`、`armor/health/<节点>`（遗嘱）、`armor/control/<id>/{command,result,maintenance}` 和 `armor/control/all/command` |
+| 端口 | 10 个串口（3 个硬件 UART 和 7 个模拟 UART，模拟时最高 19200 波特）；每个端口有一个类型：`voltronic`（2400 波特，每 5 秒）、`pylontech`（115200，每 10 秒）、`ant`（19200，每 5 秒）或 `raw`（9600，仅监听，不发布任何内容）；逆变器方言有 `auto`、`pi30`、`revo`、`pi18`；mux 方案有 3 组端口 |
+| 查询 | Voltronic：`QPIGS`、`QMOD`、`QPIWS`、`QPIRI`（带 mux 的标准逆变器还有 `QPIGS2`、`QPGS`）；Pylontech 控制台：`pwr`、`bat <n>`、`info <n>`、`stat`、`soh`、事件日志，最多 8 个模块逐个电芯查询 |
+| 面板 | 系列共有的路由（`tests/check_routes.py` 检查面板调用的每条路由都存在）加上端口和读数页面；51 个带八种语言文字的错误码（`panel/text.js` 中 772 行）；Studio 的菜单见 [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) |
 
-**环境要求:** 用于主机测试的 C++17 编译器, 用于构建镜像的 ESP-IDF 5.5.5 容器, ESP32-S3-WROOM-1 N16R8 或 Waveshare ESP32-S3-ETH
+## ⚙️ 配置
+
+| 变量 | 默认值 | 作用 |
+|---|---|---|
+| `enabled`, `kind`, `name`, `baud`, `rx`, `tx`, `de`, `poll_s`, `modules`, `dialect` | - | 每个端口的设置：是否启用、类型、主题中的设备名、速度（0 = 该类型的默认值）、引脚（以及 RS485 的 DE/RE 引脚）、轮询周期（0 = 该类型的默认值）、模块数和逆变器方言；备用网络最多 3 个，备用代理最多 2 个 |
+| `battery.write_enabled` | off | 节点对 Pylontech 电池写入的锁（管理员，使用电池的服务密码，该密码从不离开节点） |
+| `CONFIG_ARMOR_BOARD_S3_WIFI` / `_S3_ETH` | wifi | 电路板：ESP32-S3-WROOM-1 N16R8（Wi-Fi，默认）或 Waveshare ESP32-S3-ETH |
+| `CONFIG_ARMOR_NODE_ID`, `_SETUP_CODE`, `_FLEET_SECRET`, `_MQTT_*`, `_HEARTBEAT_S`, `_BLE_SETUP_MINUTES`, `_BOOT_FACTORY_RESET` | - | 所有节点共有的设置：名称（为空则为 `armor-` 加 MAC 的最后字节）、设置码（为空则随机）、机群密钥（16 个字符以上，绝不放入仓库）、最初的代理设置、心跳（2 到 300 秒）、蓝牙设置的分钟数（1 到 120）以及用 BOOT 重置（前 30 秒内按 8 秒） |
+
+## 🚀 快速开始
+
+**要求:** 用于主机测试的 C++17 编译器；用于构建镜像的 ESP-IDF 5.5.5 容器；ESP32-S3-WROOM-1 N16R8 或 Waveshare ESP32-S3-ETH。
 
 ```bash
-cmake -S tests -B build/host && cmake --build build/host
-build/host/test_solar && build/host/test_node && build/host/test_board_eth && build/host/test_ble && build/host/test_mux && build/host/test_parallel && build/host/test_console && build/host/test_release      # 10,527 checks, -Werror
+cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir build/host   # host tests, -Werror
 build/host/emit_poller_samples | python tests/check_samples.py   # what the ports make is accepted by ARMOR-COMMON
-tools/build_node.sh generic                       # the firmware image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
+tools/build_node.sh generic                       # the image for the N16R8 board in the ESP-IDF container: dist/generic-s3-wifi.bin
 tools/build_node.sh generic s3-eth               # the same firmware for the Waveshare ESP32-S3-ETH (Ethernet): dist/generic-s3-eth.bin
 node tools/panel_mock.mjs --user admin:adminpass123   # the panel without a board
 ```
 
 参见[固件指南](docs/NODE_FIRMWARE.md)（开发板、端口、首次启动和台架检查清单）以及[接线说明](docs/NODE_HARDWARE.md)。
 
+## 🧪 测试
+
+```bash
+cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir build/host
+python -I tools/armor_ci_validate.py
+```
+
+`ctest` 运行 18 个主机测试程序和 6 个 Python 检查；主机程序统计的检查共 11824 项，使用 `-Werror` 构建。
+
+Python 检查：八种语言的面板文字、任务、保存路径、受锁保护的蓝牙会话以及面板调用的路由（部分节点还包括 HTTP 状态码或字体字形）
+
+主机测试需要任意 C++17 编译器（Linux、WSL、MSYS2）；网页面板还会在真实浏览器中对着模拟节点（`tools/panel_mock.mjs`、`tools/panel_browser_test.mjs`）进行验证。
+
+`test_clock` 只输出 `ok`，没有计数器；其余每个程序都会报告其检查数。测试用的真实帧在 `tests/pylontech_real.hpp`、`pylontech_us2000_real.hpp`、`pylontech_logs_real.hpp`、`ant_frames.hpp` 和 `battery_bench.hpp` 中。
+
+## 🏗️ 构建与发布
+
+`tools/build_node.sh` 在 ESP-IDF 5.5.5 容器中构建镜像，发布版带有镜像、其 SHA-256 和 Ed25519 签名，每块电路板一份；镜像第一次通过 USB-C 写入，之后从面板更新。
+
+## 🩺 故障排除
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 忘记了密码，或节点不再加入网络 | 处于设置状态且 90 秒后仍无地址的节点会开启自己的 Wi-Fi `ARMOR-SETUP-xxxxxx`（打开 `http://192.168.4.1/`） | 要重新开始，请在上电后 30 秒内按住 BOOT 8 秒（会清除设置和用户），或使用面板中的*恢复出厂设置* |
+| 来自 GitHub 的更新被拒绝 | 发布版缺少校验和或签名，或二者不匹配（`e_no_checksum`、`e_no_signature`、`e_checksum_mismatch`、`e_bad_signature`），没有适用于此电路板的镜像（`e_no_asset_for_board`），或属于另一个项目（`e_wrong_firmware`） | 节点未发生任何变化；请重试，或由管理员手动上传文件 |
+| 对电池的写入被拒绝并带有代码 | `serial_mismatch`、`not_pylontech`、`no_battery`、`unknown_model`、`not_idle`、`critical_alarm`、`busy`、`cooldown`、`locked`、`not_armed`、`bad_token`、`expired`、`disabled`、`image_missing`、`image_mismatch` 等：节点拒绝任何与已布防操作不完全一致的内容 | 查看结果中的代码，修复原因后重新布防该操作（见 [docs/BATTERY_MAINTENANCE.md](docs/BATTERY_MAINTENANCE.md)） |
+| 端口没有发布任何内容 | 端口已关闭，类型为 `raw`（仅监听），速度或引脚与设备不符，或设备没有响应 | 检查端口设置和接线（见 [docs/NODE_HARDWARE.md](docs/NODE_HARDWARE.md)）；面板在查看某个端口时会显示其原始转储 |
+
+## 📂 仓库结构
+
+<p align="center">
+  <img src="images/repository-structure.svg" alt="ARMOR-NODE-SOLAR 的仓库结构" width="100%">
+</p>
+
+<details>
+<summary>目录树的文本版</summary>
+
+```text
+ARMOR-NODE-SOLAR/
+├── main/                                固件：一个 ESP-IDF 组件
+├── core/                                不依赖 ESP-IDF 的逻辑，在计算机上测试
+├── panel/                               嵌入固件的网页面板
+├── tests/                               主机测试和 Python 检查
+├── docs/                                10 份指南：协议、消息、维护、硬件
+├── tools/                               构建、打包和检查工具
+├── .github/                             CI 工作流以及 Issue 和 Pull Request 模板
+├── images/                              横幅、图标和本 README 的两幅图
+├── build.sh build.bat                   通过共享的项目工作流构建
+├── test.sh test.bat                     通过共享工作流运行测试
+├── run.sh run.bat                       通过共享的项目工作流启动
+├── armor.project.json                   清单：版本、角色、成熟度、构建命令
+├── CHANGELOG.md                         每个版本的变化
+├── SECURITY.md SUPPORT.md LICENSE       安全策略、支持和许可证
+├── CONTRIBUTING.md CODE_OF_CONDUCT.md   如何贡献与行为准则
+├── CMakeLists.txt                       ESP-IDF 项目
+├── partitions.csv                       闪存分区表
+├── sdkconfig.defaults                   固件设置
+├── sdkconfig.board.s3-eth               某块电路板的设置
+├── sdkconfig.board.s3-wifi              某块电路板的设置
+├── secrets/                             节点文件示例（真实文件不纳入版本管理）
+├── build-test.sh build-test.bat         通过共享工作流运行测试
+└── .gitattributes .gitignore            Git 设置
+```
+
+</details>
+
+## 🗺️ 路线图与已知限制
+
+**目前已知的限制**
+
+* Voltronic、Pylontech 和 ANT-BMS 的帧、校验和与读数已对照文档中的帧和录制的样本检查；目前还没有与真实的逆变器或电池通信过。
+* 网页面板已在浏览器中对节点的模拟进行过测试，尚未在板子上测试。
+* 尚未制作板子，也没有连接逆变器或电池：还没有在真实设备上运行过。
+* 设置码、限制错误密码次数的登录、蓝牙 PIN 和签名更新已在主机上测试；没有经过独立审查。
+* 哈希和 Ed25519 签名检查以及回滚逻辑在主机上通过；空中更新从未在板子上运行过。
+* 对 Pylontech 电池的写入默认关闭，只对照模拟器测试过。
+
+**下一步**
+
+* 在真实电路板上连接真实逆变器和电池运行节点，然后试验 ANT-BMS 的蓝牙连接（目前使用线缆）、空中更新以及对电池的写入。
+
+## 🌍 语言
+
+README 和文本提供英语、西班牙语、法语、意大利语、德语、汉语、日语和欧洲葡萄牙语版本。
+
 ## 🔗 相关项目
 
-**A.R.M.O.R.**（Autonomous Radar & Multimodal Observation Range）是由若干独立仓库组成的周界安防系统。每个仓库都有自己的版本、测试和 README；家族成员如下：
+**A.R.M.O.R.**（Autonomous Radar & Multimodal Observation Range）是一个由相互独立的仓库组成的周界安全系统。每个仓库都有自己的版本、自己的测试和自己的 README；这是整个系列：
 
 * **[ARMOR-COMMON](https://github.com/JuanenRac/ARMOR-COMMON)** - 消息契约、验证器、一致性向量和生成的类型
-* **[ARMOR-NODE-RADAR](https://github.com/JuanenRac/ARMOR-NODE-RADAR)** - 适用于 ESP32-S3 的现场节点固件，带三个雷达和自带网页面板
-* **ARMOR-NODE-SOLAR** (本仓库) - 太阳能逆变器与电池的协议，以及网关节点的消息
-* **[ARMOR-NODE-ELECTRICAL](https://github.com/JuanenRac/ARMOR-NODE-ELECTRICAL)** - 电气节点：电表、电网读数消息和开关规则
-* **[ARMOR-NODE-ALARM](https://github.com/JuanenRac/ARMOR-NODE-ALARM)** - 报警节点与报警主机：防区、布防、延时、警笛和 PIN，有无服务器均可
-* **[ARMOR-NODE-HMI](https://github.com/JuanenRac/ARMOR-NODE-HMI)** - 触摸面板：墙面屏幕上的系统状态、布防与确认，以及语音助手的所在
+* **[ARMOR-NODE-RADAR](https://github.com/JuanenRac/ARMOR-NODE-RADAR)** - 面向 ESP32-S3 的现场节点固件，配三个雷达和自带的网页面板
+* **ARMOR-NODE-SOLAR**（本仓库） - 太阳能逆变器和电池的协议，以及网关节点的消息
+* **[ARMOR-NODE-ELECTRICAL](https://github.com/JuanenRac/ARMOR-NODE-ELECTRICAL)** - 电气节点：电表、电网读数的消息和切换规则
+* **[ARMOR-NODE-ALARM](https://github.com/JuanenRac/ARMOR-NODE-ALARM)** - 报警节点与面板：防区、布防、延时、警笛和 PIN，可配合服务器也可独立使用
+* **[ARMOR-NODE-HMI](https://github.com/JuanenRac/ARMOR-NODE-HMI)** - 触摸面板：壁挂屏幕上的系统状态、布防与确认，以及语音助手的所在
 * **[ARMOR-NETWORK](https://github.com/JuanenRac/ARMOR-NETWORK)** - 本地网络：其设备、互联网以及变化
 * **[ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)** - 中央协调器：遥测、报警、设备、太阳能读数和摄像头
-* **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - 网页控制台：摄像头、雷达、报警、太阳能和 2D/3D 场地设计器
+* **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - 网页控制台：摄像头、雷达、报警、太阳能以及 2D/3D 场地设计器
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - 带实时 2D/3D 雷达的 Android 操作员客户端
 * **[ARMOR-IOS-CONTROL](https://github.com/JuanenRac/ARMOR-IOS-CONTROL)** - iPhone 操作员客户端
-* **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - 会解释决策且从不执行动作的视觉推理策略
-* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Jetson Orin NX 上的摄像头区域、遮罩与检测规则
-* **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - 带无法伪造确认的离线语音意图
+* **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - 视觉推理策略，会解释其决策且从不驱动设备
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - 面向 Jetson Orin NX 的摄像头区域、遮罩和检测规则
+* **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - 离线语音意图，附带无法伪造的确认
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - 外壳、电子器件和台架验收矩阵
-* **[ARMOR-DEVOPS](https://github.com/JuanenRac/ARMOR-DEVOPS)** - 部署、CM5 测试台、备份与 TLS
+* **[ARMOR-DEVOPS](https://github.com/JuanenRac/ARMOR-DEVOPS)** - 部署、CM5 测试台、备份和 TLS
 * **[ARMOR-SIMULATOR](https://github.com/JuanenRac/ARMOR-SIMULATOR)** - 带可重复故障的离线遥测模拟器
-* **[ARMOR-UPDATER](https://github.com/JuanenRac/ARMOR-UPDATER)** - 发现、安装并更新生态系统自身的仓库
+* **[ARMOR-UPDATER](https://github.com/JuanenRac/ARMOR-UPDATER)** - 检测、安装和更新生态系统自身的仓库
 * **[ARMOR-DOCS](https://github.com/JuanenRac/ARMOR-DOCS)** - 架构、安全基线和能力矩阵
 
-## 📚 文档与社区
+## 📚 文档
 
-更多阅读：
+* [节点固件](docs/NODE_FIRMWARE.md)：电路板、端口、首次启动和台架检查清单
+* [接线](docs/NODE_HARDWARE.md)、[协议](docs/PROTOCOLS.md)和[消息](docs/SOLAR_MESSAGES.md)
+* [电池维护](docs/BATTERY_MAINTENANCE.md)及其[台架测试计划](docs/BATTERY_BENCH_TEST_PLAN.md)
+* [Studio 菜单](docs/STUDIO_MENUS.md)、[台架测试](docs/BENCH_TESTS.md)、[设置码](docs/SETUP_CODE.md)和[蓝牙配置](docs/BLE_PROVISIONING.md)
+* [能力矩阵：哪些已被证明，哪些没有](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/CAPABILITY_MATRIX.md)
+* [项目目录：版本以及各仓库之间如何相互依赖](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/PROJECT_CATALOG.md)
+* [本仓库的更新日志](CHANGELOG.md)
 
-* [能力矩阵：哪些已被证实，哪些没有](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/CAPABILITY_MATRIX.md)
-* [项目目录：版本以及各仓库之间的依赖](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/PROJECT_CATALOG.md)
-* [本仓库的变更记录](CHANGELOG.md)
-* [许可证（GPL-3.0-or-later）](LICENSE)
-* 问题、想法与反馈：electrohobby3d@gmail.com
+## 🤝 参与贡献与社区
+
+* 提交 Pull Request 之前请运行 `ctest --test-dir build/host` and `python -I tools/armor_ci_validate.py`：必须通过。参见 [CONTRIBUTING.md](CONTRIBUTING.md) 和[行为准则](CODE_OF_CONDUCT.md)。
+* README 提供八种语言，由 ARMOR-DOCS 中的源文件生成：文本的修改在那里进行。
+* 组件之间消息的变更从 ARMOR-COMMON 开始。
+* 不要把仅仅构建过的东西描述为已在板子上运行。
+* 请私下报告漏洞：[SECURITY.md](SECURITY.md)。问题、想法和报告：electrohobby3d@gmail.com（[SUPPORT.md](SUPPORT.md)）。
 
 ## 👤 作者
 

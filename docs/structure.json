@@ -1,0 +1,515 @@
+{
+  "repo": "ARMOR-NODE-SOLAR",
+  "ecosystem": "armor",
+  "svg": "en",
+  "cards": [
+    {
+      "name": "main/",
+      "tree": {
+        "en": "the firmware: an ESP-IDF component",
+        "es": "el firmware: un componente de ESP-IDF",
+        "de": "die Firmware: eine ESP-IDF-Komponente",
+        "fr": "le firmware : un composant ESP-IDF",
+        "it": "il firmware: un componente ESP-IDF",
+        "ja": "ファームウェア（ESP-IDF コンポーネント）",
+        "zh": "固件：一个 ESP-IDF 组件",
+        "pt": "o firmware: um componente ESP-IDF"
+      },
+      "span": 3,
+      "accent": "a",
+      "rows": [
+        {
+          "desc": {
+            "en": "solar_manager, uart_ports, mux_board, port_leds_hw: the ports and their tasks",
+            "es": "solar_manager, uart_ports, mux_board, port_leds_hw: los puertos y sus tareas",
+            "de": "solar_manager, uart_ports, mux_board, port_leds_hw: die Ports und ihre Tasks",
+            "fr": "solar_manager, uart_ports, mux_board, port_leds_hw : les ports et leurs tâches",
+            "it": "solar_manager, uart_ports, mux_board, port_leds_hw: le porte e i loro task",
+            "ja": "solar_manager、uart_ports、mux_board、port_leds_hw：ポートとタスク",
+            "zh": "solar_manager、uart_ports、mux_board、port_leds_hw：端口及其任务",
+            "pt": "solar_manager, uart_ports, mux_board, port_leds_hw: as portas e as suas tarefas"
+          }
+        },
+        {
+          "desc": {
+            "en": "battery_maintenance: the writes to a battery (off by default)",
+            "es": "battery_maintenance: las escrituras a una batería (apagadas por defecto)",
+            "de": "battery_maintenance: die Schreibzugriffe auf eine Batterie (standardmäßig aus)",
+            "fr": "battery_maintenance : les écritures vers une batterie (désactivées par défaut)",
+            "it": "battery_maintenance: le scritture su una batteria (spente di default)",
+            "ja": "battery_maintenance：バッテリーへの書き込み（初期はオフ）",
+            "zh": "battery_maintenance：对电池的写入（默认关闭）",
+            "pt": "battery_maintenance: as escritas numa bateria (desligadas por omissão)"
+          }
+        },
+        {
+          "desc": {
+            "en": "mqtt_link, node_control, node_health, node_diag: the broker side",
+            "es": "mqtt_link, node_control, node_health, node_diag: el lado del broker",
+            "de": "mqtt_link, node_control, node_health, node_diag: die Broker-Seite",
+            "fr": "mqtt_link, node_control, node_health, node_diag : le côté broker",
+            "it": "mqtt_link, node_control, node_health, node_diag: il lato broker",
+            "ja": "mqtt_link、node_control、node_health、node_diag：ブローカー側",
+            "zh": "mqtt_link、node_control、node_health、node_diag：代理一侧",
+            "pt": "mqtt_link, node_control, node_health, node_diag: o lado do broker"
+          }
+        },
+        {
+          "desc": {
+            "en": "web_server, api_shared, node_store, tls_cert, network, ble_provision, github_update",
+            "es": "web_server, api_shared, node_store, tls_cert, network, ble_provision, github_update",
+            "de": "web_server, api_shared, node_store, tls_cert, network, ble_provision, github_update",
+            "fr": "web_server, api_shared, node_store, tls_cert, network, ble_provision, github_update",
+            "it": "web_server, api_shared, node_store, tls_cert, network, ble_provision, github_update",
+            "ja": "web_server、api_shared、node_store、tls_cert、network、ble_provision、github_update",
+            "zh": "web_server、api_shared、node_store、tls_cert、network、ble_provision、github_update",
+            "pt": "web_server, api_shared, node_store, tls_cert, network, ble_provision, github_update"
+          }
+        }
+      ]
+    },
+    {
+      "name": "core/",
+      "tree": {
+        "en": "the logic with no ESP-IDF, tested on a computer",
+        "es": "la lógica sin ESP-IDF, probada en un ordenador",
+        "de": "die Logik ohne ESP-IDF, am Rechner getestet",
+        "fr": "la logique sans ESP-IDF, testée sur ordinateur",
+        "it": "la logica senza ESP-IDF, testata su un computer",
+        "ja": "ESP-IDF なしのロジック（コンピューターでテスト）",
+        "zh": "不依赖 ESP-IDF 的逻辑，在计算机上测试",
+        "pt": "a lógica sem ESP-IDF, testada num computador"
+      },
+      "span": 3,
+      "accent": "b",
+      "rows": [
+        {
+          "desc": {
+            "en": "voltronic, voltronic_pi18, pylontech, ant_bms, poller: the equipment's frames",
+            "es": "voltronic, voltronic_pi18, pylontech, ant_bms, poller: las tramas de los equipos",
+            "de": "voltronic, voltronic_pi18, pylontech, ant_bms, poller: die Frames der Geräte",
+            "fr": "voltronic, voltronic_pi18, pylontech, ant_bms, poller : les trames des équipements",
+            "it": "voltronic, voltronic_pi18, pylontech, ant_bms, poller: i frame delle apparecchiature",
+            "ja": "voltronic、voltronic_pi18、pylontech、ant_bms、poller：機器のフレーム",
+            "zh": "voltronic、voltronic_pi18、pylontech、ant_bms、poller：设备的帧",
+            "pt": "voltronic, voltronic_pi18, pylontech, ant_bms, poller: as tramas dos equipamentos"
+          }
+        },
+        {
+          "desc": {
+            "en": "solar_config, solar_json, soft_uart, mux_group: settings, messages, emulated UART",
+            "es": "solar_config, solar_json, soft_uart, mux_group: ajustes, mensajes, UART emulada",
+            "de": "solar_config, solar_json, soft_uart, mux_group: Einstellungen, Nachrichten, emulierte UART",
+            "fr": "solar_config, solar_json, soft_uart, mux_group : réglages, messages, UART émulée",
+            "it": "solar_config, solar_json, soft_uart, mux_group: impostazioni, messaggi, UART emulata",
+            "ja": "solar_config、solar_json、soft_uart、mux_group：設定、メッセージ、エミュレート UART",
+            "zh": "solar_config、solar_json、soft_uart、mux_group：设置、消息、模拟 UART",
+            "pt": "solar_config, solar_json, soft_uart, mux_group: definições, mensagens, UART emulada"
+          }
+        },
+        {
+          "desc": {
+            "en": "battery_ops, battery_runner, battery_stage, xmodem: the writes to a battery",
+            "es": "battery_ops, battery_runner, battery_stage, xmodem: las escrituras a una batería",
+            "de": "battery_ops, battery_runner, battery_stage, xmodem: die Schreibzugriffe auf eine Batterie",
+            "fr": "battery_ops, battery_runner, battery_stage, xmodem : les écritures vers une batterie",
+            "it": "battery_ops, battery_runner, battery_stage, xmodem: le scritture su una batteria",
+            "ja": "battery_ops、battery_runner、battery_stage、xmodem：バッテリーへの書き込み",
+            "zh": "battery_ops、battery_runner、battery_stage、xmodem：对电池的写入",
+            "pt": "battery_ops, battery_runner, battery_stage, xmodem: as escritas numa bateria"
+          }
+        },
+        {
+          "desc": {
+            "en": "auth, web_policy, fw_trust, control_gate, ble_*, secret_seal: the shared base",
+            "es": "auth, web_policy, fw_trust, control_gate, ble_*, secret_seal: la base compartida",
+            "de": "auth, web_policy, fw_trust, control_gate, ble_*, secret_seal: die gemeinsame Basis",
+            "fr": "auth, web_policy, fw_trust, control_gate, ble_*, secret_seal : la base partagée",
+            "it": "auth, web_policy, fw_trust, control_gate, ble_*, secret_seal: la base condivisa",
+            "ja": "auth、web_policy、fw_trust、control_gate、ble_*、secret_seal：共通基盤",
+            "zh": "auth、web_policy、fw_trust、control_gate、ble_*、secret_seal：共享基础",
+            "pt": "auth, web_policy, fw_trust, control_gate, ble_*, secret_seal: a base partilhada"
+          }
+        }
+      ]
+    },
+    {
+      "name": "panel/",
+      "span": 1,
+      "tree": {
+        "en": "the web panel embedded in the firmware",
+        "es": "el panel web embebido en el firmware",
+        "de": "das in die Firmware eingebettete Web-Panel",
+        "fr": "le panneau web intégré au firmware",
+        "it": "il pannello web incorporato nel firmware",
+        "ja": "ファームウェアに埋め込まれた Web パネル",
+        "zh": "嵌入固件的网页面板",
+        "pt": "o painel web embebido no firmware"
+      },
+      "rows": [
+        {
+          "name": "text.js",
+          "desc": {
+            "en": "every text, in eight languages",
+            "es": "todos los textos, en ocho idiomas",
+            "de": "alle Texte in acht Sprachen",
+            "fr": "tous les textes, en huit langues",
+            "it": "tutti i testi, in otto lingue",
+            "ja": "すべての文言（8 言語）",
+            "zh": "所有文字（八种语言）",
+            "pt": "todos os textos, em oito línguas"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tests/",
+      "span": 1,
+      "tree": {
+        "en": "host tests and Python checks",
+        "es": "pruebas de host y comprobaciones Python",
+        "de": "Host-Tests und Python-Prüfungen",
+        "fr": "tests sur hôte et contrôles Python",
+        "it": "test su host e verifiche Python",
+        "ja": "ホストテストと Python 検査",
+        "zh": "主机测试和 Python 检查",
+        "pt": "testes de anfitrião e verificações Python"
+      },
+      "rows": [
+        {
+          "desc": {
+            "en": "host programs and checks",
+            "es": "programas y comprobaciones de host",
+            "de": "Host-Programme und Prüfungen",
+            "fr": "programmes et contrôles sur hôte",
+            "it": "programmi e verifiche su host",
+            "ja": "ホストのプログラムと検査",
+            "zh": "主机程序与检查",
+            "pt": "programas e verificações de anfitrião"
+          }
+        }
+      ]
+    },
+    {
+      "name": "docs/",
+      "span": 1,
+      "tree": {
+        "en": "10 guides: protocols, messages, maintenance, hardware",
+        "es": "10 guías: protocolos, mensajes, mantenimiento, hardware",
+        "de": "10 Anleitungen: Protokolle, Nachrichten, Wartung, Hardware",
+        "fr": "10 guides : protocoles, messages, maintenance, matériel",
+        "it": "10 guide: protocolli, messaggi, manutenzione, hardware",
+        "ja": "10 のガイド：プロトコル、メッセージ、保守、ハードウェア",
+        "zh": "10 份指南：协议、消息、维护、硬件",
+        "pt": "10 guias: protocolos, mensagens, manutenção, hardware"
+      },
+      "rows": [
+        {
+          "desc": {
+            "en": "the guides of this node",
+            "es": "las guías de este nodo",
+            "de": "die Anleitungen dieses Knotens",
+            "fr": "les guides de ce nœud",
+            "it": "le guide di questo nodo",
+            "ja": "このノードのガイド",
+            "zh": "本节点的指南",
+            "pt": "os guias deste nó"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tools/",
+      "span": 3,
+      "tree": {
+        "en": "build, pack and check tools",
+        "es": "herramientas de compilación, empaquetado y comprobación",
+        "de": "Werkzeuge für Build, Packen und Prüfung",
+        "fr": "outils de build, d'empaquetage et de contrôle",
+        "it": "strumenti di build, impacchettamento e verifica",
+        "ja": "ビルド・パッケージ・検査のツール",
+        "zh": "构建、打包和检查工具",
+        "pt": "ferramentas de compilação, empacotamento e verificação"
+      },
+      "rows": [
+        {
+          "desc": {
+            "en": "build_node.sh, pack_panel.py, check_sdkconfig.py",
+            "es": "build_node.sh, pack_panel.py, check_sdkconfig.py",
+            "de": "build_node.sh, pack_panel.py, check_sdkconfig.py",
+            "fr": "build_node.sh, pack_panel.py, check_sdkconfig.py",
+            "it": "build_node.sh, pack_panel.py, check_sdkconfig.py",
+            "ja": "build_node.sh、pack_panel.py、check_sdkconfig.py",
+            "zh": "build_node.sh、pack_panel.py、check_sdkconfig.py",
+            "pt": "build_node.sh, pack_panel.py, check_sdkconfig.py"
+          }
+        },
+        {
+          "desc": {
+            "en": "panel_mock.mjs (a stand-in node), panel_browser_test.mjs, the shared CI checks",
+            "es": "panel_mock.mjs (un nodo de pruebas), panel_browser_test.mjs, las comprobaciones de CI compartidas",
+            "de": "panel_mock.mjs (ein Ersatzknoten), panel_browser_test.mjs, die gemeinsamen CI-Prüfungen",
+            "fr": "panel_mock.mjs (un nœud de substitution), panel_browser_test.mjs, les contrôles CI partagés",
+            "it": "panel_mock.mjs (un nodo sostitutivo), panel_browser_test.mjs, i controlli CI condivisi",
+            "ja": "panel_mock.mjs（代役ノード）、panel_browser_test.mjs、共通の CI チェック",
+            "zh": "panel_mock.mjs（模拟节点）、panel_browser_test.mjs、共享的 CI 检查",
+            "pt": "panel_mock.mjs (um nó de substituição), panel_browser_test.mjs, as verificações de CI partilhadas"
+          }
+        }
+      ]
+    },
+    {
+      "name": ".github/ images/",
+      "kind": "group",
+      "span": 3,
+      "columns": 2,
+      "rows": [
+        {
+          "name": ".github/",
+          "desc": {
+            "en": "CI workflow, issue and pull-request templates",
+            "es": "flujo de CI y plantillas de issues y pull requests",
+            "de": "CI-Workflow sowie Vorlagen für Issues und Pull Requests",
+            "fr": "workflow CI et modèles d'issues et de pull requests",
+            "it": "workflow CI e modelli per issue e pull request",
+            "ja": "CI ワークフローと Issue・Pull Request のテンプレート",
+            "zh": "CI 工作流以及 Issue 和 Pull Request 模板",
+            "pt": "fluxo de CI e modelos de issues e pull requests"
+          }
+        },
+        {
+          "name": "images/",
+          "desc": {
+            "en": "banner, icon and the two pictures of this README",
+            "es": "banner, icono y las dos imágenes de este README",
+            "de": "Banner, Symbol und die zwei Bilder dieses READMEs",
+            "fr": "bannière, icône et les deux images de ce README",
+            "it": "banner, icona e le due immagini di questo README",
+            "ja": "バナー、アイコン、この README の 2 つの図",
+            "zh": "横幅、图标和本 README 的两幅图",
+            "pt": "faixa, ícone e as duas imagens deste README"
+          }
+        }
+      ]
+    },
+    {
+      "name": {
+        "en": "Files at the root",
+        "es": "Ficheros en la raíz",
+        "de": "Dateien im Wurzelverzeichnis",
+        "fr": "Fichiers à la racine",
+        "it": "File nella radice",
+        "ja": "ルートのファイル",
+        "zh": "根目录的文件",
+        "pt": "Ficheiros na raiz"
+      },
+      "kind": "group",
+      "span": 3,
+      "columns": 2,
+      "rows": [
+        {
+          "name": "build.sh  build.bat",
+          "tree_name": "build.sh build.bat",
+          "desc": {
+            "en": "build through the shared project workflow",
+            "es": "compilar con el flujo de proyecto compartido",
+            "de": "Build über den gemeinsamen Projekt-Workflow",
+            "fr": "build par le flux de projet partagé",
+            "it": "build tramite il flusso di progetto condiviso",
+            "ja": "共通のプロジェクトワークフローでビルド",
+            "zh": "通过共享的项目工作流构建",
+            "pt": "compilar pelo fluxo de projeto partilhado"
+          }
+        },
+        {
+          "name": "test.sh  test.bat",
+          "tree_name": "test.sh test.bat",
+          "desc": {
+            "en": "run the tests through the shared workflow",
+            "es": "ejecutar las pruebas con el flujo compartido",
+            "de": "Tests über den gemeinsamen Workflow ausführen",
+            "fr": "lancer les tests par le flux partagé",
+            "it": "eseguire i test tramite il flusso condiviso",
+            "ja": "共通のワークフローでテストを実行",
+            "zh": "通过共享工作流运行测试",
+            "pt": "executar os testes pelo fluxo partilhado"
+          }
+        },
+        {
+          "name": "run.sh  run.bat",
+          "tree_name": "run.sh run.bat",
+          "desc": {
+            "en": "start through the shared project workflow",
+            "es": "arrancar con el flujo de proyecto compartido",
+            "de": "Start über den gemeinsamen Projekt-Workflow",
+            "fr": "démarrer par le flux de projet partagé",
+            "it": "avvio tramite il flusso di progetto condiviso",
+            "ja": "共通のプロジェクトワークフローで起動",
+            "zh": "通过共享的项目工作流启动",
+            "pt": "arrancar pelo fluxo de projeto partilhado"
+          }
+        },
+        {
+          "name": "armor.project.json",
+          "desc": {
+            "en": "manifest: version, role, maturity, build command",
+            "es": "manifiesto: versión, rol, madurez, comando de build",
+            "de": "Manifest: Version, Rolle, Reifegrad, Build-Befehl",
+            "fr": "manifeste : version, rôle, maturité, commande de build",
+            "it": "manifesto: versione, ruolo, maturità, comando di build",
+            "ja": "マニフェスト：バージョン、役割、成熟度、ビルドコマンド",
+            "zh": "清单：版本、角色、成熟度、构建命令",
+            "pt": "manifesto: versão, função, maturidade, comando de build"
+          }
+        },
+        {
+          "name": "CHANGELOG.md",
+          "desc": {
+            "en": "what changed in each version",
+            "es": "qué cambió en cada versión",
+            "de": "was sich in jeder Version geändert hat",
+            "fr": "ce qui a changé à chaque version",
+            "it": "cosa è cambiato in ogni versione",
+            "ja": "各バージョンの変更点",
+            "zh": "每个版本的变化",
+            "pt": "o que mudou em cada versão"
+          }
+        },
+        {
+          "name": "SECURITY.md  SUPPORT.md  LICENSE",
+          "tree_name": "SECURITY.md SUPPORT.md LICENSE",
+          "desc": {
+            "en": "security policy, support and license",
+            "es": "política de seguridad, soporte y licencia",
+            "de": "Sicherheitsrichtlinie, Support und Lizenz",
+            "fr": "politique de sécurité, support et licence",
+            "it": "politica di sicurezza, supporto e licenza",
+            "ja": "セキュリティポリシー、サポート、ライセンス",
+            "zh": "安全策略、支持和许可证",
+            "pt": "política de segurança, apoio e licença"
+          }
+        },
+        {
+          "name": "CONTRIBUTING.md  CODE_OF_CONDUCT.md",
+          "tree_name": "CONTRIBUTING.md CODE_OF_CONDUCT.md",
+          "desc": {
+            "en": "how to contribute and the code of conduct",
+            "es": "cómo contribuir y el código de conducta",
+            "de": "Mitwirkung und Verhaltenskodex",
+            "fr": "comment contribuer et le code de conduite",
+            "it": "come contribuire e il codice di condotta",
+            "ja": "貢献方法と行動規範",
+            "zh": "如何贡献与行为准则",
+            "pt": "como contribuir e o código de conduta"
+          }
+        },
+        {
+          "name": "CMakeLists.txt",
+          "desc": {
+            "en": "the ESP-IDF project",
+            "es": "el proyecto ESP-IDF",
+            "de": "das ESP-IDF-Projekt",
+            "fr": "le projet ESP-IDF",
+            "it": "il progetto ESP-IDF",
+            "ja": "ESP-IDF プロジェクト",
+            "zh": "ESP-IDF 项目",
+            "pt": "o projeto ESP-IDF"
+          }
+        },
+        {
+          "name": "partitions.csv",
+          "desc": {
+            "en": "the flash table",
+            "es": "la tabla de la flash",
+            "de": "die Flash-Tabelle",
+            "fr": "la table de la flash",
+            "it": "la tabella della flash",
+            "ja": "フラッシュのテーブル",
+            "zh": "闪存分区表",
+            "pt": "a tabela da flash"
+          }
+        },
+        {
+          "name": "sdkconfig.defaults",
+          "desc": {
+            "en": "the firmware settings",
+            "es": "los ajustes del firmware",
+            "de": "die Firmware-Einstellungen",
+            "fr": "les réglages du firmware",
+            "it": "le impostazioni del firmware",
+            "ja": "ファームウェアの設定",
+            "zh": "固件设置",
+            "pt": "as definições do firmware"
+          }
+        },
+        {
+          "name": "sdkconfig.board.s3-eth",
+          "desc": {
+            "en": "the settings of one board",
+            "es": "los ajustes de una placa",
+            "de": "die Einstellungen einer Platine",
+            "fr": "les réglages d'une carte",
+            "it": "le impostazioni di una scheda",
+            "ja": "基板ごとの設定",
+            "zh": "某块电路板的设置",
+            "pt": "as definições de uma placa"
+          }
+        },
+        {
+          "name": "sdkconfig.board.s3-wifi",
+          "desc": {
+            "en": "the settings of one board",
+            "es": "los ajustes de una placa",
+            "de": "die Einstellungen einer Platine",
+            "fr": "les réglages d'une carte",
+            "it": "le impostazioni di una scheda",
+            "ja": "基板ごとの設定",
+            "zh": "某块电路板的设置",
+            "pt": "as definições de uma placa"
+          }
+        },
+        {
+          "name": "secrets/",
+          "desc": {
+            "en": "example of the node file (the real ones are not versioned)",
+            "es": "ejemplo del fichero del nodo (los reales no se versionan)",
+            "de": "Beispiel der Knotendatei (die echten sind nicht versioniert)",
+            "fr": "exemple du fichier de nœud (les vrais ne sont pas versionnés)",
+            "it": "esempio del file del nodo (quelli veri non sono versionati)",
+            "ja": "ノードファイルの例（本物はバージョン管理しません）",
+            "zh": "节点文件示例（真实文件不纳入版本管理）",
+            "pt": "exemplo do ficheiro do nó (os verdadeiros não são versionados)"
+          }
+        },
+        {
+          "name": "build-test.sh  build-test.bat",
+          "desc": {
+            "en": "run the tests through the shared workflow",
+            "es": "ejecutar las pruebas con el flujo compartido",
+            "de": "Tests über den gemeinsamen Workflow ausführen",
+            "fr": "lancer les tests par le flux partagé",
+            "it": "eseguire i test tramite il flusso condiviso",
+            "ja": "共通のワークフローでテストを実行",
+            "zh": "通过共享工作流运行测试",
+            "pt": "executar os testes pelo fluxo partilhado"
+          },
+          "tree_name": "build-test.sh build-test.bat"
+        },
+        {
+          "name": ".gitattributes  .gitignore",
+          "desc": {
+            "en": "Git settings",
+            "es": "ajustes de Git",
+            "de": "Git-Einstellungen",
+            "fr": "réglages Git",
+            "it": "impostazioni di Git",
+            "ja": "Git の設定",
+            "zh": "Git 设置",
+            "pt": "definições do Git"
+          },
+          "tree_name": ".gitattributes .gitignore"
+        }
+      ]
+    }
+  ]
+}
