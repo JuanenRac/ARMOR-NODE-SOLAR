@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.9] - The Overview boxes line up and the inter-processor tasks have more stack
+
+- **The framed values of the Overview page have the same width:** each value fills the column next to its label, so the boxes of a card line up instead of having the width of their text.
+- **The inter-processor call tasks have more stack:** `CONFIG_ESP_IPC_TASK_STACK_SIZE` is 2048 (the default left 532 bytes free in `ipc0` on a running node).
+
 ## [0.5.8] - The panel's HTTPS server has room to work: its stack grows from 10240 to 12288 bytes
 
 - **The HTTPS server of the panel gets 12288 bytes of stack instead of 10240:** the live smoke test found only 332 bytes free in an `httpd` task after the TLS handshakes of a long login, and the node reports a task with less than 400 bytes free as low. The plain HTTP server keeps its 10240 bytes.
