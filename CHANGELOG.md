@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The tests play the node's MQTT client against a real Mosquitto:** `tests/check_mosquitto.py` (shared with the other nodes) checks, with the messages this node prints, the retained birth and last will, delivery to the server, the node's own order topic and that it cannot write on another node's topics; the CI installs Mosquitto and fails without it.
+
 ## [0.6.0] - Warning on the Wi-Fi page, the universal README and the live panel of the scripts
 
 - **The Wi-Fi page warns when the node's own network is switched on next to the router connection:** the same notice the Overview shows (one radio, the network forced onto the router's channel) appears in the form as soon as both are on, in the eight languages.
