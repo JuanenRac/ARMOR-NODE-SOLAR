@@ -64,7 +64,7 @@ Each line is one part of this repository and the light says how far it is today.
 | Security | 🟡 | The set-up code, the login with a limit on wrong passwords, the Bluetooth PIN and the signed updates are tested on the host; there has been no independent review. |
 | Updates | 🟠 | The hash and Ed25519 signature checks and the rollback logic pass on the host; an update over the air has never been run on a board. |
 | Writing to equipment | 🟠 | Writing to Pylontech batteries is off by default and has only been tested against a simulator. |
-| Integration | 🟢 | The messages of the node are validated against the shared schemas and conformance vectors of ARMOR-COMMON. |
+| Integration | 🟠 | The messages of the node are validated against the shared schemas and conformance vectors of ARMOR-COMMON. Its MQTT client is played against a real Mosquitto in the tests; no board has sent them to a server yet. |
 | Documentation | 🟢 | Eight languages, the firmware guide, the wiring notes and the changelog are up to date. |
 
 ## 🎯 Overview

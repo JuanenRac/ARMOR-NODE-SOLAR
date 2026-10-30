@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The lights of Project status follow the evidence of the manifest:** the manifest says how far the repository has been shown to work (`evidence`: `host-test`, `simulator`, `bench` or `field`) and the validator fails when a light is above what that evidence and the maturity allow (`tools/status_lights.py`), so a green that never ran on real hardware cannot come back.
 - **The tests play the node's MQTT client against a real Mosquitto:** `tests/check_mosquitto.py` (shared with the other nodes) checks, with the messages this node prints, the retained birth and last will, delivery to the server, the node's own order topic and that it cannot write on another node's topics; the CI installs Mosquitto and fails without it.
 
 ## [0.6.0] - Warning on the Wi-Fi page, the universal README and the live panel of the scripts

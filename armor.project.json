@@ -15,6 +15,7 @@
   ],
   "deployment_target": "ESP32-S3 gateway nodes: N16R8 on Wi-Fi, or Waveshare ESP32-S3-ETH on Ethernet",
   "maturity": "functional",
+  "evidence": "host-test",
   "family": "Field Nodes",
   "parent": "ARMOR-COMMON",
   "native_version": "0.6.0",
