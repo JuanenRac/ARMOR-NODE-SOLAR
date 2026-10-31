@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.1] - The green frames of the Overview fit their text, the lights of Project status follow the evidence of the manifest and the node client tested against a real Mosquitto
+
+- **The green frames of the Overview fit their text:** in the Overview cards (Hardware, Flash memory and the rest) each green frame is as wide as its content, stays on the right and grows to the left, so long texts in any of the eight languages are no longer squeezed; on a narrow screen the label goes above its frame.
 - **The lights of Project status follow the evidence of the manifest:** the manifest says how far the repository has been shown to work (`evidence`: `host-test`, `simulator`, `bench` or `field`) and the validator fails when a light is above what that evidence and the maturity allow (`tools/status_lights.py`), so a green that never ran on real hardware cannot come back.
 - **The tests play the node's MQTT client against a real Mosquitto:** `tests/check_mosquitto.py` (shared with the other nodes) checks, with the messages this node prints, the retained birth and last will, delivery to the server, the node's own order topic and that it cannot write on another node's topics; the CI installs Mosquitto and fails without it.
 

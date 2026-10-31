@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
   <img src="https://img.shields.io/badge/Tests-11824%20checks-2ea44f.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Version-0.6.0-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -36,7 +36,7 @@
 
 | | |
 |---|---|
-| Version | `0.6.0` |
+| Version | `0.6.1` |
 | Maturity | Functional |
 | Role | Solar field node for ESP32-S3: inverters and batteries (family: Field Nodes, parent: ARMOR-COMMON) |
 | Stack | C++17, ESP-IDF 5.5.5, ESP32-S3 |
