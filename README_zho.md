@@ -155,6 +155,7 @@ ARMOR-NODE-SOLAR 是住宅太阳能设备与家族之间的网关。它通过最
 | `battery.write_enabled` | off | 节点对 Pylontech 电池写入的锁（管理员，使用电池的服务密码，该密码从不离开节点） |
 | `CONFIG_ARMOR_BOARD_S3_WIFI` / `_S3_ETH` | wifi | 电路板：ESP32-S3-WROOM-1 N16R8（Wi-Fi，默认）或 Waveshare ESP32-S3-ETH |
 | `CONFIG_ARMOR_NODE_ID`, `_SETUP_CODE`, `_FLEET_SECRET`, `_MQTT_*`, `_HEARTBEAT_S`, `_BLE_SETUP_MINUTES`, `_BOOT_FACTORY_RESET` | - | 所有节点共有的设置：名称（为空则为 `armor-` 加 MAC 的最后字节）、设置码（为空则随机）、机群密钥（16 个字符以上，绝不放入仓库）、最初的代理设置、心跳（2 到 300 秒）、蓝牙设置的分钟数（1 到 120）以及用 BOOT 重置（前 30 秒内按 8 秒） |
+| `system.login_limit_per_minute` | 30 (0-120) | 面板对所有人锁定登录前每分钟允许的错误密码次数（0 = 无全局限制）；可在 Studio（每个节点上的按钮）或通过 `POST /api/v1/admin/nodes/settings` 读取和修改，面板登录信息只使用一次，绝不保存 |
 
 ## 🚀 快速开始
 

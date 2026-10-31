@@ -155,6 +155,7 @@ Nessun frame è stato letto da un vero inverter o da una vera batteria; i format
 | `battery.write_enabled` | off | La serratura del nodo per scrivere su una batteria Pylontech (amministratori, con la password di servizio della batteria, che non lascia mai il nodo) |
 | `CONFIG_ARMOR_BOARD_S3_WIFI` / `_S3_ETH` | wifi | La scheda: ESP32-S3-WROOM-1 N16R8 via Wi-Fi (predefinita) o la Waveshare ESP32-S3-ETH |
 | `CONFIG_ARMOR_NODE_ID`, `_SETUP_CODE`, `_FLEET_SECRET`, `_MQTT_*`, `_HEARTBEAT_S`, `_BLE_SETUP_MINUTES`, `_BOOT_FACTORY_RESET` | - | Le impostazioni che tutti i nodi condividono: il nome (vuoto dà `armor-` e gli ultimi byte del MAC), il codice di configurazione (vuoto: casuale), il segreto di flotta (16+ caratteri, mai nel repository), le prime impostazioni del broker, il battito (da 2 a 300 s), i minuti di configurazione Bluetooth (da 1 a 120) e il ripristino con BOOT (8 s nei primi 30 s) |
+| `system.login_limit_per_minute` | 30 (0-120) | Password errate al minuto prima che il pannello blocchi l'accesso a tutti (0 = nessun limite globale); si legge e si cambia da Studio (un pulsante su ogni nodo) o con `POST /api/v1/admin/nodes/settings`, dove l'accesso al pannello è usato una volta e mai conservato |
 
 ## 🚀 Avvio rapido
 

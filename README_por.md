@@ -155,6 +155,7 @@ Nenhuma trama foi lida de um inversor ou bateria reais; os formatos estão escri
 | `battery.write_enabled` | off | A tranca do nó para escrever numa bateria Pylontech (administradores, com a palavra-passe de serviço da bateria, que nunca sai do nó) |
 | `CONFIG_ARMOR_BOARD_S3_WIFI` / `_S3_ETH` | wifi | A placa: ESP32-S3-WROOM-1 N16R8 por Wi-Fi (predefinição) ou a Waveshare ESP32-S3-ETH |
 | `CONFIG_ARMOR_NODE_ID`, `_SETUP_CODE`, `_FLEET_SECRET`, `_MQTT_*`, `_HEARTBEAT_S`, `_BLE_SETUP_MINUTES`, `_BOOT_FACTORY_RESET` | - | As definições que todos os nós partilham: o nome (vazio dá `armor-` e os últimos bytes do MAC), o código de configuração (vazio: aleatório), o segredo de frota (16+ caracteres, nunca no repositório), as primeiras definições do broker, o batimento (de 2 a 300 s), os minutos de configuração Bluetooth (de 1 a 120) e a reposição com BOOT (8 s nos primeiros 30 s) |
+| `system.login_limit_per_minute` | 30 (0-120) | Palavras-passe erradas por minuto antes de o painel bloquear o início de sessão a todos (0 = sem limite global); lê-se e altera-se no Studio (um botão em cada nó) ou com `POST /api/v1/admin/nodes/settings`, onde o acesso ao painel é usado uma vez e nunca guardado |
 
 ## 🚀 Início rápido
 

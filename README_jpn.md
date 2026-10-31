@@ -155,6 +155,7 @@ ARMOR-NODE-SOLAR は家のソーラー機器とファミリーをつなぐゲー
 | `battery.write_enabled` | off | Pylontech バッテリーへの書き込みに対するノードの錠（管理者、バッテリーのサービスパスワードを使い、パスワードはノードの外に出ません） |
 | `CONFIG_ARMOR_BOARD_S3_WIFI` / `_S3_ETH` | wifi | 基板：ESP32-S3-WROOM-1 N16R8（Wi-Fi、既定）または Waveshare ESP32-S3-ETH |
 | `CONFIG_ARMOR_NODE_ID`, `_SETUP_CODE`, `_FLEET_SECRET`, `_MQTT_*`, `_HEARTBEAT_S`, `_BLE_SETUP_MINUTES`, `_BOOT_FACTORY_RESET` | - | すべてのノードに共通する設定：名前（空なら `armor-` と MAC の下位バイト）、セットアップコード（空ならランダム）、フリートシークレット（16 文字以上、リポジトリには置かない）、最初のブローカー設定、ハートビート（2〜300 秒）、Bluetooth セットアップの分数（1〜120）、BOOT によるリセット（最初の 30 秒に 8 秒） |
+| `system.login_limit_per_minute` | 30 (0-120) | パネルが全員のログインをロックするまでの 1 分あたりの誤パスワード数（0 = 全体の上限なし）。Studio（各ノードのボタン）または `POST /api/v1/admin/nodes/settings` で読み取り・変更でき、パネルのログイン情報は 1 回だけ使われ保存されません |
 
 ## 🚀 クイックスタート
 

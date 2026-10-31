@@ -155,6 +155,7 @@ Aucune trame n'a été lue d'un vrai onduleur ou d'une vraie batterie ; les form
 | `battery.write_enabled` | off | Le verrou du nœud pour écrire sur une batterie Pylontech (administrateurs, avec le mot de passe de service de la batterie, qui ne quitte jamais le nœud) |
 | `CONFIG_ARMOR_BOARD_S3_WIFI` / `_S3_ETH` | wifi | La carte : ESP32-S3-WROOM-1 N16R8 en Wi-Fi (par défaut) ou la Waveshare ESP32-S3-ETH |
 | `CONFIG_ARMOR_NODE_ID`, `_SETUP_CODE`, `_FLEET_SECRET`, `_MQTT_*`, `_HEARTBEAT_S`, `_BLE_SETUP_MINUTES`, `_BOOT_FACTORY_RESET` | - | Les réglages que tous les nœuds partagent : le nom (vide donne `armor-` et les derniers octets de la MAC), le code de configuration (vide : aléatoire), le secret de flotte (16+ caractères, jamais dans le dépôt), les premiers réglages du broker, le battement (de 2 à 300 s), les minutes de configuration Bluetooth (de 1 à 120) et la réinitialisation avec BOOT (8 s dans les 30 premières s) |
+| `system.login_limit_per_minute` | 30 (0-120) | Mots de passe erronés par minute avant que le panneau verrouille la connexion pour tous (0 = pas de limite globale) ; on le lit et le change depuis Studio (un bouton sur chaque nœud) ou avec `POST /api/v1/admin/nodes/settings`, l'identifiant du panneau étant utilisé une fois et jamais conservé |
 
 ## 🚀 Démarrage rapide
 

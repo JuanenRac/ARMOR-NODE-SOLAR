@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The documentation covers the sign-in limit:** the configuration table of the README (eight languages) lists `system.login_limit_per_minute` (30 by default, 0 to 120, read and changed from Studio or with the server's node settings route).
+
 ## [0.6.1] - The green frames of the Overview fit their text, the lights of Project status follow the evidence of the manifest and the node client tested against a real Mosquitto
 
 - **The green frames of the Overview fit their text:** in the Overview cards (Hardware, Flash memory and the rest) each green frame is as wide as its content, stays on the right and grows to the left, so long texts in any of the eight languages are no longer squeezed; on a narrow screen the label goes above its frame.
