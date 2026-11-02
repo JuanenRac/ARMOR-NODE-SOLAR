@@ -111,12 +111,31 @@ ARMOR-NODE-SOLAR 是住宅太阳能设备与家族之间的网关。它通过最
 
 ## 🖼️ 屏幕截图
 
-在测试台上以 1920×1080 截取，使用示例数据，背后没有真实的安装。
+在测试台上使用虚构的示例数据截取，背后没有真实的安装。
 
-<table>
-<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="概览：节点状态一目了然——网络、代理、固件及其上报内容。" width="100%"><br><sub>概览：节点状态一目了然——网络、代理、固件及其上报内容。</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="端口：节点的串行端口以及每个端口上的设备。" width="100%"><br><sub>端口：节点的串行端口以及每个端口上的设备。</sub></td></tr>
-<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="读数：节点此刻读取到的内容，以及每个数值的时效。" width="100%"><br><sub>读数：节点此刻读取到的内容，以及每个数值的时效。</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="网络：节点的以太网或 Wi-Fi 地址设置，在其自带的网页面板中配置。" width="100%"><br><sub>网络：节点的以太网或 Wi-Fi 地址设置，在其自带的网页面板中配置。</sub></td></tr>
-</table>
+<p align="center">
+  <img src="images/screenshots/overview.png" alt="概览" width="100%">
+</p>
+
+<p align="center"><em>概览：节点状态一目了然——网络、代理、固件及其上报内容。</em></p>
+
+<p align="center">
+  <img src="images/screenshots/ports.png" alt="端口" width="100%">
+</p>
+
+<p align="center"><em>端口：节点的串行端口以及每个端口上的设备。</em></p>
+
+<p align="center">
+  <img src="images/screenshots/readings.png" alt="读数" width="100%">
+</p>
+
+<p align="center"><em>读数：节点此刻读取到的内容，以及每个数值的时效。</em></p>
+
+<p align="center">
+  <img src="images/screenshots/network.png" alt="网络" width="100%">
+</p>
+
+<p align="center"><em>网络：节点的以太网或 Wi-Fi 地址设置，在其自带的网页面板中配置。</em></p>
 
 ## 🔒 安全与防护
 

@@ -111,12 +111,31 @@ ARMOR-NODE-SOLAR is the gateway between the house's solar equipment and the fami
 
 ## 🖼️ Screenshots
 
-Captured at 1920×1080 on a test bench, with sample data and no real installation behind them.
+Captured on a test bench with made-up sample data and no real installation behind them.
 
-<table>
-<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="Overview: the state of the node at a glance - network, broker, firmware and what it reports." width="100%"><br><sub>Overview: the state of the node at a glance - network, broker, firmware and what it reports.</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="Ports: the serial ports of the node and the equipment on each of them." width="100%"><br><sub>Ports: the serial ports of the node and the equipment on each of them.</sub></td></tr>
-<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="Readings: what the node is reading right now, with the age of each value." width="100%"><br><sub>Readings: what the node is reading right now, with the age of each value.</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="Network: Ethernet or Wi-Fi addressing of the node, set from its own web panel." width="100%"><br><sub>Network: Ethernet or Wi-Fi addressing of the node, set from its own web panel.</sub></td></tr>
-</table>
+<p align="center">
+  <img src="images/screenshots/overview.png" alt="Overview" width="100%">
+</p>
+
+<p align="center"><em>Overview: the state of the node at a glance - network, broker, firmware and what it reports.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/ports.png" alt="Ports" width="100%">
+</p>
+
+<p align="center"><em>Ports: the serial ports of the node and the equipment on each of them.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/readings.png" alt="Readings" width="100%">
+</p>
+
+<p align="center"><em>Readings: what the node is reading right now, with the age of each value.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/network.png" alt="Network" width="100%">
+</p>
+
+<p align="center"><em>Network: Ethernet or Wi-Fi addressing of the node, set from its own web panel.</em></p>
 
 ## 🔒 Security & Safety
 

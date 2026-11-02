@@ -111,12 +111,31 @@ ARMOR-NODE-SOLAR est la passerelle entre le matériel solaire de la maison et la
 
 ## 🖼️ Captures d'écran
 
-Capturées en 1920×1080 sur un banc d'essai, avec des données d'exemple et sans installation réelle derrière.
+Capturées sur un banc d'essai avec des données d'exemple fictives et sans installation réelle derrière.
 
-<table>
-<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="Résumé : l'état du nœud en un coup d'œil - réseau, broker, firmware et ce qu'il remonte." width="100%"><br><sub>Résumé : l'état du nœud en un coup d'œil - réseau, broker, firmware et ce qu'il remonte.</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="Ports : les ports série du nœud et l'équipement de chacun." width="100%"><br><sub>Ports : les ports série du nœud et l'équipement de chacun.</sub></td></tr>
-<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="Mesures : ce que le nœud lit en ce moment, avec l'âge de chaque valeur." width="100%"><br><sub>Mesures : ce que le nœud lit en ce moment, avec l'âge de chaque valeur.</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="Réseau : l'adressage Ethernet ou Wi-Fi du nœud, réglé depuis son propre panneau web." width="100%"><br><sub>Réseau : l'adressage Ethernet ou Wi-Fi du nœud, réglé depuis son propre panneau web.</sub></td></tr>
-</table>
+<p align="center">
+  <img src="images/screenshots/overview.png" alt="Résumé" width="100%">
+</p>
+
+<p align="center"><em>Résumé : l'état du nœud en un coup d'œil - réseau, broker, firmware et ce qu'il remonte.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/ports.png" alt="Ports" width="100%">
+</p>
+
+<p align="center"><em>Ports : les ports série du nœud et l'équipement de chacun.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/readings.png" alt="Mesures" width="100%">
+</p>
+
+<p align="center"><em>Mesures : ce que le nœud lit en ce moment, avec l'âge de chaque valeur.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/network.png" alt="Réseau" width="100%">
+</p>
+
+<p align="center"><em>Réseau : l'adressage Ethernet ou Wi-Fi du nœud, réglé depuis son propre panneau web.</em></p>
 
 ## 🔒 Sécurité et protection
 

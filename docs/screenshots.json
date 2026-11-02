@@ -1,0 +1,96 @@
+{
+  "screens": [
+    {
+      "file": "overview.png",
+      "alt": {
+        "en": "Overview",
+        "es": "Resumen",
+        "fr": "Résumé",
+        "it": "Riepilogo",
+        "de": "Übersicht",
+        "zh": "概览",
+        "ja": "概要",
+        "pt": "Resumo"
+      },
+      "caption": {
+        "en": "Overview: the state of the node at a glance - network, broker, firmware and what it reports.",
+        "es": "Resumen: el estado del nodo de un vistazo - red, broker, firmware y lo que reporta.",
+        "fr": "Résumé : l'état du nœud en un coup d'œil - réseau, broker, firmware et ce qu'il remonte.",
+        "it": "Riepilogo: lo stato del nodo in breve - rete, broker, firmware e ciò che riporta.",
+        "de": "Übersicht: der Zustand des Knotens auf einen Blick - Netzwerk, Broker, Firmware und was er meldet.",
+        "zh": "概览：节点状态一目了然——网络、代理、固件及其上报内容。",
+        "ja": "概要：ネットワーク、ブローカー、ファームウェア、報告内容など、ノードの状態をひと目で確認できます。",
+        "pt": "Resumo: o estado do nó num relance - rede, broker, firmware e o que reporta."
+      }
+    },
+    {
+      "file": "ports.png",
+      "alt": {
+        "en": "Ports",
+        "es": "Puertos",
+        "fr": "Ports",
+        "it": "Porte",
+        "de": "Anschlüsse",
+        "zh": "端口",
+        "ja": "ポート",
+        "pt": "Portas"
+      },
+      "caption": {
+        "en": "Ports: the serial ports of the node and the equipment on each of them.",
+        "es": "Puertos: los puertos serie del nodo y el equipo de cada uno.",
+        "fr": "Ports : les ports série du nœud et l'équipement de chacun.",
+        "it": "Porte: le porte seriali del nodo e l'apparecchiatura su ciascuna.",
+        "de": "Anschlüsse: die seriellen Anschlüsse des Knotens und das Gerät an jedem.",
+        "zh": "端口：节点的串行端口以及每个端口上的设备。",
+        "ja": "ポート：ノードのシリアルポートと、それぞれに接続された機器。",
+        "pt": "Portas: as portas série do nó e o equipamento de cada uma."
+      }
+    },
+    {
+      "file": "readings.png",
+      "alt": {
+        "en": "Readings",
+        "es": "Lecturas",
+        "fr": "Mesures",
+        "it": "Letture",
+        "de": "Messwerte",
+        "zh": "读数",
+        "ja": "測定値",
+        "pt": "Leituras"
+      },
+      "caption": {
+        "en": "Readings: what the node is reading right now, with the age of each value.",
+        "es": "Lecturas: lo que el nodo lee ahora mismo, con la antigüedad de cada valor.",
+        "fr": "Mesures : ce que le nœud lit en ce moment, avec l'âge de chaque valeur.",
+        "it": "Letture: ciò che il nodo legge in questo momento, con l'età di ogni valore.",
+        "de": "Messwerte: was der Knoten gerade liest, mit dem Alter jedes Wertes.",
+        "zh": "读数：节点此刻读取到的内容，以及每个数值的时效。",
+        "ja": "測定値：ノードがいま読み取っている値と、各値の経過時間。",
+        "pt": "Leituras: o que o nó está a ler neste momento, com a idade de cada valor."
+      }
+    },
+    {
+      "file": "network.png",
+      "alt": {
+        "en": "Network",
+        "es": "Red",
+        "fr": "Réseau",
+        "it": "Rete",
+        "de": "Netzwerk",
+        "zh": "网络",
+        "ja": "ネットワーク",
+        "pt": "Rede"
+      },
+      "caption": {
+        "en": "Network: Ethernet or Wi-Fi addressing of the node, set from its own web panel.",
+        "es": "Red: el direccionamiento Ethernet o Wi-Fi del nodo, ajustado desde su propio panel web.",
+        "fr": "Réseau : l'adressage Ethernet ou Wi-Fi du nœud, réglé depuis son propre panneau web.",
+        "it": "Rete: l'indirizzamento Ethernet o Wi-Fi del nodo, impostato dal suo pannello web.",
+        "de": "Netzwerk: Ethernet- oder WLAN-Adressierung des Knotens, im eigenen Web-Panel eingestellt.",
+        "zh": "网络：节点的以太网或 Wi-Fi 地址设置，在其自带的网页面板中配置。",
+        "ja": "ネットワーク：ノードの Ethernet または Wi-Fi のアドレス設定を、専用の Web パネルから行います。",
+        "pt": "Rede: o endereçamento Ethernet ou Wi-Fi do nó, definido no seu próprio painel web."
+      }
+    }
+  ]
+}

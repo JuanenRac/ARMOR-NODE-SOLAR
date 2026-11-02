@@ -111,12 +111,31 @@ ARMOR-NODE-SOLAR ist das Gateway zwischen den Solargeräten des Hauses und der F
 
 ## 🖼️ Screenshots
 
-Aufgenommen mit 1920×1080 auf einem Prüfstand, mit Beispieldaten und ohne eine echte Anlage dahinter.
+Aufgenommen auf einem Prüfstand mit erfundenen Beispieldaten und ohne eine echte Anlage dahinter.
 
-<table>
-<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="Übersicht: der Zustand des Knotens auf einen Blick - Netzwerk, Broker, Firmware und was er meldet." width="100%"><br><sub>Übersicht: der Zustand des Knotens auf einen Blick - Netzwerk, Broker, Firmware und was er meldet.</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="Anschlüsse: die seriellen Anschlüsse des Knotens und das Gerät an jedem." width="100%"><br><sub>Anschlüsse: die seriellen Anschlüsse des Knotens und das Gerät an jedem.</sub></td></tr>
-<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="Messwerte: was der Knoten gerade liest, mit dem Alter jedes Wertes." width="100%"><br><sub>Messwerte: was der Knoten gerade liest, mit dem Alter jedes Wertes.</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="Netzwerk: Ethernet- oder WLAN-Adressierung des Knotens, im eigenen Web-Panel eingestellt." width="100%"><br><sub>Netzwerk: Ethernet- oder WLAN-Adressierung des Knotens, im eigenen Web-Panel eingestellt.</sub></td></tr>
-</table>
+<p align="center">
+  <img src="images/screenshots/overview.png" alt="Übersicht" width="100%">
+</p>
+
+<p align="center"><em>Übersicht: der Zustand des Knotens auf einen Blick - Netzwerk, Broker, Firmware und was er meldet.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/ports.png" alt="Anschlüsse" width="100%">
+</p>
+
+<p align="center"><em>Anschlüsse: die seriellen Anschlüsse des Knotens und das Gerät an jedem.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/readings.png" alt="Messwerte" width="100%">
+</p>
+
+<p align="center"><em>Messwerte: was der Knoten gerade liest, mit dem Alter jedes Wertes.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/network.png" alt="Netzwerk" width="100%">
+</p>
+
+<p align="center"><em>Netzwerk: Ethernet- oder WLAN-Adressierung des Knotens, im eigenen Web-Panel eingestellt.</em></p>
 
 ## 🔒 Sicherheit und Schutz
 

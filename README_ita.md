@@ -111,12 +111,31 @@ ARMOR-NODE-SOLAR è il gateway fra gli apparecchi solari della casa e la famigli
 
 ## 🖼️ Schermate
 
-Catturate a 1920×1080 su un banco di prova, con dati di esempio e senza alcuna installazione reale dietro.
+Catturate su un banco di prova con dati di esempio inventati e senza alcuna installazione reale dietro.
 
-<table>
-<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="Riepilogo: lo stato del nodo in breve - rete, broker, firmware e ciò che riporta." width="100%"><br><sub>Riepilogo: lo stato del nodo in breve - rete, broker, firmware e ciò che riporta.</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="Porte: le porte seriali del nodo e l'apparecchiatura su ciascuna." width="100%"><br><sub>Porte: le porte seriali del nodo e l'apparecchiatura su ciascuna.</sub></td></tr>
-<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="Letture: ciò che il nodo legge in questo momento, con l'età di ogni valore." width="100%"><br><sub>Letture: ciò che il nodo legge in questo momento, con l'età di ogni valore.</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="Rete: l'indirizzamento Ethernet o Wi-Fi del nodo, impostato dal suo pannello web." width="100%"><br><sub>Rete: l'indirizzamento Ethernet o Wi-Fi del nodo, impostato dal suo pannello web.</sub></td></tr>
-</table>
+<p align="center">
+  <img src="images/screenshots/overview.png" alt="Riepilogo" width="100%">
+</p>
+
+<p align="center"><em>Riepilogo: lo stato del nodo in breve - rete, broker, firmware e ciò che riporta.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/ports.png" alt="Porte" width="100%">
+</p>
+
+<p align="center"><em>Porte: le porte seriali del nodo e l'apparecchiatura su ciascuna.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/readings.png" alt="Letture" width="100%">
+</p>
+
+<p align="center"><em>Letture: ciò che il nodo legge in questo momento, con l'età di ogni valore.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/network.png" alt="Rete" width="100%">
+</p>
+
+<p align="center"><em>Rete: l'indirizzamento Ethernet o Wi-Fi del nodo, impostato dal suo pannello web.</em></p>
 
 ## 🔒 Sicurezza e protezione
 

@@ -111,12 +111,31 @@ ARMOR-NODE-SOLAR es la pasarela entre el equipo solar de la casa y la familia. L
 
 ## 🖼️ Capturas de pantalla
 
-Capturadas a 1920×1080 en un banco de pruebas, con datos de ejemplo y sin ninguna instalación real detrás.
+Capturadas en un banco de pruebas con datos de ejemplo inventados y sin ninguna instalación real detrás.
 
-<table>
-<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="Resumen: el estado del nodo de un vistazo - red, broker, firmware y lo que reporta." width="100%"><br><sub>Resumen: el estado del nodo de un vistazo - red, broker, firmware y lo que reporta.</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="Puertos: los puertos serie del nodo y el equipo de cada uno." width="100%"><br><sub>Puertos: los puertos serie del nodo y el equipo de cada uno.</sub></td></tr>
-<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="Lecturas: lo que el nodo lee ahora mismo, con la antigüedad de cada valor." width="100%"><br><sub>Lecturas: lo que el nodo lee ahora mismo, con la antigüedad de cada valor.</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="Red: el direccionamiento Ethernet o Wi-Fi del nodo, ajustado desde su propio panel web." width="100%"><br><sub>Red: el direccionamiento Ethernet o Wi-Fi del nodo, ajustado desde su propio panel web.</sub></td></tr>
-</table>
+<p align="center">
+  <img src="images/screenshots/overview.png" alt="Resumen" width="100%">
+</p>
+
+<p align="center"><em>Resumen: el estado del nodo de un vistazo - red, broker, firmware y lo que reporta.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/ports.png" alt="Puertos" width="100%">
+</p>
+
+<p align="center"><em>Puertos: los puertos serie del nodo y el equipo de cada uno.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/readings.png" alt="Lecturas" width="100%">
+</p>
+
+<p align="center"><em>Lecturas: lo que el nodo lee ahora mismo, con la antigüedad de cada valor.</em></p>
+
+<p align="center">
+  <img src="images/screenshots/network.png" alt="Red" width="100%">
+</p>
+
+<p align="center"><em>Red: el direccionamiento Ethernet o Wi-Fi del nodo, ajustado desde su propio panel web.</em></p>
 
 ## 🔒 Seguridad y protección
 

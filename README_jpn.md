@@ -111,12 +111,31 @@ ARMOR-NODE-SOLAR は家のソーラー機器とファミリーをつなぐゲー
 
 ## 🖼️ スクリーンショット
 
-テストベンチで 1920×1080 で撮影。サンプルデータを使用しており、実際の設備は接続されていません。
+テストベンチで架空のサンプルデータを使って撮影したもので、実際の設備は接続されていません。
 
-<table>
-<tr><td width="50%" valign="top"><img src="images/screenshots/overview.png" alt="概要：ネットワーク、ブローカー、ファームウェア、報告内容など、ノードの状態をひと目で確認できます。" width="100%"><br><sub>概要：ネットワーク、ブローカー、ファームウェア、報告内容など、ノードの状態をひと目で確認できます。</sub></td><td width="50%" valign="top"><img src="images/screenshots/ports.png" alt="ポート：ノードのシリアルポートと、それぞれに接続された機器。" width="100%"><br><sub>ポート：ノードのシリアルポートと、それぞれに接続された機器。</sub></td></tr>
-<tr><td width="50%" valign="top"><img src="images/screenshots/readings.png" alt="測定値：ノードがいま読み取っている値と、各値の経過時間。" width="100%"><br><sub>測定値：ノードがいま読み取っている値と、各値の経過時間。</sub></td><td width="50%" valign="top"><img src="images/screenshots/network.png" alt="ネットワーク：ノードの Ethernet または Wi-Fi のアドレス設定を、専用の Web パネルから行います。" width="100%"><br><sub>ネットワーク：ノードの Ethernet または Wi-Fi のアドレス設定を、専用の Web パネルから行います。</sub></td></tr>
-</table>
+<p align="center">
+  <img src="images/screenshots/overview.png" alt="概要" width="100%">
+</p>
+
+<p align="center"><em>概要：ネットワーク、ブローカー、ファームウェア、報告内容など、ノードの状態をひと目で確認できます。</em></p>
+
+<p align="center">
+  <img src="images/screenshots/ports.png" alt="ポート" width="100%">
+</p>
+
+<p align="center"><em>ポート：ノードのシリアルポートと、それぞれに接続された機器。</em></p>
+
+<p align="center">
+  <img src="images/screenshots/readings.png" alt="測定値" width="100%">
+</p>
+
+<p align="center"><em>測定値：ノードがいま読み取っている値と、各値の経過時間。</em></p>
+
+<p align="center">
+  <img src="images/screenshots/network.png" alt="ネットワーク" width="100%">
+</p>
+
+<p align="center"><em>ネットワーク：ノードの Ethernet または Wi-Fi のアドレス設定を、専用の Web パネルから行います。</em></p>
 
 ## 🔒 セキュリティと安全
 
