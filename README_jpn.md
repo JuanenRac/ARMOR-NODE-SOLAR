@@ -21,14 +21,14 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-11824%20checks-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-11979%20checks-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.6.2-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
 ---
 
-**正直さのチェック - 今日動いているもの:** ファームウェアは ESP-IDF 5.5.5 コンテナーでビルドでき、そのコア（設定、各種機器とのやり取り、エミュレートした UART の計算、Bluetooth チャネル、バージョンと署名の検査：18 のテストプログラムで 11,824 項目）は代替機器を使ってコンピューター上でテストされ、生成するメッセージは ARMOR-COMMON に受け付けられ、パネルは代替ノードに対してブラウザーで動かしました。**基板上で動いたことはなく、インバーターやバッテリーも接続されていません**：Wi-Fi、TLS のパネル、アップデート、ハードウェアとエミュレートした UART、プロトコルの形式（公開資料と記憶から作成）は未検証です。テスト内の ANT-BMS フレームは他の人が自分の機器で取得したもので、このプロジェクト自身はまだ 1 つも読み取っていません。
+**正直さのチェック - 今日動いているもの:** ファームウェアは ESP-IDF 5.5.5 コンテナーでビルドでき、そのコア（設定、各種機器とのやり取り、エミュレートした UART の計算、Bluetooth チャネル、バージョンと署名の検査：20 のテストプログラムで 11,979 項目）は代替機器を使ってコンピューター上でテストされ、生成するメッセージは ARMOR-COMMON に受け付けられ、パネルは代替ノードに対してブラウザーで動かしました。**基板上で動いたことはなく、インバーターやバッテリーも接続されていません**：Wi-Fi、TLS のパネル、アップデート、ハードウェアとエミュレートした UART、プロトコルの形式（公開資料と記憶から作成）は未検証です。テスト内の ANT-BMS フレームは他の人が自分の機器で取得したもので、このプロジェクト自身はまだ 1 つも読み取っていません。
 
 ---
 
@@ -40,7 +40,7 @@
 | 成熟度 | 機能する |
 | 役割 | ESP32-S3 用ソーラーフィールドノード：インバーターとバッテリー（ファミリー：Field Nodes、親：ARMOR-COMMON） |
 | 技術 | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| テスト | 11824 件の検査（ホスト用プログラム 18 本と Python 検査 6 個、`ctest`） |
+| テスト | 11979 件の検査（ホスト用プログラム 20 本と Python 検査 7 個、`ctest`） |
 | 機器 | Voltronic / MPP Solar インバーター、Pylontech バッテリー、ANT-BMS、シリアルポート 10 本 |
 | 動作環境 | ESP32-S3-WROOM-1 N16R8 または Waveshare ESP32-S3-ETH、ホストテストは任意のコンピューター |
 | 実機での確認 | まだありません：基板は未製作で、インバーターやバッテリーも未接続（コンピューター上のテスト、ビルド、ブラウザーでのパネルのみ） |
@@ -57,7 +57,7 @@
 | 領域 | 状態 | ここでの意味 |
 |---|---|---|
 | ソフトウェア | 🟢 | ファームウェアは ESP-IDF 5.5.5 コンテナで両方のボード（Wi-Fi とイーサネット）向けにビルドできます。 |
-| テスト | 🟢 | 18 のホストプログラムで 11,824 件のチェックが通ります（`ctest`）：設定、各種機器とのやり取り、エミュレートした UART、Bluetooth チャネル、バージョン確認。 |
+| テスト | 🟢 | 20 のホストプログラムで 11,979 件のチェックが通ります（`ctest`）：設定、各種機器とのやり取り、エミュレートした UART、Bluetooth チャネル、バージョン確認。 |
 | プロトコルとデータ | 🟡 | Voltronic、Pylontech、ANT-BMS のフレーム、チェックサム、読み取り値は、文書化されたフレームと記録したサンプルに対して検証済みです。実際のインバーターやバッテリーとはまだ通信していません。 |
 | インターフェース | 🟡 | Web パネルはブラウザーでノードの模擬に対して試しており、ボード上では試していません。 |
 | ハードウェア | 🔴 | ボードは未製作で、インバーターやバッテリーも接続していません。実機ではまだ何も動かしていません。 |
@@ -178,7 +178,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-ホスト用テストプログラム 18 個と Python の検査 6 個を `ctest` で実行します。ホストのプログラムが数えた検査は 11824 件で、`-Werror` でビルドします。
+ホスト用テストプログラム 20 個と Python の検査 6 個を `ctest` で実行します。ホストのプログラムが数えた検査は 11979 件で、`-Werror` でビルドします。
 
 Python の検査：8 言語のパネル文言、タスク、保存パス、ロック下の Bluetooth セッション、パネルが呼ぶルート（ノードによっては HTTP コードやフォントのグリフも）
 
@@ -285,7 +285,7 @@ README とテキストは、英語、スペイン語、フランス語、イタ�
 * [ノードのファームウェア](docs/NODE_FIRMWARE.md)：基板、ポート、初回起動、ベンチのチェックリスト
 * [配線](docs/NODE_HARDWARE.md)、[プロトコル](docs/PROTOCOLS.md)、[メッセージ](docs/SOLAR_MESSAGES.md)
 * [バッテリー保守](docs/BATTERY_MAINTENANCE.md)と[ベンチテスト計画](docs/BATTERY_BENCH_TEST_PLAN.md)
-* [Studio のメニュー](docs/STUDIO_MENUS.md)、[ベンチテスト](docs/BENCH_TESTS.md)、[セットアップコード](docs/SETUP_CODE.md)、[Bluetooth プロビジョニング](docs/BLE_PROVISIONING.md)
+* [Studio のメニュー](docs/STUDIO_MENUS.md)、[ベンチテスト](docs/BENCH_TESTS.md)、[互換性の表](docs/COMPATIBILITY.md)、[セットアップコード](docs/SETUP_CODE.md)、[Bluetooth プロビジョニング](docs/BLE_PROVISIONING.md)
 * [機能マトリクス：何が証明され、何が証明されていないか](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/CAPABILITY_MATRIX.md)
 * [プロジェクトカタログ：バージョンと、リポジトリ同士の依存関係](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/PROJECT_CATALOG.md)
 * [このリポジトリの変更履歴](CHANGELOG.md)

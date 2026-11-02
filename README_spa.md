@@ -21,14 +21,14 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 o posterior">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Lenguaje">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-11824%20checks-2ea44f.svg" alt="Pruebas">
+  <img src="https://img.shields.io/badge/Tests-11979%20checks-2ea44f.svg" alt="Pruebas">
   <img src="https://img.shields.io/badge/Version-0.6.2-0f6cbd.svg" alt="Versión">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Madurez">
 </p>
 
 ---
 
-**Comprobación de honestidad - qué funciona hoy:** El firmware compila en el contenedor ESP-IDF 5.5.5, su núcleo (los ajustes, el intercambio con cada tipo de equipo, la aritmética de la UART emulada, el canal Bluetooth, las comprobaciones de versión y firma: 11.824 comprobaciones en 18 programas de test) se prueba en un ordenador con equipos de pega, los mensajes que hace los acepta ARMOR-COMMON y el panel se ejercitó en un navegador contra un nodo de pega. **Nunca ha corrido en una placa y no se ha conectado ningún inversor ni batería**: el Wi-Fi, el panel sobre TLS, la actualización, las UART de hardware y emuladas y los formatos de los protocolos (escritos a partir de documentos públicos y de memoria) están sin probar. Las tramas ANT-BMS de sus tests las capturaron otras personas en sus propias unidades: este proyecto no ha leído ninguna por sí mismo.
+**Comprobación de honestidad - qué funciona hoy:** El firmware compila en el contenedor ESP-IDF 5.5.5, su núcleo (los ajustes, el intercambio con cada tipo de equipo, la aritmética de la UART emulada, el canal Bluetooth, las comprobaciones de versión y firma: 11.979 comprobaciones en 20 programas de test) se prueba en un ordenador con equipos de pega, los mensajes que hace los acepta ARMOR-COMMON y el panel se ejercitó en un navegador contra un nodo de pega. **Nunca ha corrido en una placa y no se ha conectado ningún inversor ni batería**: el Wi-Fi, el panel sobre TLS, la actualización, las UART de hardware y emuladas y los formatos de los protocolos (escritos a partir de documentos públicos y de memoria) están sin probar. Las tramas ANT-BMS de sus tests las capturaron otras personas en sus propias unidades: este proyecto no ha leído ninguna por sí mismo.
 
 ---
 
@@ -40,7 +40,7 @@
 | Madurez | Funcional |
 | Función | Nodo de campo solar para ESP32-S3: inversores y baterías (familia: Field Nodes, padre: ARMOR-COMMON) |
 | Tecnología | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Pruebas | 11824 comprobaciones en 18 programas de host y 6 de Python (`ctest`) |
+| Pruebas | 11979 comprobaciones en 20 programas de host y 7 de Python (`ctest`) |
 | Equipos | Inversores Voltronic / MPP Solar, baterías Pylontech, ANT-BMS; 10 puertos serie |
 | Funciona en | ESP32-S3-WROOM-1 N16R8 o Waveshare ESP32-S3-ETH; pruebas de host en cualquier ordenador |
 | En hardware real | Ninguno todavía: ninguna placa montada ni inversor o batería conectado (solo tests en ordenador, la compilación y el panel en un navegador) |
@@ -57,7 +57,7 @@ Cada línea es una parte de este repositorio y la luz dice hasta dónde llega ho
 | Área | Estado | Qué significa aquí |
 |---|---|---|
 | Software | 🟢 | El firmware compila en el contenedor ESP-IDF 5.5.5 para las dos placas (Wi-Fi y Ethernet). |
-| Pruebas | 🟢 | Pasan 11.824 comprobaciones en 18 programas de host (`ctest`): los ajustes, el intercambio con cada tipo de equipo, la UART emulada, el canal Bluetooth y las comprobaciones de versión. |
+| Pruebas | 🟢 | Pasan 11.979 comprobaciones en 20 programas de host (`ctest`): los ajustes, el intercambio con cada tipo de equipo, la UART emulada, el canal Bluetooth y las comprobaciones de versión. |
 | Protocolos y datos | 🟡 | Las tramas, sumas de control y lecturas de Voltronic, Pylontech y ANT-BMS se comprueban contra las tramas documentadas y muestras grabadas; ninguno ha hablado todavía con un inversor o una batería reales. |
 | Interfaz | 🟡 | El panel web se ha ejercitado en un navegador contra una simulación del nodo, no en una placa. |
 | Hardware | 🔴 | Ninguna placa construida ni inversor o batería conectados: nada ha funcionado todavía con equipos reales. |
@@ -178,7 +178,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-18 programas de prueba de host y 6 comprobaciones en Python se ejecutan con `ctest`; 11824 comprobaciones contadas por los programas de host, compilados con `-Werror`.
+20 programas de prueba de host y 7 comprobaciones en Python se ejecutan con `ctest`; 11979 comprobaciones contadas por los programas de host, compilados con `-Werror`.
 
 Comprobaciones Python: los textos del panel en ocho idiomas, las tareas, las rutas de guardado, la sesión Bluetooth bajo su bloqueo y las rutas que llama el panel (y, en algunos nodos, los códigos HTTP o los glifos de las fuentes)
 
@@ -285,7 +285,7 @@ El README y los textos existen en inglés, español, francés, italiano, alemán
 * [Firmware del nodo](docs/NODE_FIRMWARE.md): la placa, los puertos, el primer arranque y la lista de banco
 * [Cableado](docs/NODE_HARDWARE.md), [protocolos](docs/PROTOCOLS.md) y [mensajes](docs/SOLAR_MESSAGES.md)
 * [Mantenimiento de baterías](docs/BATTERY_MAINTENANCE.md) y su [plan de pruebas de banco](docs/BATTERY_BENCH_TEST_PLAN.md)
-* [Menús de Studio](docs/STUDIO_MENUS.md), [pruebas de banco](docs/BENCH_TESTS.md), [código de puesta en marcha](docs/SETUP_CODE.md) y [alta por Bluetooth](docs/BLE_PROVISIONING.md)
+* [Menús de Studio](docs/STUDIO_MENUS.md), [pruebas de banco](docs/BENCH_TESTS.md), [tabla de compatibilidad](docs/COMPATIBILITY.md), [código de puesta en marcha](docs/SETUP_CODE.md) y [alta por Bluetooth](docs/BLE_PROVISIONING.md)
 * [Matriz de capacidades: qué está demostrado y qué no](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/CAPABILITY_MATRIX.md)
 * [Catálogo de proyectos: versiones y cómo dependen unos repositorios de otros](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/PROJECT_CATALOG.md)
 * [Registro de cambios de este repositorio](CHANGELOG.md)

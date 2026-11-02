@@ -7,7 +7,8 @@ The software of these checks is done and tested on a computer; what is left need
 | Check | Connect | Run | Expected |
 |---|---|---|---|
 | Serial bytes while flash is written | a serial transmitter at 9600 baud (and 2400 and 19200) | write the settings in a loop from the panel | no lost bytes; measure the interrupt jitter with Wi-Fi active |
-| Compatibility table | each inverter and battery model | read the model, the firmware and which commands answer | one row per model in the compatibility table |
+| Lateness of the edge interrupt | a jumper from the TX pin of an emulated port to the RX pin of another, and Wi-Fi in use | send a stream of 0x55 at each speed while the node uploads and the settings are saved; for every edge note the time the transmitter made it and the time the interrupt saw it (the difference is the lateness) | the spread of the lateness (the latest minus the earliest) is under 30 % of a bit at the speed in use; `core/isr_jitter.hpp` (`judge`, `fastest_safe_baud`) gives the verdict from the numbers and `docs/UART_JITTER_LIMITS.json` holds the limits; the host test shows a line within the limit is read byte for byte |
+| Compatibility table | each inverter and battery model | read the model, the firmware and which commands answer | one row per model in the compatibility table: write the three in the row's `bench` member of `docs/compatibility.json`, set its status to `done` and its level to `bench`, and run `python tools/make_compatibility.py` (see [COMPATIBILITY.md](COMPATIBILITY.md)) |
 
 ## Checks every node needs on a real board
 

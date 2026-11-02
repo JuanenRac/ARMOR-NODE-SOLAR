@@ -21,14 +21,14 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 o successiva">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Linguaggio">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-11824%20checks-2ea44f.svg" alt="Test">
+  <img src="https://img.shields.io/badge/Tests-11979%20checks-2ea44f.svg" alt="Test">
   <img src="https://img.shields.io/badge/Version-0.6.2-0f6cbd.svg" alt="Versione">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturità">
 </p>
 
 ---
 
-**Controllo di onestà - cosa funziona oggi:** Il firmware si compila nel contenitore ESP-IDF 5.5.5, il suo nucleo (le impostazioni, lo scambio con ogni tipo di apparecchio, l'aritmetica dell'UART emulata, il canale Bluetooth, i controlli di versione e firma: 11.824 controlli in 18 programmi di test) è provato su un computer con apparecchi sostitutivi, i messaggi che produce sono accettati da ARMOR-COMMON e il pannello è stato esercitato in un browser contro un nodo sostitutivo. **Non ha mai girato su una scheda e nessun inverter o batteria è stato collegato**: il Wi-Fi, il pannello su TLS, l'aggiornamento, le UART hardware ed emulate e i formati dei protocolli (scritti da documenti pubblici e a memoria) non sono provati. I frame ANT-BMS dei suoi test sono stati catturati da altre persone sulle loro unità: questo progetto non ne ha letto nessuno di persona.
+**Controllo di onestà - cosa funziona oggi:** Il firmware si compila nel contenitore ESP-IDF 5.5.5, il suo nucleo (le impostazioni, lo scambio con ogni tipo di apparecchio, l'aritmetica dell'UART emulata, il canale Bluetooth, i controlli di versione e firma: 11.979 controlli in 18 programmi di test) è provato su un computer con apparecchi sostitutivi, i messaggi che produce sono accettati da ARMOR-COMMON e il pannello è stato esercitato in un browser contro un nodo sostitutivo. **Non ha mai girato su una scheda e nessun inverter o batteria è stato collegato**: il Wi-Fi, il pannello su TLS, l'aggiornamento, le UART hardware ed emulate e i formati dei protocolli (scritti da documenti pubblici e a memoria) non sono provati. I frame ANT-BMS dei suoi test sono stati catturati da altre persone sulle loro unità: questo progetto non ne ha letto nessuno di persona.
 
 ---
 
@@ -40,7 +40,7 @@
 | Maturità | Funzionale |
 | Ruolo | Nodo di campo solare per ESP32-S3: inverter e batterie (famiglia: Field Nodes, padre: ARMOR-COMMON) |
 | Tecnologia | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Test | 11824 verifiche in 18 programmi host e 6 verifiche Python (`ctest`) |
+| Test | 11979 verifiche in 20 programmi host e 7 verifiche Python (`ctest`) |
 | Apparecchiature | Inverter Voltronic / MPP Solar, batterie Pylontech, ANT-BMS; 10 porte seriali |
 | Gira su | ESP32-S3-WROOM-1 N16R8 o Waveshare ESP32-S3-ETH; test su host su qualsiasi computer |
 | Su hardware reale | Ancora nessuno: nessuna scheda montata né inverter o batteria collegati (solo test su computer, la compilazione e il pannello in un browser) |
@@ -57,7 +57,7 @@ Ogni riga è una parte di questo repository e il semaforo dice a che punto è og
 | Area | Stato | Cosa significa qui |
 |---|---|---|
 | Software | 🟢 | Il firmware compila nel contenitore ESP-IDF 5.5.5 per entrambe le schede (Wi-Fi ed Ethernet). |
-| Test | 🟢 | Superano 11.824 controlli in 18 programmi host (`ctest`): le impostazioni, lo scambio con ogni tipo di apparecchiatura, la UART emulata, il canale Bluetooth e i controlli di versione. |
+| Test | 🟢 | Superano 11.979 controlli in 20 programmi host (`ctest`): le impostazioni, lo scambio con ogni tipo di apparecchiatura, la UART emulata, il canale Bluetooth e i controlli di versione. |
 | Protocolli e dati | 🟡 | I frame, i checksum e le letture di Voltronic, Pylontech e ANT-BMS sono verificati contro i frame documentati e campioni registrati; nessuno ha ancora parlato con un inverter o una batteria reali. |
 | Interfaccia | 🟡 | Il pannello web è stato provato in un browser contro una simulazione del nodo, non su una scheda. |
 | Hardware | 🔴 | Nessuna scheda costruita e nessun inverter o batteria collegati: nulla ha ancora funzionato su apparecchiature reali. |
@@ -178,7 +178,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-18 programmi di test su host e 6 verifiche Python girano con `ctest`; 11824 verifiche contate dai programmi host, compilati con `-Werror`.
+20 programmi di test su host e 7 verifiche Python girano con `ctest`; 11979 verifiche contate dai programmi host, compilati con `-Werror`.
 
 Verifiche Python: i testi del pannello in otto lingue, i task, i percorsi di salvataggio, la sessione Bluetooth sotto il suo lock e i percorsi chiamati dal pannello (e, in alcuni nodi, i codici HTTP o i glifi dei caratteri)
 
@@ -285,7 +285,7 @@ Il README e i testi esistono in inglese, spagnolo, francese, italiano, tedesco, 
 * [Firmware del nodo](docs/NODE_FIRMWARE.md): la scheda, le porte, il primo avvio e la lista di controllo del banco
 * [Cablaggio](docs/NODE_HARDWARE.md), [protocolli](docs/PROTOCOLS.md) e [messaggi](docs/SOLAR_MESSAGES.md)
 * [Manutenzione delle batterie](docs/BATTERY_MAINTENANCE.md) e il suo [piano di prove al banco](docs/BATTERY_BENCH_TEST_PLAN.md)
-* [Menu di Studio](docs/STUDIO_MENUS.md), [prove al banco](docs/BENCH_TESTS.md), [codice di configurazione](docs/SETUP_CODE.md) e [provisioning Bluetooth](docs/BLE_PROVISIONING.md)
+* [Menu di Studio](docs/STUDIO_MENUS.md), [prove al banco](docs/BENCH_TESTS.md), [tabella di compatibilità](docs/COMPATIBILITY.md), [codice di configurazione](docs/SETUP_CODE.md) e [provisioning Bluetooth](docs/BLE_PROVISIONING.md)
 * [Matrice delle capacità: cosa è provato e cosa no](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/CAPABILITY_MATRIX.md)
 * [Catalogo dei progetti: versioni e dipendenze tra i repository](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/PROJECT_CATALOG.md)
 * [Cronologia delle modifiche di questo repository](CHANGELOG.md)

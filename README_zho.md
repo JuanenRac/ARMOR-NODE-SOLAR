@@ -21,14 +21,14 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-11824%20checks-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-11979%20checks-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.6.2-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
 ---
 
-**诚实性检查 - 今天真正能运行的部分：** 固件可在 ESP-IDF 5.5.5 容器中构建，其核心（设置、与每种设备的交互、模拟 UART 的运算、蓝牙通道、版本和签名检查：18 个测试程序中的 11,824 项检查）在计算机上用替身设备测试，它生成的消息被 ARMOR-COMMON 接受，面板已在浏览器中对照替身节点验证。**它从未在板上运行，也没有连接过任何逆变器或电池**：Wi-Fi、TLS 上的面板、更新、硬件和模拟 UART 以及协议格式（根据公开文档和记忆编写）都未经尝试。其测试中的 ANT-BMS 帧由其他人在自己的设备上捕获：本项目自己还没有读取过任何一帧。
+**诚实性检查 - 今天真正能运行的部分：** 固件可在 ESP-IDF 5.5.5 容器中构建，其核心（设置、与每种设备的交互、模拟 UART 的运算、蓝牙通道、版本和签名检查：20 个测试程序中的 11,979 项检查）在计算机上用替身设备测试，它生成的消息被 ARMOR-COMMON 接受，面板已在浏览器中对照替身节点验证。**它从未在板上运行，也没有连接过任何逆变器或电池**：Wi-Fi、TLS 上的面板、更新、硬件和模拟 UART 以及协议格式（根据公开文档和记忆编写）都未经尝试。其测试中的 ANT-BMS 帧由其他人在自己的设备上捕获：本项目自己还没有读取过任何一帧。
 
 ---
 
@@ -40,7 +40,7 @@
 | 成熟度 | 可用 |
 | 角色 | ESP32-S3 太阳能现场节点：逆变器和电池（家族：Field Nodes，上级：ARMOR-COMMON） |
 | 技术栈 | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| 测试 | 11824 项检查（18 个主机程序和 6 项 Python 检查，`ctest`） |
+| 测试 | 11979 项检查（20 个主机程序和 7 项 Python 检查，`ctest`） |
 | 设备 | Voltronic / MPP Solar 逆变器、Pylontech 电池、ANT-BMS；10 个串口 |
 | 运行位置 | ESP32-S3-WROOM-1 N16R8 或 Waveshare ESP32-S3-ETH；主机测试可在任何计算机上运行 |
 | 真实硬件 | 暂无：没有制作板子，也没有连接逆变器或电池（仅有计算机测试、构建和浏览器中的面板） |
@@ -57,7 +57,7 @@
 | 领域 | 状态 | 在这里的含义 |
 |---|---|---|
 | 软件 | 🟢 | 固件可在 ESP-IDF 5.5.5 容器中为两块板（Wi-Fi 和以太网）构建。 |
-| 测试 | 🟢 | 18 个主机程序中的 11,824 项检查通过（`ctest`）：设置、与各类设备的交换、模拟 UART、蓝牙通道和版本检查。 |
+| 测试 | 🟢 | 20 个主机程序中的 11,979 项检查通过（`ctest`）：设置、与各类设备的交换、模拟 UART、蓝牙通道和版本检查。 |
 | 协议与数据 | 🟡 | Voltronic、Pylontech 和 ANT-BMS 的帧、校验和与读数已对照文档中的帧和录制的样本检查；目前还没有与真实的逆变器或电池通信过。 |
 | 界面 | 🟡 | 网页面板已在浏览器中对节点的模拟进行过测试，尚未在板子上测试。 |
 | 硬件 | 🔴 | 尚未制作板子，也没有连接逆变器或电池：还没有在真实设备上运行过。 |
@@ -178,7 +178,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-`ctest` 运行 18 个主机测试程序和 6 个 Python 检查；主机程序统计的检查共 11824 项，使用 `-Werror` 构建。
+`ctest` 运行 20 个主机测试程序和 7 个 Python 检查；主机程序统计的检查共 11979 项，使用 `-Werror` 构建。
 
 Python 检查：八种语言的面板文字、任务、保存路径、受锁保护的蓝牙会话以及面板调用的路由（部分节点还包括 HTTP 状态码或字体字形）
 
@@ -285,7 +285,7 @@ README 和文本提供英语、西班牙语、法语、意大利语、德语、�
 * [节点固件](docs/NODE_FIRMWARE.md)：电路板、端口、首次启动和台架检查清单
 * [接线](docs/NODE_HARDWARE.md)、[协议](docs/PROTOCOLS.md)和[消息](docs/SOLAR_MESSAGES.md)
 * [电池维护](docs/BATTERY_MAINTENANCE.md)及其[台架测试计划](docs/BATTERY_BENCH_TEST_PLAN.md)
-* [Studio 菜单](docs/STUDIO_MENUS.md)、[台架测试](docs/BENCH_TESTS.md)、[设置码](docs/SETUP_CODE.md)和[蓝牙配置](docs/BLE_PROVISIONING.md)
+* [Studio 菜单](docs/STUDIO_MENUS.md)、[台架测试](docs/BENCH_TESTS.md)、[兼容性表](docs/COMPATIBILITY.md)、[设置码](docs/SETUP_CODE.md)和[蓝牙配置](docs/BLE_PROVISIONING.md)
 * [能力矩阵：哪些已被证明，哪些没有](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/CAPABILITY_MATRIX.md)
 * [项目目录：版本以及各仓库之间如何相互依赖](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/PROJECT_CATALOG.md)
 * [本仓库的更新日志](CHANGELOG.md)

@@ -13,6 +13,8 @@ add_executable(test_solar test_solar.cpp)
 add_executable(test_clock test_clock.cpp)
 add_executable(test_node test_node.cpp)
 add_executable(test_uart_stress test_uart_stress.cpp)
+add_executable(test_isr_jitter test_isr_jitter.cpp)
+add_executable(test_compat test_compat.cpp)
 # the s3-eth board profile (the Waveshare ESP32-S3-ETH): the same core headers compiled for the other board
 add_executable(test_board_eth test_board_eth.cpp)
 target_compile_definitions(test_board_eth PRIVATE ARMOR_BOARD_S3_ETH=1)
@@ -41,6 +43,8 @@ add_test(NAME clock COMMAND test_clock)
 add_test(NAME solar COMMAND test_solar)
 add_test(NAME node COMMAND test_node)
 add_test(NAME uart_stress COMMAND test_uart_stress)
+add_test(NAME isr_jitter COMMAND test_isr_jitter ${CMAKE_CURRENT_SOURCE_DIR}/../docs/UART_JITTER_LIMITS.json)
+add_test(NAME compat COMMAND test_compat ${CMAKE_CURRENT_SOURCE_DIR}/../docs/compatibility.json)
 add_test(NAME board_eth COMMAND test_board_eth)
 add_test(NAME ble COMMAND test_ble)
 add_test(NAME mux COMMAND test_mux)
@@ -59,6 +63,8 @@ if(Python3_FOUND)
   add_test(NAME panel_text COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_panel_text.py)
   # no task keeps a big copy of the settings on its small stack, every task has the stack its job needs, GitHub's long redirects fit the HTTP buffer
   add_test(NAME task_safety COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_task_safety.py)
+  # the compatibility page says what the table says
+  add_test(NAME compat_doc COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/make_compatibility.py --check)
   # a saved time zone applies at once; the panel can still say that a restart is needed
   add_test(NAME save_paths COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_save_paths.py)
   # the Bluetooth set-up keeps the session of the phone under its lock, and a request or an answer never crosses to another connection

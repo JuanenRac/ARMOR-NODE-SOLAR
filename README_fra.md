@@ -21,14 +21,14 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 ou ultérieure">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Langage">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-11824%20checks-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-11979%20checks-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.6.2-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturité">
 </p>
 
 ---
 
-**Vérification d'honnêteté - ce qui fonctionne aujourd'hui :** Le firmware se compile dans le conteneur ESP-IDF 5.5.5, son cœur (les réglages, l'échange avec chaque type d'équipement, l'arithmétique de l'UART émulée, le canal Bluetooth, les contrôles de version et de signature : 11 824 vérifications dans 18 programmes de test) est testé sur un ordinateur avec des équipements factices, les messages qu'il produit sont acceptés par ARMOR-COMMON et le panneau a été exercé dans un navigateur contre un nœud factice. **Il n'a jamais tourné sur une carte et aucun onduleur ni batterie n'a été connecté** : le Wi-Fi, le panneau sur TLS, la mise à jour, les UART matérielles et émulées et les formats des protocoles (écrits d'après des documents publics et de mémoire) ne sont pas essayés. Les trames ANT-BMS de ses tests ont été capturées par d'autres personnes sur leurs propres unités : ce projet n'en a lu aucune lui-même.
+**Vérification d'honnêteté - ce qui fonctionne aujourd'hui :** Le firmware se compile dans le conteneur ESP-IDF 5.5.5, son cœur (les réglages, l'échange avec chaque type d'équipement, l'arithmétique de l'UART émulée, le canal Bluetooth, les contrôles de version et de signature : 11 979 vérifications dans 20 programmes de test) est testé sur un ordinateur avec des équipements factices, les messages qu'il produit sont acceptés par ARMOR-COMMON et le panneau a été exercé dans un navigateur contre un nœud factice. **Il n'a jamais tourné sur une carte et aucun onduleur ni batterie n'a été connecté** : le Wi-Fi, le panneau sur TLS, la mise à jour, les UART matérielles et émulées et les formats des protocoles (écrits d'après des documents publics et de mémoire) ne sont pas essayés. Les trames ANT-BMS de ses tests ont été capturées par d'autres personnes sur leurs propres unités : ce projet n'en a lu aucune lui-même.
 
 ---
 
@@ -40,7 +40,7 @@
 | Maturité | Fonctionnel |
 | Rôle | Nœud de terrain solaire pour ESP32-S3 : onduleurs et batteries (famille : Field Nodes, parent : ARMOR-COMMON) |
 | Technologie | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 11824 vérifications dans 18 programmes hôte et 6 contrôles Python (`ctest`) |
+| Tests | 11979 vérifications dans 20 programmes hôte et 7 contrôles Python (`ctest`) |
 | Équipements | Onduleurs Voltronic / MPP Solar, batteries Pylontech, ANT-BMS ; 10 ports série |
 | Fonctionne sur | ESP32-S3-WROOM-1 N16R8 ou Waveshare ESP32-S3-ETH ; tests sur hôte sur n'importe quel ordinateur |
 | Sur matériel réel | Aucun pour l'instant : aucune carte montée ni onduleur ou batterie connecté (seulement des tests sur ordinateur, la compilation et le panneau dans un navigateur) |
@@ -57,7 +57,7 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 | Domaine | État | Ce que cela veut dire ici |
 |---|---|---|
 | Logiciel | 🟢 | Le firmware compile dans le conteneur ESP-IDF 5.5.5 pour les deux cartes (Wi-Fi et Ethernet). |
-| Tests | 🟢 | 11 824 vérifications dans 18 programmes d'hôte réussissent (`ctest`) : les réglages, l'échange avec chaque type d'équipement, l'UART émulée, le canal Bluetooth et les contrôles de version. |
+| Tests | 🟢 | 11 979 vérifications dans 20 programmes d'hôte réussissent (`ctest`) : les réglages, l'échange avec chaque type d'équipement, l'UART émulée, le canal Bluetooth et les contrôles de version. |
 | Protocoles et données | 🟡 | Les trames, sommes de contrôle et lectures de Voltronic, Pylontech et ANT-BMS sont vérifiées par rapport aux trames documentées et à des échantillons enregistrés ; aucun n'a encore parlé à un vrai onduleur ou à une vraie batterie. |
 | Interface | 🟡 | Le panneau web a été essayé dans un navigateur contre une simulation du nœud, pas sur une carte. |
 | Matériel | 🔴 | Aucune carte construite ni onduleur ou batterie connectés : rien n'a encore tourné sur de vrais équipements. |
@@ -178,7 +178,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-18 programmes de test sur hôte et 6 contrôles Python tournent sous `ctest` ; 11824 vérifications comptées par les programmes hôte, compilés avec `-Werror`.
+20 programmes de test sur hôte et 7 contrôles Python tournent sous `ctest` ; 11979 vérifications comptées par les programmes hôte, compilés avec `-Werror`.
 
 Contrôles Python : les textes du panneau en huit langues, les tâches, les chemins de sauvegarde, la session Bluetooth sous son verrou et les routes appelées par le panneau (et, dans certains nœuds, les codes HTTP ou les glyphes des polices)
 
@@ -285,7 +285,7 @@ Le README et les textes existent en anglais, espagnol, français, italien, allem
 * [Firmware du nœud](docs/NODE_FIRMWARE.md) : la carte, les ports, le premier démarrage et la liste de contrôle du banc
 * [Câblage](docs/NODE_HARDWARE.md), [protocoles](docs/PROTOCOLS.md) et [messages](docs/SOLAR_MESSAGES.md)
 * [Maintenance des batteries](docs/BATTERY_MAINTENANCE.md) et son [plan d'essais de banc](docs/BATTERY_BENCH_TEST_PLAN.md)
-* [Menus de Studio](docs/STUDIO_MENUS.md), [essais de banc](docs/BENCH_TESTS.md), [code de configuration](docs/SETUP_CODE.md) et [mise en service Bluetooth](docs/BLE_PROVISIONING.md)
+* [Menus de Studio](docs/STUDIO_MENUS.md), [essais de banc](docs/BENCH_TESTS.md), [table de compatibilité](docs/COMPATIBILITY.md), [code de configuration](docs/SETUP_CODE.md) et [mise en service Bluetooth](docs/BLE_PROVISIONING.md)
 * [Matrice des capacités : ce qui est prouvé et ce qui ne l'est pas](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/CAPABILITY_MATRIX.md)
 * [Catalogue des projets : versions et dépendances entre les dépôts](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/PROJECT_CATALOG.md)
 * [Historique des modifications de ce dépôt](CHANGELOG.md)

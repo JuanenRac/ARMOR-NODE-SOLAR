@@ -1,0 +1,329 @@
+{
+  "schema": 1,
+  "levels": {
+    "bench": "read by this node on a bench: the model, the firmware and the commands that answered are written in the row",
+    "capture": "decoded from a capture made on a real unit of that model (the tests replay it); the node itself has not been connected to one",
+    "protocol": "written from the public description of the protocol and checked against sample replies only; no unit of it has been met"
+  },
+  "rows": [
+    {
+      "id": "voltronic-pi30",
+      "kind": "inverter",
+      "name": "Voltronic / MPP Solar: Axpert, PIP, InfiniSolar and clones (PI30)",
+      "port": "RS232, 2400 baud 8N1",
+      "reads": "QPIGS, QMOD, QPIWS, QPIRI",
+      "level": "protocol",
+      "evidence": "typical replies written by hand; the CRCs of QPIGS, QPIRI, QMOD and QPIWS",
+      "tests": [
+        "tests/test_solar.cpp",
+        "tests/test_limits.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "voltronic-pi30-second-pv",
+      "kind": "inverter",
+      "name": "Voltronic PI30 with a second PV input",
+      "port": "RS232, 2400 baud 8N1",
+      "reads": "QPIGS2 (optional, off by default)",
+      "level": "protocol",
+      "evidence": "the sample replies of the mpp-solar project; no inverter with two inputs has been met",
+      "tests": [
+        "tests/test_solar.cpp",
+        "tests/test_limits.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "voltronic-pi30-parallel",
+      "kind": "inverter",
+      "name": "Voltronic PI30 parallel system",
+      "port": "RS232, 2400 baud 8N1",
+      "reads": "QPGS0 to QPGS9 (optional, off by default)",
+      "level": "protocol",
+      "evidence": "the sample replies of the mpp-solar project; no parallel system has been met",
+      "tests": [
+        "tests/test_parallel.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "voltronic-revo",
+      "kind": "inverter",
+      "name": "Revo VM III and the inverters esphome-pipsolar marks as REVO",
+      "port": "RS232, 2400 baud 8N1",
+      "reads": "QPIGS (REVO fields), QMOD",
+      "level": "protocol",
+      "evidence": "the frames and sample replies of the esphome-pipsolar project",
+      "tests": [
+        "tests/test_solar.cpp",
+        "tests/test_limits.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "voltronic-pi18",
+      "kind": "inverter",
+      "name": "InfiniSolar V, LV5048, SunGoldPower and clones (PI18)",
+      "port": "RS232, 2400 baud 8N1",
+      "reads": "GS, MOD, FWS",
+      "level": "protocol",
+      "evidence": "the sample replies of the mpp-solar and esphome-pipsolar projects",
+      "tests": [
+        "tests/test_solar.cpp",
+        "tests/test_limits.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "pylontech-us2000c",
+      "kind": "battery",
+      "name": "Pylontech US2000C (four firmware versions)",
+      "port": "console RS232, 115200 baud 8N1",
+      "reads": "pwr, info, stat, soh, data event",
+      "level": "capture",
+      "evidence": "captures of the console of real units (prompt pylon_debug>); the layouts of pwr and bat are those of the maker's console documentation, they were not in the captures",
+      "tests": [
+        "tests/pylontech_logs_real.hpp",
+        "tests/pylontech_real.hpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "pylontech-us2kbpl",
+      "kind": "battery",
+      "name": "Pylontech US2KBPL (sold as US2000B)",
+      "port": "console RS232, 115200 baud 8N1",
+      "reads": "pwr, info, stat, soh",
+      "level": "capture",
+      "evidence": "a capture of a real unit",
+      "tests": [
+        "tests/pylontech_logs_real.hpp",
+        "tests/pylontech_real.hpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "pylontech-us3000c",
+      "kind": "battery",
+      "name": "Pylontech US3000C",
+      "port": "console RS232, 115200 baud 8N1",
+      "reads": "pwr, info, stat, soh",
+      "level": "capture",
+      "evidence": "a capture of a real unit",
+      "tests": [
+        "tests/pylontech_logs_real.hpp",
+        "tests/pylontech_real.hpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "pylontech-24v",
+      "kind": "battery",
+      "name": "Pylontech 24 V unit",
+      "port": "console RS232, 115200 baud 8N1",
+      "reads": "pwr, info, stat",
+      "level": "capture",
+      "evidence": "a capture of a real unit (its model name was not recorded)",
+      "tests": [
+        "tests/pylontech_logs_real.hpp",
+        "tests/pylontech_real.hpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "pylontech-us2000-v15",
+      "kind": "battery",
+      "name": "Pylontech US2000 (board US2000CV30R07, firmware V1.5)",
+      "port": "console RS232, 19200 baud 8N1 (recent units say 115200)",
+      "reads": "help, pwr, info, stat",
+      "level": "capture",
+      "evidence": "a capture of the console of a real unit, replayed unchanged by the tests",
+      "tests": [
+        "tests/pylontech_us2000_real.hpp",
+        "tests/test_solar.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "pylontech-others",
+      "kind": "battery",
+      "name": "Pylontech US2000B, US2000B Plus, US3000, US5000, UP2500, UP5000, Force L1, Force L2",
+      "port": "console RS232, 115200 baud 8N1",
+      "reads": "pwr, info, stat",
+      "level": "protocol",
+      "evidence": "the names these firmwares are known under; the columns of pwr are found by the names of the header line, so the layouts of the different firmwares are tolerated",
+      "tests": [
+        "tests/test_solar.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "pytes-e-box-48100r",
+      "kind": "battery",
+      "name": "Pytes E-Box 48100R",
+      "port": "console RS232, 115200 baud 8N1",
+      "reads": "pwr",
+      "level": "protocol",
+      "evidence": "its console is a relative of Pylontech's; no unit has been met",
+      "tests": [
+        "tests/test_solar.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "pylontech-rs485",
+      "kind": "battery",
+      "name": "Pylontech RS485 protocol",
+      "port": "RS485, 9600 baud (DIP 1 on) or 115200 baud (DIP 1 off)",
+      "reads": "the frame and its checks; INFO is not decoded",
+      "level": "protocol",
+      "evidence": "the public description of the frame; the meaning of INFO differs between protocol versions and no capture exists",
+      "tests": [
+        "tests/test_solar.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "ant-bms-old-captured",
+      "kind": "battery",
+      "name": "ANT-BMS 16ZMB-TB-7-16S-300A and 24AHA-TB-24S-200A (old protocol)",
+      "port": "3.3 V TTL UART, 19200 baud 8N1",
+      "reads": "the status frame",
+      "level": "capture",
+      "evidence": "frames captured on real boards",
+      "tests": [
+        "tests/ant_frames.hpp",
+        "tests/test_node.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "ant-bms-new-captured",
+      "kind": "battery",
+      "name": "ANT-BMS ANT-BLE16ZMUB and ANT-BLE24BHUB (new protocol)",
+      "port": "3.3 V TTL UART, 19200 baud 8N1",
+      "reads": "the status frame",
+      "level": "capture",
+      "evidence": "frames captured on real boards",
+      "tests": [
+        "tests/ant_frames.hpp",
+        "tests/test_node.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "ant-bms-old-other",
+      "kind": "battery",
+      "name": "ANT-BMS 16S / 24S 100 to 200 A of 2020 (old protocol)",
+      "port": "3.3 V TTL UART, 19200 baud 8N1",
+      "reads": "the status frame",
+      "level": "protocol",
+      "evidence": "the old protocol is the same frame as the captured boards; these models were not captured",
+      "tests": [
+        "tests/ant_frames.hpp",
+        "tests/test_node.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "ant-bms-new-32s",
+      "kind": "battery",
+      "name": "ANT-BMS boards after the ANT-BLE24BHUB, the 32S included (new protocol)",
+      "port": "3.3 V TTL UART, 19200 baud 8N1",
+      "reads": "the status frame",
+      "level": "protocol",
+      "evidence": "the new protocol is the same frame as the captured boards; these models were not captured",
+      "tests": [
+        "tests/ant_frames.hpp",
+        "tests/test_node.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    }
+  ]
+}

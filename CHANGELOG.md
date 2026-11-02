@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The lateness of the edge interrupt of an emulated serial line is measured and judged:** `core/isr_jitter.hpp` keeps the record of how late the interrupt saw each edge and says whether a line of a given speed can bear it (the spread must stay under 30 % of a bit, 45 % at most; the limits are in `docs/UART_JITTER_LIMITS.json`); the host test shows that a line the verdict calls fine is read byte for byte and one far past the limit is not, and the bench test for the loopback measurement with Wi-Fi in use is written down.
+- **The table of the inverters and batteries the node reads says how far each is verified:** `docs/compatibility.json` (one row per model, three levels: protocol, capture, bench), the page `docs/COMPATIBILITY.md` made from it by `tools/make_compatibility.py`, and a test that refuses a bench row without its numbers; the bench fills it in.
+
 ## [0.6.2] - The documentation covers the sign-in limit, the generated configuration is checked against ESP-IDF 5.5.5 and the counters of the host tests are exact
 
 - **The documentation covers the sign-in limit:** the configuration table of the README (eight languages) lists `system.login_limit_per_minute` (30 by default, 0 to 120, read and changed from Studio or with the server's node settings route).
