@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The launchers find the shared repository through `ARMOR_COMMON_DIR`:** `build`, `build-test`, `test` and `run` (`.sh` and `.bat`) use the folder named by that variable when it is set and the sibling `ARMOR-COMMON` folder otherwise, so a checkout with another layout builds without changing a file.
 - **The lateness of the edge interrupt of an emulated serial line is measured and judged:** `core/isr_jitter.hpp` keeps the record of how late the interrupt saw each edge and says whether a line of a given speed can bear it (the spread must stay under 30 % of a bit, 45 % at most; the limits are in `docs/UART_JITTER_LIMITS.json`); the host test shows that a line the verdict calls fine is read byte for byte and one far past the limit is not, and the bench test for the loopback measurement with Wi-Fi in use is written down.
 - **The table of the inverters and batteries the node reads says how far each is verified:** `docs/compatibility.json` (one row per model, three levels: protocol, capture, bench), the page `docs/COMPATIBILITY.md` made from it by `tools/make_compatibility.py`, and a test that refuses a bench row without its numbers; the bench fills it in.
 - **The README shows screenshots of the web panel of the node:** four pictures with a sentence under each, in the eight languages, taken headless against a stand-in node with made-up sample data by `tools/capture_screenshots.py` and listed in `docs/screenshots.json`; the pictures weigh at most 400 KB each.
