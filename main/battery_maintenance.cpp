@@ -337,8 +337,7 @@ void handle(const std::string& payload) {
   ctx.action = in.string_or("action", "");
   ctx.op = in.string_or("op", "");
   ctx.port = static_cast<int>(in.integer_or("port", 0, 1, 10));
-  if (ctx.command_id.size() < 8 || ctx.command_id.size() > 32 || ctx.port == 0) return;   // not an order this node can answer
-  for (char c : ctx.command_id) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z'))) return;
+  if (!bat::valid_command_id(ctx.command_id) || ctx.port == 0) return;   // not an order this node can answer
   if (!g_enabled) { reject(ctx, bat::refusal::kDisabled); return; }
   if (!node_control::working() && ctx.action != "cancel") { reject(ctx, bat::refusal::kDisabled); return; }   // paused or in standby by the server's order: no battery is written (a running operation can still be cancelled)
   if (g_password.empty()) { reject(ctx, bat::refusal::kNoPassword); return; }

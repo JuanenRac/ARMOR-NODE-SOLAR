@@ -333,6 +333,8 @@ static void test_values_are_bounded() {
 
   // an unknown operation, and the read-only plan cannot be asked for
   Op op;
+  CHECK(valid_command_id("b0b0b0b012345678") && valid_command_id("0123456789abcdef"));
+  for (const char* bad : {"", "b0b0b0b", "b0b0b0b0", "b0b0b0b0123456789", "B0B0B0B012345678", "b0b0b0b0zzzzzzzz", "b0b0b0b01234567-"}) CHECK(!valid_command_id(bad));
   CHECK(op_from_name("set_clock", op) && op == Op::kSetClock && !op_from_name("preflight", op) && !op_from_name("format", op) && !op_from_name("", op));
 }
 

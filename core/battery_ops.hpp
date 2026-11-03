@@ -79,6 +79,12 @@ inline const OpInfo* op_info(Op op) {
   for (const OpInfo& i : catalog()) if (i.op == op) return &i;
   return nullptr;
 }
+/// The id of a command: sixteen lowercase hexadecimal digits, the one format of every command in the family (ARMOR-COMMON, solar_battery_command.schema.json).
+inline bool valid_command_id(std::string_view id) {
+  if (id.size() != 16) return false;
+  for (const char c : id) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+  return true;
+}
 inline bool op_from_name(std::string_view name, Op& out) {
   for (const OpInfo& i : catalog()) if (name == i.name && i.op != Op::kPreflight) { out = i.op; return true; }
   return false;
