@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.3] - The health report says which contracts the firmware was checked against: new main/contractversion.hpp (the number the shared repository pins and a test there compares) and the shared health report now carries it as contract,... (and 5 more changes)
+
 - **The health report says which contracts the firmware was checked against:** new `main/contract_version.hpp` (the number the shared repository pins and a test there compares) and the shared health report now carries it as `contract`, so the server and Studio can warn about a node built against other contracts. The shared firmware files are copied again from the shared repository.
 - **A command id is sixteen lowercase hexadecimal digits, as in every command of the family:** the node ignores a battery order and a control order whose `command_id` has another form (the server has always issued ids of that form); `valid_command_id` is tested on its own.
 - **The launchers find the shared repository through `ARMOR_COMMON_DIR`:** `build`, `build-test`, `test` and `run` (`.sh` and `.bat`) use the folder named by that variable when it is set and the sibling `ARMOR-COMMON` folder otherwise, so a checkout with another layout builds without changing a file.
