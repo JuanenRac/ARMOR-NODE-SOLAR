@@ -49,9 +49,11 @@ try {
   const ev = async expr => { const r = await send("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) console.log("EXC", r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result?.value; };
   const shot = async file => { const r = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true }); fs.writeFileSync(path.join(OUT, file), Buffer.from(r.data, "base64")); };
   const text = () => ev("document.body.innerText");
-  const goto = async hash => { await ev(`location.hash = '#/${hash}'`); await sleep(900); };
-  const setText = (selector, value) => ev(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; e.focus(); e.value = ${JSON.stringify(value)}; e.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
-  const clickButton = label => ev(`(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === ${JSON.stringify(label)}); if (!b) return false; b.click(); return true; })()`);
+  const goto = async hash => { await call("function (hash) { location.hash = '#/' + hash; }", hash); await sleep(900); };
+  // The data go to the page as arguments of a function declared once (never spliced into a piece of code).
+  const call = async (declaration, ...args) => { const doc = await send("Runtime.evaluate", { expression: "document" }); const r = await send("Runtime.callFunctionOn", { objectId: doc.result.objectId, functionDeclaration: declaration, arguments: args.map(value => ({ value })), returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) console.log("EXC", r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result?.value; };
+  const setText = (selector, value) => call("function (selector, value) { const e = this.querySelector(selector); if (!e) return false; e.focus(); e.value = value; e.dispatchEvent(new Event('input', { bubbles: true })); return true; }", selector, value);
+  const clickButton = label => call("function (label) { const b = [...this.querySelectorAll('button')].find(x => x.textContent.trim() === label); if (!b) return false; b.click(); return true; }", label);
 
   await send("Network.setCookie", { name: cname, value: cvalue, url: "http://127.0.0.1:18132/", path: "/" });
   await send("Page.navigate", { url: "http://127.0.0.1:18132/" });
@@ -135,9 +137,9 @@ try {
   const langs = await ev("LANGS.map(l => l[0])");
   let rawBad = 0;
   for (let li = 0; li < langs.length; li += 1) {
-    await ev(`(() => { lang = ${li}; document.documentElement.lang = LANGS[${li}][0]; })()`);
+    await call("function (li) { lang = li; document.documentElement.lang = LANGS[li][0]; }", li);
     for (const p of pages) {
-      await ev(`location.hash = '#/${p}'`); await sleep(300);
+      await call("function (hash) { location.hash = '#/' + hash; }", p); await sleep(300);
       const raw = await ev(`(() => { const keys = new Set(Object.keys(L)); const bad = []; document.querySelectorAll('h1,h2,h3,label,span,button,p,dt,th,option,small,a').forEach(n => { const s = n.childNodes.length === 1 && n.childNodes[0].nodeType === 3 ? n.textContent.trim() : ''; if (s && keys.has(s) && L[s][0] !== s) bad.push(s); }); return bad; })()`);
       if (raw.length) { rawBad += 1; check(`no raw text keys on ${p} in ${langs[li]}`, false, raw.join(",")); }
       if (li === 5 && p === "ports") await shot(`spanel-${board}-ports-${langs[li]}.png`);
