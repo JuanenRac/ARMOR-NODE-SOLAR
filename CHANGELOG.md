@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The messages are tested against a seeded oracle:** the shared firmware now carries the readers and writers that ARMOR-COMMON generates from its schemas (`core/armor_wire.hpp`) and a host test (`tests/test_wire.cpp`) that reads the seeded cases of the contracts (each with the verdict of the Python validator) and checks, with the compiler and the flags of this project, that the generated validator, reader and writer agree on every one. The shared control order is checked the same way.
+
 ## [0.6.3] - The health report says which contracts the firmware was checked against: new main/contractversion.hpp (the number the shared repository pins and a test there compares) and the shared health report now carries it as contract,... (and 5 more changes)
 
 - **The health report says which contracts the firmware was checked against:** new `main/contract_version.hpp` (the number the shared repository pins and a test there compares) and the shared health report now carries it as `contract`, so the server and Studio can warn about a node built against other contracts. The shared firmware files are copied again from the shared repository.
