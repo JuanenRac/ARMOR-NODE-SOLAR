@@ -28,7 +28,7 @@
 
 ---
 
-**Honesty check - what runs today:** The firmware builds in the ESP-IDF 5.5.5 container, its core (the settings, the exchange with each kind of equipment, the arithmetic of the emulated UART, the Bluetooth channel, the release and signature checks: 11,979 checks in 20 test programs) is tested on a computer with stand-in equipment, the messages it makes are accepted by ARMOR-COMMON and the panel was exercised in a browser against a stand-in node. **It has never run on a board and no inverter or battery has been connected**: the Wi-Fi, the panel over TLS, the update, the hardware and emulated UARTs and the formats of the protocols (written from public documents and from memory) are untried. The ANT-BMS frames in its tests were captured by other people on their own units: this project has not read one itself.
+**Honesty check - what runs today:** The firmware builds in the ESP-IDF 5.5.5 container, its core (the settings, the exchange with each kind of equipment, the arithmetic of the emulated UART, the Bluetooth channel, the release and signature checks: 11,979 checks in 21 test programs) is tested on a computer with stand-in equipment, the messages it makes are accepted by ARMOR-COMMON and the panel was exercised in a browser against a stand-in node. **It has never run on a board and no inverter or battery has been connected**: the Wi-Fi, the panel over TLS, the update, the hardware and emulated UARTs and the formats of the protocols (written from public documents and from memory) are untried. The ANT-BMS frames in its tests were captured by other people on their own units: this project has not read one itself.
 
 ---
 
@@ -40,7 +40,7 @@
 | Maturity | Functional |
 | Role | Solar field node for ESP32-S3: inverters and batteries (family: Field Nodes, parent: ARMOR-COMMON) |
 | Stack | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 11979 checks in 20 host programs and 7 Python checks (`ctest`) |
+| Tests | 11979 checks in 21 host programs and 7 Python checks (`ctest`) |
 | Equipment | Voltronic / MPP Solar inverters, Pylontech batteries, ANT-BMS; 10 serial ports |
 | Runs on | ESP32-S3-WROOM-1 N16R8 or Waveshare ESP32-S3-ETH; host tests on any computer |
 | On real hardware | None yet: no board built and no inverter or battery connected (host tests, the build and the panel in a browser only) |
@@ -57,7 +57,7 @@ Each line is one part of this repository and the light says how far it is today.
 | Area | State | What it means here |
 |---|---|---|
 | Software | 🟢 | The firmware builds in the ESP-IDF 5.5.5 container for both boards (Wi-Fi and Ethernet). |
-| Tests | 🟢 | 11,979 checks in 20 host programs pass (`ctest`): the settings, the exchange with each kind of equipment, the emulated UART, the Bluetooth channel and the release checks. |
+| Tests | 🟢 | 11,979 checks in 21 host programs pass (`ctest`): the settings, the exchange with each kind of equipment, the emulated UART, the Bluetooth channel and the release checks. |
 | Protocols and data | 🟡 | The Voltronic, Pylontech and ANT-BMS frames, checksums and readings are checked against the documented frames and recorded samples; none has talked to a real inverter or battery yet. |
 | Interface | 🟡 | The web panel is exercised in a browser against a mock of the node, not on a board. |
 | Hardware | 🔴 | No board built and no inverter or battery connected: nothing has run on real equipment yet. |
@@ -197,7 +197,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-20 host test programs and 7 Python checks run under `ctest`; 11979 checks counted by the host programs, built with `-Werror`.
+21 host test programs and 7 Python checks run under `ctest`; 11979 checks counted by the host programs, built with `-Werror`.
 
 Python checks: the panel texts in eight languages, the tasks, the save paths, the Bluetooth session under its lock and the routes the panel calls (and, in some nodes, the HTTP codes or the glyphs of the fonts)
 
