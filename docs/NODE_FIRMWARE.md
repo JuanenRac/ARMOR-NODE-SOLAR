@@ -142,6 +142,9 @@ if the equipment shares its ground with a battery bank, with a common ground on 
 2. A node with no user opens the Wi-Fi **ARMOR-SETUP-xxxxxx** (the password is the setup code) and shows the code on its USB console every 15 seconds. Join it,
    open `http://192.168.4.1/`, enter the code, create the administrator and, if you want, the Wi-Fi network the node is to join. The node restarts.
    On the Waveshare board the cable works too: plug it in and open the address DHCP gave the node (its MAC is on the console); there is no Wi-Fi to give in the set-up.
+   **Two addresses, on purpose.** The identity of the node (its name `solar-xxxxxx`, its setup code and the derived fleet code) comes from the **Wi-Fi** MAC address of the chip, on both boards, and it
+   never changes with the cable. On the Ethernet board the network layer and `/api/v1/session` show the **Ethernet** MAC address, which is a different one. They are not meant to match; nodes
+   already made keep the identity they were given, so the two are not unified. A tool that looks for a node by the MAC it sees on the cable must not use it to derive the setup code.
 3. After the setup the node keeps its own Wi-Fi **ARMOR-NODE-SOLAR-xxxxxx** (its password is the setup code; change it in the Wi-Fi page) so it can always be reached, and
    joins the network you gave it. Holding BOOT for 8 seconds within 30 seconds of power-up erases the settings and the users.
 4. In the panel: **Serial ports** (enable and set each port, save, restart), **Broker** (the address and the identity), **Readings** (the last reading of every port).

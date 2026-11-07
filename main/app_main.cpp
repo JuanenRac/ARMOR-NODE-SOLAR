@@ -26,6 +26,7 @@ extern "C" {
 #include "freertos/task.h"
 #include "sdkconfig.h"
 }
+#include "core/image_board.hpp"
 #include "core/netplan.hpp"
 #include "log_buffer.hpp"
 #include "psram_mem.hpp"
@@ -117,6 +118,7 @@ extern "C" void app_main() {
   ESP_ERROR_CHECK(esp_event_loop_create_default());
   const armor::config::Settings settings = armor::store::settings();
   const bool setup = armor::store::users_empty();
+  armor::image_board::keep();   // the mark of the board this image was built for (what an upload of a firmware is checked against) stays in the image
   ESP_LOGI(kTag, "A.R.M.O.R. solar node %s, firmware %s, MAC tail %s%s", settings.node_id.c_str(), esp_app_get_description()->version, armor::store::mac_tail().c_str(), setup ? ", NOT SET UP YET" : "");
   if (armor::store::settings_are_stored()) {
     const armor::config::Problems problems = armor::config::validate(settings);

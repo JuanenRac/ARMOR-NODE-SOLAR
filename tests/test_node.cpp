@@ -161,7 +161,24 @@ static void test_settings_document() {
   CHECK(!config::load("{\"security\":{\"seal_secrets\":\"yes\"}}", s, edited, problems) && has(problems, "security.seal_secrets", "invalid"));
   problems.clear();
   CHECK(config::load("{\"security\":{\"seal_secrets\":true}}", s, edited, problems) && edited.seal_secrets);
-  { config::Settings on = edited; config::Settings back; problems.clear(); CHECK(config::to_json(on, true).find("\"security\":{\"seal_secrets\":true}") != std::string::npos && config::load(config::to_json(on, true), s, back, problems) && back.seal_secrets); }
+  { config::Settings on = edited; config::Settings back; problems.clear(); CHECK(config::to_json(on, true).find("\"security\":{\"seal_secrets\":true,") != std::string::npos && config::load(config::to_json(on, true), s, back, problems) && back.seal_secrets); }
+  // the board check of a firmware upload: both on until the settings say otherwise, each read and written on its own
+  {
+    const config::Settings& fresh = s; config::Settings out; problems.clear();
+    CHECK(fresh.ota_check_board && fresh.ota_require_board_mark);
+    CHECK(!config::load("{\"security\":{\"ota_check_board\":1}}", fresh, out, problems) && has(problems, "security.ota_check_board", "invalid"));
+    problems.clear();
+    CHECK(!config::load("{\"security\":{\"ota_require_board_mark\":\"no\"}}", fresh, out, problems) && has(problems, "security.ota_require_board_mark", "invalid"));
+    problems.clear();
+    CHECK(config::load("{\"security\":{\"ota_require_board_mark\":false}}", fresh, out, problems) && out.ota_check_board && !out.ota_require_board_mark);
+    config::Settings kept; problems.clear();
+    CHECK(config::load("{\"system\":{\"auto_restart_hours\":0}}", out, kept, problems) && !kept.ota_require_board_mark);   // a document without it keeps it
+    problems.clear();
+    CHECK(config::load("{\"security\":{\"ota_check_board\":false,\"ota_require_board_mark\":true}}", fresh, out, problems) && !out.ota_check_board && out.ota_require_board_mark);
+    CHECK(config::to_json(out, true).find("\"ota_check_board\":false,\"ota_require_board_mark\":true") != std::string::npos);
+    config::Settings back; problems.clear();
+    CHECK(config::load(config::to_json(out, true), fresh, back, problems) && !back.ota_check_board && back.ota_require_board_mark);
+  }
 }
 
 // ---- the network -------------------------------------------------------------------------------------------------------------------------
