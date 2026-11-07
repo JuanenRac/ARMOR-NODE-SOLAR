@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A shim for the simulator's MQTT output:** `tests/mqtt_shim.cpp` is built from the same core files as the firmware (the Voltronic framing and decoders, the Pylontech console reader and the writer of the solar message) and prints the messages the node would publish for the replies of an inverter and the console tables of a battery stack, so ARMOR-SIMULATOR can send them to a real broker and the server bench can check that the real server takes them. No board is involved and nothing here has run on one.
+
 ## [0.6.4] - Simulation bench: tests/simbench.cpp is built from the same core files as the firmware and is fed by ARMOR-SIMULATOR (python -m armorsimulator.nodebench --bus pylontech) with the console tables of a Pylontech stack (an absent... (and 1 more changes)
 
 - **Simulation bench:** `tests/sim_bench.cpp` is built from the same core files as the firmware and is fed by ARMOR-SIMULATOR (`python -m armor_simulator.node_bench --bus pylontech`) with the console tables of a Pylontech stack (an absent module, garbled rows, no header, cells out of range or out of order), and the answers are compared with what the documented rules require. The workflow `Simulation bench` runs it on every push, with no board and no ESP-IDF.
