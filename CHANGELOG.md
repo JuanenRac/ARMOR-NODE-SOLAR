@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A watch on the Wi-Fi link by ping, off by default:** the build option `ARMOR_NET_LINK_WATCH` (menuconfig, A.R.M.O.R. node) makes the station ping its gateway every 20 s and force a fresh association after three rounds in a row without a single reply, for routers that leave the node "connected" but unreachable until it is reset by hand. One reply in a round is enough (a lost packet is not an outage). The rule is `core/link_watch.hpp`, covered by the new host program `tests/test_link_watch.cpp` (rounds with lost packets, the limit, the count cleared by an answer, a seeded long run); the shared file is kept equal in the five node projects.
+
 - **A shim for the simulator's MQTT output:** `tests/mqtt_shim.cpp` is built from the same core files as the firmware (the Voltronic framing and decoders, the Pylontech console reader and the writer of the solar message) and prints the messages the node would publish for the replies of an inverter and the console tables of a battery stack, so ARMOR-SIMULATOR can send them to a real broker and the server bench can check that the real server takes them. No board is involved and nothing here has run on one.
 
 ## [0.6.4] - Simulation bench: tests/simbench.cpp is built from the same core files as the firmware and is fed by ARMOR-SIMULATOR (python -m armorsimulator.nodebench --bus pylontech) with the console tables of a Pylontech stack (an absent... (and 1 more changes)
