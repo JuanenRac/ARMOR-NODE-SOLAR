@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-19884%20checks-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-19919%20checks-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.6.5-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
@@ -40,7 +40,7 @@
 | 成熟度 | 可用 |
 | 角色 | ESP32-S3 太阳能现场节点：逆变器和电池（家族：Field Nodes，上级：ARMOR-COMMON） |
 | 技术栈 | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| 测试 | 19884 项检查（28 个主机程序和 7 项 Python 检查，`ctest`） |
+| 测试 | 19919 项检查（28 个主机程序和 7 项 Python 检查，`ctest`） |
 | 设备 | Voltronic / MPP Solar 逆变器、Pylontech 电池、ANT-BMS；10 个串口 |
 | 运行位置 | ESP32-S3-WROOM-1 N16R8 或 Waveshare ESP32-S3-ETH；主机测试可在任何计算机上运行 |
 | 真实硬件 | 暂无：没有制作板子，也没有连接逆变器或电池（仅有计算机测试、构建和浏览器中的面板） |
@@ -199,7 +199,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-`ctest` 运行 28 个主机测试程序和 7 个 Python 检查；主机程序统计的检查共 19884 项，使用 `-Werror` 构建。
+`ctest` 运行 28 个主机测试程序和 7 个 Python 检查；主机程序统计的检查共 19919 项，使用 `-Werror` 构建。
 
 Python 检查：八种语言的面板文字、任务、保存路径、受锁保护的蓝牙会话以及面板调用的路由（部分节点还包括 HTTP 状态码或字体字形）
 
