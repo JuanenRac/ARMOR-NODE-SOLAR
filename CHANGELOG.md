@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The shared wire header knows the field `challenge` of the voice turn result:** the generated `core/armor_wire.hpp` (copied from ARMOR-COMMON) describes the optional number of two to six digits that the voice service sends in the mode `challenge` of its silence confirmation. This node does not use it; the copy only follows the contract.
+
 - **The log hook no longer takes 224 bytes of the stack of every task that logs:** the line is formatted into one static buffer shared by all the tasks (tried, never waited for, with a small buffer on the stack as the way out), so the tasks with 3 KiB of stack have room and the lines of the panel's log are cut at 383 characters instead of 223. The rule of what is kept is `core/log_line.hpp`, host-tested.
 
 - **The two MAC addresses of the Ethernet board are documented:** the identity of the node (name, setup code, fleet code) comes from the Wi-Fi MAC address on both boards, while the cable and the session information show the Ethernet one. They are left different on purpose so that nodes already made keep their identity; `docs/NODE_FIRMWARE.md` says so.
