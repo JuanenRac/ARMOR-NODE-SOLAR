@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.6] - Shared base lock and power-cut tests
+
 - **The way back to the first saved broker is decided in one place and tested on a computer:** a node that works on a backup broker asks, every half hour, whether the first one answers again and goes back only when it does (leaving a broker that works for one that is still down cost a minute of silence each time); the rule is `linkwatch::BackupReturn` and the node's task only counts its rounds and connects. The radar node had the old behaviour (it went back without asking) and now has the check too.
 - **A check keeps the converter shared:** every file of the node that reads the converter must take its lock and the random generator takes it before it switches the noise source on, which reconfigures the converter; the host tests fail if an edit reads the converter without it.
 - **A Wi-Fi search on a node that uses the cable no longer takes its address away:** when the station loses its network on the s3-eth board in the Ethernet or the Ethernet-with-access-point layout, the link and the address that came from the cable stay as they are (before, a search of networks in the access point mode marked the node as having no address and cut the broker link); the rule is `netplan::after_station_lost` with host tests for every combination of the flags.
