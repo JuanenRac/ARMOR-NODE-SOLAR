@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.5] - The readers and writers of the messages are tried with every member of their contract: a new test program (`test_wire_full`, shared with the other nodes) reads and writes back, for every message, documents that hold every member the schema
+
 - **The readers and writers of the messages are tried with every member of their contract:** a new test program (`test_wire_full`, shared with the other nodes) reads and writes back, for every message, documents that hold every member the schema declares and documents that leave out about half of the optional ones, and feeds the decoder of the text patterns text that is not UTF-8; the branch coverage of the generated reader and writer goes from 79 % to 88 %, the floor goes from 98.0 % of the lines and 86.0 % of the branches to 98.9 % and 88.8 % (measured 99.2 % and 89.1 %).
 
 - **The runner of the battery console is tried at its edges:** a new test program (`test_runner_edges`) tries what is refused before anything is sent, every way a step can end (a failure in the answer, silence before and after a write, a pause, a cancel, a long answer), that the service password goes out and never stays, and the firmware transfer when the battery is not ready, reports an error or never says it is done; the shared test program covers the diagnostic package, the release signature text, the topics and the Bluetooth frames branch by branch. The branch coverage of `battery_runner` goes from 79 % to 92 % and the floor of the whole from 85.0 % to 86.0 % (measured 86.5 %).
