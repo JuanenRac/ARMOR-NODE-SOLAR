@@ -81,6 +81,8 @@ if(Python3_FOUND)
   add_test(NAME panel_text COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_panel_text.py)
   # no task keeps a big copy of the settings on its small stack, every task has the stack its job needs, GitHub's long redirects fit the HTTP buffer
   add_test(NAME task_safety COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_task_safety.py)
+  # what the interrupts of the soft serial ports touch lives in the internal memory
+  add_test(NAME isr_memory COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_isr_memory.py)
   # the compatibility page says what the table says
   add_test(NAME compat_doc COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/make_compatibility.py --check)
   # a saved time zone applies at once; the panel can still say that a restart is needed

@@ -2,6 +2,7 @@
 // every operation run against the simulated console (battery_bench.hpp). Nothing has been tried on a real battery; the service password in these tests is a made-up value.
 #include <algorithm>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -806,8 +807,71 @@ static void test_the_catalog() {
 #include "battery_more_tests.inc"
 #include "battery_catalog_test.inc"
 
+// The power goes while an image is arriving in pieces: what was staged is lost (it lives in RAM), a later piece of the same image is refused as out of order, and only a full resend from piece
+// 0 completes it. Random cuts, random bad pieces; an image is never ready unless every piece arrived in order and its CRC-32 is the one the sender said.
+static std::string base64_of(const std::uint8_t* data, std::size_t size) {
+  static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  for (std::size_t i = 0; i < size; i += 3) {
+    const std::uint32_t a = data[i], b = i + 1 < size ? data[i + 1] : 0, c = i + 2 < size ? data[i + 2] : 0;
+    const std::uint32_t triple = (a << 16) | (b << 8) | c;
+    out += alphabet[(triple >> 18) & 63]; out += alphabet[(triple >> 12) & 63];
+    out += i + 1 < size ? alphabet[(triple >> 6) & 63] : '='; out += i + 2 < size ? alphabet[triple & 63] : '=';
+  }
+  return out;
+}
+
+static void test_random_power_cuts_while_an_image_arrives() {
+  using battery::ImageStage;
+  std::uint32_t seed = 31337;
+  const auto next = [&seed]() { seed = seed * 1664525u + 1013904223u; return seed >> 8; };
+  std::vector<std::uint8_t> image(battery::kImageMinBytes + 100);
+  for (std::size_t i = 0; i < image.size(); ++i) image[i] = static_cast<std::uint8_t>((i * 31 + 7) & 0xff);
+  const std::uint32_t crc = battery::crc32(image.data(), image.size());
+  const std::size_t piece = ImageStage::kMaxChunkBytes;
+  const std::size_t total = (image.size() + piece - 1) / piece;
+  const auto send = [&](ImageStage& stage, std::size_t index, std::uint64_t now, bool spoil = false) {
+    const std::size_t from = index * piece, size = std::min(piece, image.size() - from);
+    std::vector<std::uint8_t> bytes(image.begin() + static_cast<std::ptrdiff_t>(from), image.begin() + static_cast<std::ptrdiff_t>(from + size));
+    if (spoil) bytes[0] ^= 0x55;
+    return stage.add("image-0001", index, total, image.size(), crc, base64_of(bytes.data(), bytes.size()), now);
+  };
+  int cuts = 0, completed = 0, refused = 0;
+  for (int round = 0; round < 40; ++round) {
+    std::unique_ptr<ImageStage> stage(new ImageStage());
+    std::uint64_t now = 1000;
+    std::size_t next_piece = 0;
+    for (int step = 0; step < 4000 && completed < 1000; ++step) {
+      now += 10;
+      if (next() % 400 == 0) {                                          // the power goes: the staged image is gone with the RAM
+        ++cuts;
+        stage.reset(new ImageStage());
+        CHECK(stage->image() == nullptr);
+        if (next_piece > 0) { CHECK(send(*stage, next_piece, now) == "stage_order"); ++refused; }   // the sender carries on: refused, nothing staged
+        CHECK(stage->image() == nullptr);
+        next_piece = 0;                                                  // and starts again from piece 0
+        continue;
+      }
+      const bool spoil = next() % 900 == 0 && next_piece > 0 && next_piece + 1 < total;
+      const std::string answer = send(*stage, next_piece, now, spoil);
+      if (spoil) { CHECK(answer.empty() || answer == "stage_data" || answer == "stage_crc"); }
+      if (!answer.empty()) { next_piece = 0; continue; }
+      CHECK(stage->image() == nullptr || next_piece + 1 == total);     // ready only after the last piece
+      if (++next_piece == total) {
+        if (spoil) continue;
+        const auto ready = stage->image();
+        CHECK(ready != nullptr && ready->size() == image.size() && battery::crc32(ready->data(), ready->size()) == crc);
+        ++completed;
+        next_piece = 0;
+      }
+    }
+  }
+  CHECK(cuts > 20 && completed > 20 && refused > 10);
+}
+
 int main() {
   test_xmodem();
+  test_random_power_cuts_while_an_image_arrives();
   test_identity_and_chip();
   test_image_checks();
   test_values_are_bounded();
