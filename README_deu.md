@@ -40,7 +40,7 @@
 | Reifegrad | Funktionsfähig |
 | Rolle | Solar-Feldknoten für ESP32-S3: Wechselrichter und Batterien (Familie: Field Nodes, übergeordnet: ARMOR-COMMON) |
 | Technik | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 183212 Prüfungen in 28 Host-Programmen und 8 Python-Prüfungen (`ctest`) |
+| Tests | 183212 Prüfungen in 28 Host-Programmen und 9 Python-Prüfungen (`ctest`) |
 | Geräte | Voltronic- / MPP-Solar-Wechselrichter, Pylontech-Batterien, ANT-BMS; 10 serielle Ports |
 | Läuft auf | ESP32-S3-WROOM-1 N16R8 oder Waveshare ESP32-S3-ETH; Host-Tests auf jedem Computer |
 | Auf echter Hardware | Noch keiner: keine Platine aufgebaut und kein Wechselrichter oder keine Batterie angeschlossen (nur Computertests, der Build und das Panel im Browser) |
@@ -199,7 +199,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-28 Host-Testprogramme und 8 Python-Prüfungen laufen unter `ctest`; 183212 Prüfungen, gezählt von den Host-Programmen, mit `-Werror` gebaut.
+28 Host-Testprogramme und 9 Python-Prüfungen laufen unter `ctest`; 183212 Prüfungen, gezählt von den Host-Programmen, mit `-Werror` gebaut.
 
 Python-Prüfungen: die Panel-Texte in acht Sprachen, die Tasks, die Speicherpfade, die Bluetooth-Sitzung unter ihrer Sperre und die vom Panel aufgerufenen Routen (und in manchen Knoten die HTTP-Codes oder die Glyphen der Schriften)
 

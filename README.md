@@ -40,7 +40,7 @@
 | Maturity | Functional |
 | Role | Solar field node for ESP32-S3: inverters and batteries (family: Field Nodes, parent: ARMOR-COMMON) |
 | Stack | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 183212 checks in 28 host programs and 8 Python checks (`ctest`) |
+| Tests | 183212 checks in 28 host programs and 9 Python checks (`ctest`) |
 | Equipment | Voltronic / MPP Solar inverters, Pylontech batteries, ANT-BMS; 10 serial ports |
 | Runs on | ESP32-S3-WROOM-1 N16R8 or Waveshare ESP32-S3-ETH; host tests on any computer |
 | On real hardware | None yet: no board built and no inverter or battery connected (host tests, the build and the panel in a browser only) |
@@ -199,7 +199,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-28 host test programs and 8 Python checks run under `ctest`; 183212 checks counted by the host programs, built with `-Werror`.
+28 host test programs and 9 Python checks run under `ctest`; 183212 checks counted by the host programs, built with `-Werror`.
 
 Python checks: the panel texts in eight languages, the tasks, the save paths, the Bluetooth session under its lock and the routes the panel calls (and, in some nodes, the HTTP codes or the glyphs of the fonts)
 
