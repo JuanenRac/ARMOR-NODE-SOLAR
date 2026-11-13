@@ -40,7 +40,7 @@
 | Maturidade | Funcional |
 | Função | Nó de campo solar para ESP32-S3: inversores e baterias (família: Field Nodes, pai: ARMOR-COMMON) |
 | Tecnologia | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Testes | 183212 verificações em 28 programas de anfitrião e 8 em Python (`ctest`) |
+| Testes | 183212 verificações em 28 programas de anfitrião e 9 em Python (`ctest`) |
 | Equipamentos | Inversores Voltronic / MPP Solar, baterias Pylontech, ANT-BMS; 10 portas série |
 | Funciona em | ESP32-S3-WROOM-1 N16R8 ou Waveshare ESP32-S3-ETH; testes de anfitrião em qualquer computador |
 | Em hardware real | Nenhum ainda: nenhuma placa montada nem inversor ou bateria ligados (só testes no computador, a compilação e o painel num navegador) |
@@ -199,7 +199,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-28 programas de teste de anfitrião e 8 verificações Python correm com `ctest`; 183212 verificações contadas pelos programas de anfitrião, compiladas com `-Werror`.
+28 programas de teste de anfitrião e 9 verificações Python correm com `ctest`; 183212 verificações contadas pelos programas de anfitrião, compiladas com `-Werror`.
 
 Verificações Python: os textos do painel em oito línguas, as tarefas, os caminhos de gravação, a sessão Bluetooth sob o seu bloqueio e as rotas que o painel chama (e, em alguns nós, os códigos HTTP ou os glifos dos tipos de letra)
 

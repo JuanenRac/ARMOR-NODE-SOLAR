@@ -40,7 +40,7 @@
 | Maturité | Fonctionnel |
 | Rôle | Nœud de terrain solaire pour ESP32-S3 : onduleurs et batteries (famille : Field Nodes, parent : ARMOR-COMMON) |
 | Technologie | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 183212 vérifications dans 28 programmes hôte et 8 contrôles Python (`ctest`) |
+| Tests | 183212 vérifications dans 28 programmes hôte et 9 contrôles Python (`ctest`) |
 | Équipements | Onduleurs Voltronic / MPP Solar, batteries Pylontech, ANT-BMS ; 10 ports série |
 | Fonctionne sur | ESP32-S3-WROOM-1 N16R8 ou Waveshare ESP32-S3-ETH ; tests sur hôte sur n'importe quel ordinateur |
 | Sur matériel réel | Aucun pour l'instant : aucune carte montée ni onduleur ou batterie connecté (seulement des tests sur ordinateur, la compilation et le panneau dans un navigateur) |
@@ -199,7 +199,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-28 programmes de test sur hôte et 8 contrôles Python tournent sous `ctest` ; 183212 vérifications comptées par les programmes hôte, compilés avec `-Werror`.
+28 programmes de test sur hôte et 9 contrôles Python tournent sous `ctest` ; 183212 vérifications comptées par les programmes hôte, compilés avec `-Werror`.
 
 Contrôles Python : les textes du panneau en huit langues, les tâches, les chemins de sauvegarde, la session Bluetooth sous son verrou et les routes appelées par le panneau (et, dans certains nœuds, les codes HTTP ou les glyphes des polices)
 
