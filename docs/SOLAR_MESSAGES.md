@@ -43,3 +43,32 @@ With no module present the message has `modules: 0` and the empty `stack`, and n
 `current_a` is the sum of the modules (negative discharging), `voltage_v` their mean, `soc_percent` the mean state of charge (left out when unknown: the contract has no nulls).
 
 - `pv_energy_total_wh` (from the inverter's `QET` answer) is **provisional**: the unit of that answer has not been confirmed on a real inverter, so treat the figure as indicative until it is.
+
+## System summary and the alerts of the node
+
+```
+armor/solar/<node>/system                 JSON, one message every `summary.every_s` seconds, QoS 0, not retained
+```
+
+```json
+{"kind":"system","node_id":"solar-1","timestamp_ms":5000,"inverters":1,"batteries":2,"pv_w":856,"load_w":119,"soc_percent":88.5,"balance_w":737,
+ "alerts":[{"code":"soc_low","device":"us3000-1"}]}
+```
+
+It adds up the latest reading of every port: `pv_w` the power of all the panels, `load_w` what the inverters give to the house, `balance_w` their difference (positive while the panels give more than the house takes) and `soc_percent` the mean state of charge of the batteries that answered. A reading older than a minute is not counted, so an inverter or a battery that stopped answering does not stay in the totals; the numbers that need an inverter (or a battery) are left out when none answered. `inverters` and `batteries` count the ports that answered in the last round (a stack with no module present is not a battery that answered).
+
+The alerts are decided on the node, from its own settings, so they exist when the server cannot be reached; they are a fixed list of words and a device name, with no free text: `soc_low`, `cell_over_voltage`, `temperature_high` and `temperature_low`. An alert is raised at its limit and cleared a little inside it (2 points of charge, 20 mV, 2 degrees), so a reading that hovers at the limit does not make the message flicker. While an alert lasts, the LED of the port of that device blinks slowly (half a second on, half a second off); the fast blink is still a port that fails and the short pulse a good reading.
+
+Everything is **off** by default. The settings (the `summary` block of the configuration file of the node):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `summary.publish` | off | Send the message. The broker must let the node write `armor/solar/<node>/system` (`mqtt_identity.sh` of ARMOR-DEVOPS gives that line to the nodes it makes; an older node needs `upgrade-node`). |
+| `summary.alerts` | off | Raise the alerts (in the message and on the LEDs). |
+| `summary.every_s` | 10 (5-3600) | Seconds between two messages. |
+| `summary.soc_low_percent` | 20 (1-99) | `soc_low` when the state of charge is at or below this. |
+| `summary.cell_over_mv` | 3650 (3000-4500) | `cell_over_voltage` when the highest cell is at or above this, in millivolts. |
+| `summary.temperature_high_c` | 50 (0-120) | `temperature_high` when the hottest module is at or above this. |
+| `summary.temperature_low_c` | 0 (-40-60) | `temperature_low` when the coldest module is at or below this; it must stay under the high limit. |
+
+Nothing of this has run on a board: the host tests (`tests/test_system.cpp`) drive the poller against a simulated RS-485 line with a Pylontech stack (`tests/pylontech_rs485_sim.hpp`: noise, a silent stack, a reply in small pieces, a line cut in the middle of a reply, a module that disappears) and the messages are accepted by the contract of ARMOR-COMMON (`tests/check_samples.py`).

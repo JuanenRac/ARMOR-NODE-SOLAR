@@ -19,10 +19,15 @@ class PortLeds {
   static constexpr std::uint64_t kPulseMs = 100;         // one good reading
   static constexpr std::uint64_t kBlinkPhaseMs = 100;    // a failing port: on for this long, off for this long
   static constexpr std::uint64_t kBlinkTotalMs = 1500;   // ... for this long after the failure
+  static constexpr std::uint64_t kAlertPhaseMs = 500;    // a port with an alert of its own (core/solar_system.hpp): slow, steady blink, half a second on and half off, for as long as the alert lasts
 
   void set_enabled(std::size_t port, bool enabled) { if (port < kCount) leds_[port].enabled = enabled; }
   void good(std::size_t port, std::uint64_t now_ms) { if (port < kCount) { leds_[port].blink_until = 0; leds_[port].pulse_until = now_ms + kPulseMs; } }
   void bad(std::size_t port, std::uint64_t now_ms) { if (port < kCount) { leds_[port].pulse_until = 0; leds_[port].blink_from = now_ms; leds_[port].blink_until = now_ms + kBlinkTotalMs; } }
+
+  // An alert about the device on this port: on until it is cleared. The slow blink is told from the fast blink of a failing port and from the short pulse of a good reading.
+  void alert(std::size_t port, bool on) { if (port < kCount) leds_[port].alert = on; }
+  bool alerting(std::size_t port) const { return port < kCount && leds_[port].alert; }
 
   // The bits to show at `now_ms`: bit n is the LED of port n + 1 (bits 0 to 7 go to the register, 8 and 9 to their own pins).
   std::uint16_t pattern(std::uint64_t now_ms) const {
@@ -32,6 +37,7 @@ class PortLeds {
       if (!led.enabled) continue;
       bool on = now_ms < led.pulse_until;
       if (!on && now_ms >= led.blink_from && now_ms < led.blink_until) on = ((now_ms - led.blink_from) / kBlinkPhaseMs) % 2 == 0;
+      if (!on && led.alert) on = (now_ms / kAlertPhaseMs) % 2 == 0;
       if (on) bits = static_cast<std::uint16_t>(bits | (1u << i));
     }
     return bits;
@@ -39,7 +45,7 @@ class PortLeds {
 
  private:
   struct Led {
-    bool enabled = false;
+    bool enabled = false, alert = false;
     std::uint64_t pulse_until = 0, blink_from = 0, blink_until = 0;
   };
   std::array<Led, kCount> leds_;

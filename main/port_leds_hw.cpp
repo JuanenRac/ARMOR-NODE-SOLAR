@@ -71,5 +71,6 @@ bool start(const config::LedPins& pins, const config::Settings& settings) {
 
 void good(std::size_t port) { if (!g_running) return; std::lock_guard<std::mutex> guard(g_lock); g_leds.good(port, now_ms()); }
 void bad(std::size_t port) { if (!g_running) return; std::lock_guard<std::mutex> guard(g_lock); g_leds.bad(port, now_ms()); }
+void alert(std::size_t port, bool on) { if (!g_running) return; std::lock_guard<std::mutex> guard(g_lock); g_leds.alert(port, on); }
 
 }  // namespace armor::leds

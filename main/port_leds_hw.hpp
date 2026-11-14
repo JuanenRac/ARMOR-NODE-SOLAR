@@ -12,5 +12,6 @@ bool start(const config::LedPins& pins, const config::Settings& settings);
 
 void good(std::size_t port);   // a port was read correctly
 void bad(std::size_t port);    // a port did not answer, or answered wrongly
+void alert(std::size_t port, bool on);   // the node raised an alert about the device on this port (core/solar_system.hpp): a slow blink while it lasts
 
 }  // namespace armor::leds
