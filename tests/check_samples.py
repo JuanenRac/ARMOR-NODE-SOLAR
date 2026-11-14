@@ -44,8 +44,10 @@ def main() -> int:
             return 1
         kinds.add(payload["kind"])
         checked += 1
-    if checked < 6 or kinds != {"inverter", "battery", "system"}:
-        print(f"expected at least 6 messages of the three kinds, got {checked} ({sorted(kinds)})", file=sys.stderr)
+    # The sample emitters print different sets: the serialiser one has the three kinds (the summary of the whole system included), the poller one prints what the
+    # ports send (inverters and batteries) and the summary only when it is on, so "system" is optional here.
+    if checked < 6 or not {"inverter", "battery"} <= kinds or not kinds <= {"inverter", "battery", "system"}:
+        print(f"expected at least 6 messages of the inverter and battery kinds, got {checked} ({sorted(kinds)})", file=sys.stderr)
         return 1
     print(f"SOLAR_MESSAGES=PASS {checked} messages accepted by ARMOR-COMMON")
     return 0
