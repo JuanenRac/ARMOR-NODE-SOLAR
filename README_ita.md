@@ -40,7 +40,7 @@
 | Maturità | Funzionale |
 | Ruolo | Nodo di campo solare per ESP32-S3: inverter e batterie (famiglia: Field Nodes, padre: ARMOR-COMMON) |
 | Tecnologia | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Test | 183212 verifiche in 28 programmi host e 9 verifiche Python (`ctest`) |
+| Test | 183212 verifiche in 31 programmi host e 10 verifiche Python (`ctest`) |
 | Apparecchiature | Inverter Voltronic / MPP Solar, batterie Pylontech, ANT-BMS; 10 porte seriali |
 | Gira su | ESP32-S3-WROOM-1 N16R8 o Waveshare ESP32-S3-ETH; test su host su qualsiasi computer |
 | Su hardware reale | Ancora nessuno: nessuna scheda montata né inverter o batteria collegati (solo test su computer, la compilazione e il pannello in un browser) |
@@ -57,7 +57,7 @@ Ogni riga è una parte di questo repository e il semaforo dice a che punto è og
 | Area | Stato | Cosa significa qui |
 |---|---|---|
 | Software | 🟢 | Il firmware compila nel contenitore ESP-IDF 5.5.5 per entrambe le schede (Wi-Fi ed Ethernet). |
-| Test | 🟢 | Superano 19.884 controlli in 28 programmi host (`ctest`): le impostazioni, lo scambio con ogni tipo di apparecchiatura, la UART emulata, il canale Bluetooth e i controlli di versione. |
+| Test | 🟢 | Superano 19.884 controlli in 31 programmi host (`ctest`): le impostazioni, lo scambio con ogni tipo di apparecchiatura, la UART emulata, il canale Bluetooth e i controlli di versione. |
 | Protocolli e dati | 🟡 | I frame, i checksum e le letture di Voltronic, Pylontech e ANT-BMS sono verificati contro i frame documentati e campioni registrati; nessuno ha ancora parlato con un inverter o una batteria reali. |
 | Interfaccia | 🟡 | Il pannello web è stato provato in un browser contro una simulazione del nodo, non su una scheda. |
 | Hardware | 🔴 | Nessuna scheda costruita e nessun inverter o batteria collegati: nulla ha ancora funzionato su apparecchiature reali. |
@@ -199,7 +199,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-28 programmi di test su host e 9 verifiche Python girano con `ctest`; 183212 verifiche contate dai programmi host, compilati con `-Werror`.
+31 programmi di test su host e 10 verifiche Python girano con `ctest`; 183212 verifiche contate dai programmi host, compilati con `-Werror`.
 
 Verifiche Python: i testi del pannello in otto lingue, i task, i percorsi di salvataggio, la sessione Bluetooth sotto il suo lock e i percorsi chiamati dal pannello (e, in alcuni nodi, i codici HTTP o i glifi dei caratteri)
 
