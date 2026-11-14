@@ -164,6 +164,19 @@ struct BatteryWrite {
   std::string service_password;
 };
 
+// The summary of the whole system (core/solar_system.hpp) and the alerts the node raises on its own. Everything is OFF until the owner turns it on: the message needs the broker to
+// let the node write armor/solar/<node>/system (mqtt_identity.sh of ARMOR-DEVOPS gives that line to the nodes it makes from now on; an older node needs `upgrade-node`), and an alert is a
+// decision about the owner's battery, so it is never taken for them. The limits are the owner's, in the configuration file; the numbers here are only where a panel starts.
+struct SummarySettings {
+  bool publish = false;                 // send the summary message
+  bool alerts = false;                  // raise alerts (in the message and on the LEDs of the ports)
+  int every_s = 10;                     // seconds between two summaries
+  int soc_low_percent = 20;             // soc_low: the state of charge is at or below this
+  int cell_over_mv = 3650;              // cell_over_voltage: the highest cell is at or above this, in millivolts
+  int temperature_high_c = 50;          // temperature_high: the hottest module is at or above this
+  int temperature_low_c = 0;            // temperature_low: the coldest module is at or below this
+};
+
 struct Settings {
   std::string node_id;
   std::string node_name;
@@ -205,6 +218,7 @@ struct Settings {
   bool capture_enabled = false;
   int capture_frames = framecap::kDefaultFrames;
   BatteryWrite battery;
+  SummarySettings summary;
 };
 
 struct Problem {
@@ -539,6 +553,15 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
     read_bool(*capture, "enabled", s.capture_enabled, "capture.enabled", problems);
     read_int(*capture, "frames", s.capture_frames, framecap::kMinFrames, framecap::kMaxFrames, "capture.frames", problems);
   }
+  if (const json::Value* summary = document.get("summary"); summary != nullptr && summary->is_object()) {
+    read_bool(*summary, "publish", s.summary.publish, "summary.publish", problems);
+    read_bool(*summary, "alerts", s.summary.alerts, "summary.alerts", problems);
+    read_int(*summary, "every_s", s.summary.every_s, 5, 3600, "summary.every_s", problems);
+    read_int(*summary, "soc_low_percent", s.summary.soc_low_percent, 1, 99, "summary.soc_low_percent", problems);
+    read_int(*summary, "cell_over_mv", s.summary.cell_over_mv, 3000, 4500, "summary.cell_over_mv", problems);
+    read_int(*summary, "temperature_high_c", s.summary.temperature_high_c, 0, 120, "summary.temperature_high_c", problems);
+    read_int(*summary, "temperature_low_c", s.summary.temperature_low_c, -40, 60, "summary.temperature_low_c", problems);
+  }
   if (const json::Value* battery = document.get("battery"); battery != nullptr && battery->is_object()) {
     read_bool(*battery, "write_enabled", s.battery.enabled, "battery.write_enabled", problems);
     read_secret(*battery, "service_password", s.battery.service_password, "battery.service_password", problems);
@@ -696,6 +719,7 @@ inline Problems validate(const Settings& s) {
     if (s.leds.led9 >= 0) claim(s.leds.led9, "leds", "leds.led9");
     if (s.leds.led10 >= 0) claim(s.leds.led10, "leds", "leds.led10");
   }
+  if (s.summary.temperature_low_c >= s.summary.temperature_high_c) bad(problems, "summary.temperature_low_c", "range");
   const std::size_t mux_ports = mux_port_count(s.mux);
   for (std::size_t i = 0; i < kPortCount; ++i) {
     const PortConfig& port = s.ports[i];
@@ -783,6 +807,8 @@ inline std::string to_json(const Settings& s, bool secrets) {
   w.key("system").begin_object().field("auto_restart_hours", s.auto_restart_hours).field("login_limit_per_minute", s.login_limit_per_minute).end_object();
   w.key("security").begin_object().field("seal_secrets", s.seal_secrets).field("ota_check_board", s.ota_check_board).field("ota_require_board_mark", s.ota_require_board_mark).end_object();
   w.key("capture").begin_object().field("enabled", s.capture_enabled).field("frames", s.capture_frames).end_object();
+  w.key("summary").begin_object().field("publish", s.summary.publish).field("alerts", s.summary.alerts).field("every_s", s.summary.every_s).field("soc_low_percent", s.summary.soc_low_percent)
+      .field("cell_over_mv", s.summary.cell_over_mv).field("temperature_high_c", s.summary.temperature_high_c).field("temperature_low_c", s.summary.temperature_low_c).end_object();
   w.key("battery").begin_object().field("write_enabled", s.battery.enabled);
   if (secrets) w.field("service_password", s.battery.service_password); else w.field("service_password_set", !s.battery.service_password.empty());
   w.end_object();

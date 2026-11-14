@@ -19,6 +19,8 @@ extern "C" {
 #include "core/console_probe.hpp"
 #include "core/mux_group.hpp"
 #include "core/poller.hpp"
+#include "core/port_leds.hpp"
+#include "core/solar_system.hpp"
 #include "mqtt_link.hpp"
 #include "mux_board.hpp"
 #include "port_leds_hw.hpp"
@@ -52,6 +54,41 @@ std::array<Slot, config::kPortCount> g_slots;
 Publish g_publish;
 
 std::uint64_t uptime_ms() { return static_cast<std::uint64_t>(esp_timer_get_time()) / 1000ULL; }
+
+// ---- the summary of the whole system and the alerts of the node (core/solar_system.hpp) -----------------------------------------------------------
+// Off until the settings turn on the message or the alerts: with both off nothing here takes a lock. Every reading that a port takes is noted; once a second one of the tasks decides the
+// alerts again (a battery that stopped answering clears its own), lights the slow blink of the port LEDs and sends the message when it is due.
+std::mutex g_summary_lock;
+solar::SystemSummary g_summary;
+std::string g_summary_node;
+std::atomic<bool> g_summary_wanted{false};
+std::atomic<std::uint64_t> g_summary_next_tick_ms{0};
+
+void summary_note(const solar::Poller& poller, std::size_t port, std::uint64_t now_ms) {
+  if (!g_summary_wanted.load()) return;
+  std::lock_guard<std::mutex> guard(g_summary_lock);
+  if (poller.kind() == config::Kind::kVoltronic) g_summary.note_inverter(port, poller.device(), poller.pv_power_w(), poller.status().out_w, now_ms);
+  else if (poller.kind() != config::Kind::kRaw) g_summary.note_battery(port, poller.device(), poller.modules(), now_ms);
+}
+
+void summary_tick(std::uint64_t now_ms) {
+  if (!g_summary_wanted.load() || now_ms < g_summary_next_tick_ms.load()) return;
+  g_summary_next_tick_ms.store(now_ms + 1000);
+  std::string payload, topic;
+  std::array<bool, solar::PortLeds::kCount> lit{};
+  {
+    std::lock_guard<std::mutex> guard(g_summary_lock);
+    const std::vector<solar::Alert> alerts = g_summary.evaluate(now_ms);
+    for (const solar::Alert& alert : alerts) if (alert.port < lit.size()) lit[alert.port] = true;
+    if (g_summary.due(now_ms)) {
+      topic = solar::system_topic(g_summary_node);
+      payload = g_summary.json(g_summary_node, mqtt_link::clock_is_set() ? mqtt_link::wall_clock_ms() : now_ms, now_ms, alerts);
+      g_summary.mark_sent(now_ms);
+    }
+  }
+  for (std::size_t port = 0; port < lit.size(); ++port) leds::alert(port, lit[port]);
+  if (!topic.empty() && g_publish) g_publish(topic, payload);
+}
 
 // The capture of the exchanges of the polling: off until the settings turn it on. The flag is read first so that a node with the capture off takes no lock for it.
 std::mutex g_capture_lock;
@@ -190,6 +227,8 @@ void port_task(void* argument) {
     // The message carries the node's wall clock; while the clock is not set it carries the time since the node started, and the server stamps it with the time it receives it.
     const bool ready = poller.take_message(mqtt_link::clock_is_set() ? mqtt_link::wall_clock_ms() : uptime_ms(), topic, payload);
     if (ready && g_publish) g_publish(topic, payload);
+    if (ready) summary_note(poller, slot.index, uptime_ms());
+    summary_tick(uptime_ms());
     const std::uint64_t after = uptime_ms();
     if (ready || after - last_fill_ms >= 1000) {
       last_fill_ms = after;
@@ -289,6 +328,8 @@ void group_task(void* argument) {
     if (turn.reading && g_publish) g_publish(turn.topic, turn.payload);
     if (turn.reading) leds::good(turn.port);
     if (turn.ended && turn.failed) leds::bad(turn.port);
+    if (turn.reading && turn.active) summary_note(*group->members()[turn.member].poller, turn.port, uptime_ms());
+    summary_tick(uptime_ms());
     if (!turn.active) continue;
     Slot& slot = g_slots[turn.port];
     const solar::Poller& poller = *group->members()[turn.member].poller;
@@ -339,6 +380,12 @@ static void start_mux(const config::Settings& settings) {
 
 void start(const config::Settings& settings, Publish publish) {
   g_publish = std::move(publish);
+  {
+    std::lock_guard<std::mutex> guard(g_summary_lock);
+    g_summary.configure(settings.summary);
+    g_summary_node = settings.node_id;
+  }
+  g_summary_wanted.store(settings.summary.publish || settings.summary.alerts);
   set_capture(settings.capture_enabled, settings.capture_frames);
   if (config::profile_is_mux(settings.profile)) { start_mux(settings); return; }
   for (std::size_t i = 0; i < config::kPortCount; ++i) {

@@ -4,6 +4,7 @@
 #include <string>
 
 #include "../core/solar_json.hpp"
+#include "../core/solar_system.hpp"
 
 static void emit(const std::string& node, const std::string& device, const std::string& payload) {
   std::printf("%s %s\n", armor::solar::topic(node, device).c_str(), payload.c_str());
@@ -29,5 +30,17 @@ int main() {
   pylontech::parse_info("Device name : US3000C\nRemain Capacity : 60000 mAH\nTotal Capacity : 74000 mAH\nCycle Times : 340\n", modules[1]);
   emit("solar-1", "us3000-1", battery_json("solar-1", "us3000-1", 3000, modules));
   emit("solar-1", "us3000-2", battery_json("solar-1", "us3000-2", 4000, {}));
+  // the summary of the whole system, empty, with the readings above, and with an alert raised by the node on its own
+  config::SummarySettings summary_settings;
+  summary_settings.publish = true;
+  summary_settings.alerts = true;
+  summary_settings.soc_low_percent = 90;   // the stack above is at 88 %
+  SystemSummary summary;
+  summary.configure(summary_settings);
+  std::printf("%s %s\n", system_topic("solar-1").c_str(), summary.json("solar-1", 1000, 1000, {}).c_str());
+  summary.note_inverter(0, "axpert-1", s.pv_w, s.out_w, 1000);
+  summary.note_battery(1, "us3000-1", modules, 1000);
+  const std::vector<Alert> alerts = summary.evaluate(1000);
+  std::printf("%s %s\n", system_topic("solar-1").c_str(), summary.json("solar-1", 5000, 1000, alerts).c_str());
   return 0;
 }

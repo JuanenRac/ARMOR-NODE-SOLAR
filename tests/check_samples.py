@@ -14,6 +14,7 @@ COMMON = Path(__file__).resolve().parents[2] / "ARMOR-COMMON" / "src"
 if COMMON.is_dir():
     sys.path.insert(0, str(COMMON))
     from armor_common import ContractError, validate_solar_message  # noqa: E402
+    from armor_common.contracts import validate_solar_system  # noqa: E402
 else:
     # Honest degradation, not a vendored copy of the contract: ARMOR-COMMON
     # only exists as a sibling checkout (see ARMOR-COMMON/scripts/armor-project.sh),
@@ -21,6 +22,7 @@ else:
     # tests still run and still gate the build either way.
     ContractError = None
     validate_solar_message = None
+    validate_solar_system = None
 
 
 def main() -> int:
@@ -33,14 +35,17 @@ def main() -> int:
         topic, _, body = line.partition(" ")
         payload = json.loads(body)
         try:
-            validate_solar_message(topic, payload)
+            if topic.endswith("/system"):
+                validate_solar_system(topic, payload)
+            else:
+                validate_solar_message(topic, payload)
         except ContractError as error:
             print(f"{topic} violates the contract: {error}\n  {body}", file=sys.stderr)
             return 1
         kinds.add(payload["kind"])
         checked += 1
-    if checked < 4 or kinds != {"inverter", "battery"}:
-        print(f"expected at least 4 messages of both kinds, got {checked} ({sorted(kinds)})", file=sys.stderr)
+    if checked < 6 or kinds != {"inverter", "battery", "system"}:
+        print(f"expected at least 6 messages of the three kinds, got {checked} ({sorted(kinds)})", file=sys.stderr)
         return 1
     print(f"SOLAR_MESSAGES=PASS {checked} messages accepted by ARMOR-COMMON")
     return 0

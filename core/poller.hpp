@@ -184,6 +184,11 @@ class Poller {
     return stats_.readings > 0 ? "silent" : "garbled";
   }
 
+  // What the last reading said, for the summary of the whole system (core/solar_system.hpp): the inverter's numbers and the modules of a battery stack.
+  const voltronic::Status& status() const { return status_; }
+  double pv_power_w() const { return status_.pv_w + (has_pv2_ ? pv2_.power_w : 0.0); }   // the same figure the inverter's message carries as pv_w
+  const std::vector<pylontech::Module>& modules() const { return modules_; }
+
   const PortStats& stats() const { return stats_; }
   const RawLog& raw() const { return raw_; }
   const std::string& last_payload() const { return last_payload_; }
