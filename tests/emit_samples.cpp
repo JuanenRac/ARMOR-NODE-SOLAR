@@ -31,7 +31,7 @@ int main() {
   emit("solar-1", "us3000-1", battery_json("solar-1", "us3000-1", 3000, modules));
   emit("solar-1", "us3000-2", battery_json("solar-1", "us3000-2", 4000, {}));
   // the summary of the whole system, empty, with the readings above, and with an alert raised by the node on its own
-  config::SummarySettings summary_settings;
+  armor::config::SummarySettings summary_settings;
   summary_settings.publish = true;
   summary_settings.alerts = true;
   summary_settings.soc_low_percent = 90;   // the stack above is at 88 %
