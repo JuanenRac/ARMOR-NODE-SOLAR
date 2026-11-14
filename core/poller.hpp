@@ -23,6 +23,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -114,6 +115,7 @@ class Poller {
       std::vector<std::uint8_t> out;
       out.swap(pending_);
       stats_.bytes_tx += static_cast<std::uint32_t>(out.size());
+      if (capture_) capture_(true, out.data(), out.size());
       return out;
     }
     // a reading that has not been taken yet is not overwritten by the next cycle
@@ -122,6 +124,7 @@ class Poller {
     std::vector<std::uint8_t> out;
     out.swap(pending_);
     stats_.bytes_tx += static_cast<std::uint32_t>(out.size());
+    if (capture_) capture_(true, out.data(), out.size());
     return out;
   }
 
@@ -130,6 +133,9 @@ class Poller {
   void set_optional(bool pv2, int parallel_units) { pv2_wanted_ = pv2; parallel_ = parallel_units < 0 ? 0 : parallel_units > 10 ? 10 : parallel_units; }
   // Whether the unit is asked what it says about itself (its serial number, firmware, ratings and settings, and the energy the panels have made in all): off until the firmware turns it on.
   void set_identity(bool wanted) { identity_wanted_ = wanted; }
+  // Where the requests this poller sends (tx = true) and the bytes it hears are copied, for the capture of the traffic (core/frame_capture.hpp); empty = nowhere. Only the polling goes through here.
+  using CaptureSink = std::function<void(bool tx, const std::uint8_t* data, std::size_t length)>;
+  void set_capture(CaptureSink sink) { capture_ = std::move(sink); }
   // Whether the second PV input has answered (in the last cycle), and what it said.
   bool has_pv2() const { return has_pv2_; }
 
@@ -148,6 +154,7 @@ class Poller {
     stats_.bytes_rx += static_cast<std::uint32_t>(length);
     last_rx_ms_ = now_ms;
     raw_.add(data, length);
+    if (capture_) capture_(false, data, length);
     if (kind_ == config::Kind::kVoltronic) rx_voltronic(data, length, now_ms);
     else if (kind_ == config::Kind::kPylontech) rx_pylontech(data, length, now_ms);
     else if (kind_ == config::Kind::kAnt) rx_ant(data, length, now_ms);
@@ -697,6 +704,7 @@ class Poller {
   std::string last_payload_;
   PortStats stats_;
   RawLog raw_;
+  CaptureSink capture_;
 };
 
 }  // namespace armor::solar

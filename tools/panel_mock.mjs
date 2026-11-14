@@ -53,6 +53,7 @@ const config = {
   time: { ntp_enabled: true, ntp: "pool.ntp.org", zone: "CET-1CEST,M3.5.0,M10.5.0/3" },
   system: { auto_restart_hours: 0, login_limit_per_minute: 30 },
   security: { seal_secrets: false, ota_check_board: true, ota_require_board_mark: true },
+  capture: { enabled: false, frames: 48 },
   web: { mode: "both" },
   ble: { mode: "setup" },
   ui: { language: "en" },
@@ -201,6 +202,9 @@ const server = createServer(async (request, response) => {
     return json(response, 200, { port: number, state: "done", error: "", step: 57, total: 57, result: antSettings });
   }
   if (method === "GET" && route === "ports/raw") return json(response, 200, { port: Number(url.searchParams.get("port")), text: rawText });
+  if (method === "GET" && route === "capture") { if (!needAdmin()) return; return json(response, 200, { enabled: config.capture.enabled, capacity: config.capture.enabled ? config.capture.frames : 0, stored: 0, dropped: 0, refused: 0 }); }
+  if (method === "GET" && route === "capture/frames") { if (!needAdmin()) return; response.writeHead(200, { "Content-Type": "text/plain" }); return response.end(""); }
+  if (method === "POST" && route === "capture/clear") { if (!needAdmin()) return; return json(response, 200, { ok: true }); }
   if (method === "GET" && route === "users") { if (!needAdmin()) return; return json(response, 200, [...users].map(([name, u]) => ({ name, role: u.role }))); }
   if (method === "POST" && route === "users") {
     if (!needAdmin()) return;

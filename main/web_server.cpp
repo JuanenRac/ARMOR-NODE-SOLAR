@@ -520,6 +520,31 @@ esp_err_t get_port_raw(httpd_req_t* r) {
   return send_json(r, 200, w.str());
 }
 
+// The capture of the exchanges of the polling (off by default, see the setting capture.enabled): what is kept, and the entries as text to download. Only an administrator.
+esp_err_t get_capture(httpd_req_t* r) {
+  Who who;
+  if (!require(r, who, true, false)) return ESP_OK;
+  return send_json(r, 200, manager::capture_json());
+}
+
+esp_err_t get_capture_frames(httpd_req_t* r) {
+  Who who;
+  if (!require(r, who, true, false)) return ESP_OK;
+  const std::string text = manager::capture_text();
+  security_headers(r);
+  httpd_resp_set_status(r, status_line(200));
+  httpd_resp_set_type(r, "text/plain; charset=utf-8");
+  httpd_resp_set_hdr(r, "Content-Disposition", "attachment; filename=\"solar_frames.log\"");
+  return httpd_resp_send(r, text.c_str(), static_cast<ssize_t>(text.size()));
+}
+
+esp_err_t post_capture_clear(httpd_req_t* r) {
+  Who who;
+  if (!require(r, who, true, true)) return ESP_OK;
+  manager::capture_clear();
+  return send_ok(r);
+}
+
 const char* result_code(auth::Result result) {
   switch (result) {
     case auth::Result::kOk: return "ok";
@@ -913,6 +938,8 @@ esp_err_t api_handler(httpd_req_t* r) {
     if (route == "users") return get_users(r);
     if (route == "ble-pin") return get_ble_pin(r);
     if (route == "log") return get_log(r);
+    if (route == "capture") return get_capture(r);
+    if (route == "capture/frames") return get_capture_frames(r);
     if (route == "coredump") return get_coredump(r);
     if (route == "coredump/info") return get_coredump_info(r);
     if (route == "ota/check") return get_ota_check(r);
@@ -925,6 +952,7 @@ esp_err_t api_handler(httpd_req_t* r) {
     if (route == "users") return post_user(r);
     if (route == "ports/ant-settings") return post_bms_settings(r);
     if (route == "ports/console") return post_console(r);
+    if (route == "capture/clear") return post_capture_clear(r);
     if (route == "reboot") return post_reboot(r);
     if (route == "factory-reset") return post_factory_reset(r);
     if (route == "ota") return post_ota(r);

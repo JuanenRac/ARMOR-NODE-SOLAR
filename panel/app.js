@@ -649,8 +649,28 @@ function portCard(index) {
       S.rawOpen === index ? el("pre", { class: "log", id: "port-raw" }, S.raw || t("rawEmpty")) : null] : null);
 }
 
+// The capture of the exchanges with the equipment (off by default): the switch and the size are settings; here is what is kept, the download as a text file and the button that forgets it.
+function captureCard() {
+  const result = el("p", { class: "muted", role: "status" });
+  const look = async () => {
+    const r = await api("GET", "capture");
+    if (!r.ok) { result.textContent = errorText(r.data.error); result.className = "err"; return; }
+    result.textContent = r.data.enabled ? t("captureStatus", r.data.stored, r.data.capacity, r.data.dropped) : t("captureOffNow"); result.className = "muted";
+  };
+  const clear = async () => {
+    const r = await api("POST", "capture/clear", {});
+    if (!r.ok) { result.textContent = errorText(r.data.error); result.className = "err"; return; }
+    await look();
+  };
+  return card(t("captureTitle"), field("captureEnabled", "capture.enabled", { type: "checkbox" }), field("captureFrames", "capture.frames", { type: "number", min: 8, max: 128 }),
+    el("p", { class: "muted" }, t("captureHelp")),
+    el("div", { class: "actions" }, el("button", { class: "b", disabled: !isAdmin(), onclick: look }, t("captureRefresh")),
+      el("a", { class: "b", href: "api/v1/capture/frames", download: "solar_frames.log" }, t("captureDownload")),
+      el("button", { class: "b danger", disabled: !isAdmin(), onclick: clear }, t("captureClear"))), result);
+}
+
 function portsPage() {
-  return el("div", {}, note(t("portsWarn")), el("p", { class: "muted" }, t("portsIntro")), note(t("portsRestart"), "info"),
+  return el("div", {}, note(t("portsWarn")), el("p", { class: "muted" }, t("portsIntro")), note(t("portsRestart"), "info"), captureCard(),
     el("div", { class: "grid wide" }, [boardCard()].concat(Array.from({ length: S.cfg.profile === "mux" ? Math.min(10, muxPortCount()) : 10 }, (_, i) => i).map(portCard))));
 }
 

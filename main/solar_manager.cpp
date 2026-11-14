@@ -53,6 +53,18 @@ Publish g_publish;
 
 std::uint64_t uptime_ms() { return static_cast<std::uint64_t>(esp_timer_get_time()) / 1000ULL; }
 
+// The capture of the exchanges of the polling: off until the settings turn it on. The flag is read first so that a node with the capture off takes no lock for it.
+std::mutex g_capture_lock;
+framecap::Capture g_capture;
+std::atomic<bool> g_capture_on{false};
+std::function<void(bool, const std::uint8_t*, std::size_t)> capture_sink(std::size_t port) {
+  return [port](bool tx, const std::uint8_t* data, std::size_t length) {
+    if (!g_capture_on.load()) return;
+    std::lock_guard<std::mutex> guard(g_capture_lock);
+    g_capture.push(static_cast<unsigned>(port), tx, data, length);
+  };
+}
+
 void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::uint32_t framing_errors, const std::string& payload) {
   const solar::PortStats& stats = poller.stats();
   std::lock_guard<std::mutex> guard(slot.lock);
@@ -162,6 +174,7 @@ void port_task(void* argument) {
   solar::Poller& poller = *poller_owner;
   poller.set_optional(cfg.pv2, cfg.parallel);
   poller.set_identity(true);
+  poller.set_capture(capture_sink(slot.index + 1));
   std::uint8_t buffer[256];
   std::uint64_t last_fill_ms = 0, last_raw_total = 0;
   for (;;) {
@@ -227,6 +240,7 @@ void group_task(void* argument) {
     member.poller = std::make_unique<solar::Poller>(kind, slot.node_id, cfg.name, config::effective_poll_s(cfg), cfg.modules, cfg.dialect, cfg.cells_per_cycle);
     member.poller->set_optional(cfg.pv2, cfg.parallel);
     member.poller->set_identity(true);
+    member.poller->set_capture(capture_sink(index + 1));
     members.push_back(std::move(member));
   }
   const std::unique_ptr<solar::MuxGroup> group = std::make_unique<solar::MuxGroup>(std::move(members));
@@ -325,6 +339,7 @@ static void start_mux(const config::Settings& settings) {
 
 void start(const config::Settings& settings, Publish publish) {
   g_publish = std::move(publish);
+  set_capture(settings.capture_enabled, settings.capture_frames);
   if (config::profile_is_mux(settings.profile)) { start_mux(settings); return; }
   for (std::size_t i = 0; i < config::kPortCount; ++i) {
     Slot& slot = g_slots[i];
@@ -439,6 +454,24 @@ bool cancel_battery_job(std::size_t index) {
   if (!slot.battery_job || slot.battery_job->committed.load()) return false;
   slot.battery_job->cancel = true;
   return true;
+}
+
+void set_capture(bool enabled, int frames) {
+  std::lock_guard<std::mutex> guard(g_capture_lock);
+  g_capture.configure(enabled, frames);
+  g_capture_on.store(g_capture.enabled());
+}
+
+std::string capture_text() { std::lock_guard<std::mutex> guard(g_capture_lock); return g_capture.text(); }
+
+void capture_clear() { std::lock_guard<std::mutex> guard(g_capture_lock); g_capture.clear(); }
+
+std::string capture_json() {
+  json::Writer w;
+  std::lock_guard<std::mutex> guard(g_capture_lock);
+  w.begin_object().field("enabled", g_capture.enabled()).field("capacity", static_cast<long long>(g_capture.capacity())).field("stored", static_cast<long long>(g_capture.size()))
+      .field("dropped", static_cast<long long>(g_capture.dropped())).field("refused", static_cast<long long>(g_capture.refused())).end_object();
+  return w.str();
 }
 
 std::string raw_dump(std::size_t index) {

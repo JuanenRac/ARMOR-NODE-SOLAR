@@ -220,6 +220,8 @@ bool needs_restart(const config::Settings& before, const config::Settings& after
   a->node_name = b->node_name = "";
   a->language = b->language = "en";
   a->time.zone = b->time.zone = "";   // the zone is applied as soon as it is saved (clocksync::set_zone below)
+  a->capture_enabled = b->capture_enabled = false;   // the capture of the exchanges is applied as soon as it is saved too
+  a->capture_frames = b->capture_frames = framecap::kDefaultFrames;
   return config::to_json(*a, true) != config::to_json(*b, true);
 }
 }  // namespace
@@ -234,6 +236,7 @@ PutResult put_config(std::string_view document, config::Problems& problems, bool
   if (!store::save_settings(*after)) return PutResult::kStorage;
   restart_required = needs_restart(*before, *after);
   if (before->time.zone != after->time.zone) clocksync::set_zone(after->time.zone);
+  manager::set_capture(after->capture_enabled, after->capture_frames);
   return PutResult::kSaved;
 }
 
