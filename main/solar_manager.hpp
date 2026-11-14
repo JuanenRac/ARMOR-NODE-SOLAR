@@ -89,6 +89,12 @@ ConsoleStatus console_status(std::size_t index);
 // The last bytes a port received, as hexadecimal lines with the printable characters beside them.
 std::string raw_dump(std::size_t index);
 
+// The capture of the exchanges of the polling (core/frame_capture.hpp): turned on or off and sized by the settings, applies at once; the text has one FRAME line per entry.
+void set_capture(bool enabled, int frames);
+std::string capture_text();
+std::string capture_json();
+void capture_clear();
+
 // The last reading of every port that has one, as a JSON array of the messages the node publishes.
 std::string readings_json();
 

@@ -22,6 +22,7 @@
 #include "board_s3.hpp"
 #include "admin_sources.hpp"
 #include "json.hpp"
+#include "frame_capture.hpp"
 #include "mqtt_tls.hpp"
 #include "net_text.hpp"
 #include "node_id.hpp"
@@ -200,6 +201,9 @@ struct Settings {
   // also refuses an image that carries no mark at all (an old image); turn it off to go back to a version that predates the marks.
   bool ota_check_board = true;
   bool ota_require_board_mark = true;
+  // The capture of the exchanges with the inverters and batteries for the bench (core/frame_capture.hpp): off, and 48 entries when it is turned on. It applies at once.
+  bool capture_enabled = false;
+  int capture_frames = framecap::kDefaultFrames;
   BatteryWrite battery;
 };
 
@@ -531,6 +535,10 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
     read_bool(*security, "ota_check_board", s.ota_check_board, "security.ota_check_board", problems);
     read_bool(*security, "ota_require_board_mark", s.ota_require_board_mark, "security.ota_require_board_mark", problems);
   }
+  if (const json::Value* capture = document.get("capture"); capture != nullptr && capture->is_object()) {
+    read_bool(*capture, "enabled", s.capture_enabled, "capture.enabled", problems);
+    read_int(*capture, "frames", s.capture_frames, framecap::kMinFrames, framecap::kMaxFrames, "capture.frames", problems);
+  }
   if (const json::Value* battery = document.get("battery"); battery != nullptr && battery->is_object()) {
     read_bool(*battery, "write_enabled", s.battery.enabled, "battery.write_enabled", problems);
     read_secret(*battery, "service_password", s.battery.service_password, "battery.service_password", problems);
@@ -774,6 +782,7 @@ inline std::string to_json(const Settings& s, bool secrets) {
   w.key("time").begin_object().field("ntp_enabled", s.time.ntp_enabled).field("ntp", s.time.ntp).field("zone", s.time.zone).end_object();
   w.key("system").begin_object().field("auto_restart_hours", s.auto_restart_hours).field("login_limit_per_minute", s.login_limit_per_minute).end_object();
   w.key("security").begin_object().field("seal_secrets", s.seal_secrets).field("ota_check_board", s.ota_check_board).field("ota_require_board_mark", s.ota_require_board_mark).end_object();
+  w.key("capture").begin_object().field("enabled", s.capture_enabled).field("frames", s.capture_frames).end_object();
   w.key("battery").begin_object().field("write_enabled", s.battery.enabled);
   if (secrets) w.field("service_password", s.battery.service_password); else w.field("service_password_set", !s.battery.service_password.empty());
   w.end_object();
