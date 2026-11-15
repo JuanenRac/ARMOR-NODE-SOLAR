@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.7] - System summary, own alerts, exchange capture, random Bluetooth PIN and guarded firmware upload
+
 - **The test against a real broker retries the start of the broker:** `tests/check_mosquitto.py` (from the shared firmware base) makes up to three attempts to start Mosquitto, 1 s and 2 s apart and each on a new port, before it reports `mosquitto did not start`. Only the start is retried, never the checks that follow.
 - **The shared firmware base is brought up to date:** the readers of the messages know the system summary of a solar gateway and the notice of the network node, and the rule that decides when the broker client restarts and when it moves to the next saved broker lives in one tested place (`core/broker_failover.hpp`, with its host test). No change of behaviour is meant.
 - **A summary of the whole system and alerts raised by the node on its own, both off by default:** with `summary.publish` the node sends `armor/solar/<node>/system` (the power of the panels, the load, their balance, the mean state of charge and the alerts), and with `summary.alerts` it raises `soc_low`, `cell_over_voltage`, `temperature_high` and `temperature_low` from limits in its configuration file, with a little hysteresis; while an alert lasts the LED of the port of that device blinks slowly. The host tests drive the poller against a simulated RS-485 line with a Pylontech stack (noise, a silent stack, a reply in small pieces, a line cut in the middle of a reply, a module that disappears) and the messages are checked against the shared contract. Nothing of this has run on a board.
