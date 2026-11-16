@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The manual firmware upload and the change of boot slot take the same lock as an installation from GitHub and a copy of the slot:** only one of them writes or reads the slot at a time (a second one is answered `409 ota_busy`), and the buffers of the upload and of the slot check are no longer shared between the two web servers. Before, an upload could overlap another writer or an upload through the other server and end in a corrupt image. Not run on a board; the build is checked in CI.
 - **The order channel of the node can check a signature before it reads anything:** `node_control::Options` has an optional `authorize` hook that sees each order that arrives on `armor/control/...` and drops it, before it can arm anything, when the node says no. A node that does not set it behaves as before.
 
 ## [0.6.7] - System summary, own alerts, exchange capture, random Bluetooth PIN and guarded firmware upload

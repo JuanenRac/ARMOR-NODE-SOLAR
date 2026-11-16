@@ -8,6 +8,7 @@
 #include "node_diag.hpp"
 #include "node_guard.hpp"
 
+#include <vector>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -664,9 +665,10 @@ esp_err_t post_reboot(httpd_req_t* r) {
 // Reads a slot back and looks for the board marks of the image in it (image_board.hpp). A slot written before the marks existed has none.
 image_board::Verdict slot_board_verdict(const esp_partition_t* slot) {
   image_board::Scanner scanner;
-  static std::uint8_t piece[2048];
-  for (std::size_t at = 0; at < slot->size; at += sizeof piece) {
-    const std::size_t n = slot->size - at < sizeof piece ? slot->size - at : sizeof piece;
+  std::vector<std::uint8_t> piece_buffer(2048);   // of its own: the two servers (80 and 443) run in different tasks
+  std::uint8_t* const piece = piece_buffer.data();
+  for (std::size_t at = 0; at < slot->size; at += piece_buffer.size()) {
+    const std::size_t n = slot->size - at < piece_buffer.size() ? slot->size - at : piece_buffer.size();
     if (esp_partition_read(slot, at, piece, n) != ESP_OK) break;
     scanner.feed(piece, n);
   }
@@ -678,6 +680,8 @@ image_board::Verdict slot_board_verdict(const esp_partition_t* slot) {
 esp_err_t post_ota_switch(httpd_req_t* r) {
   Who who;
   if (!require(r, who, true, true)) return ESP_OK;
+  if (!github_update::begin_manual_write()) return send_error(r, 409, "ota_busy");   // the slot is being written by an upload, an installation or a copy
+  struct Release { ~Release() { github_update::end_manual_write(); } } release;
   const esp_partition_t* other = esp_ota_get_next_update_partition(nullptr);
   esp_app_desc_t description{};
   if (other == nullptr || esp_ota_get_partition_description(other, &description) != ESP_OK) return send_error(r, 409, "slot_empty");
@@ -787,6 +791,9 @@ esp_err_t post_ota(httpd_req_t* r) {
   const std::size_t total = r->content_len;
   if (total < 100 * 1024 || total > kMaxFirmware) return send_error(r, 413, "bad_size");
   store::snapshot_settings(esp_app_get_description()->version);   // a copy of the settings, for the start to use if the new firmware cannot read them
+  // One writer of the slot at a time: an installation from GitHub, a copy of the slot or another upload would write the same flash.
+  if (!github_update::begin_manual_write()) return send_error(r, 409, "ota_busy");
+  struct Release { ~Release() { github_update::end_manual_write(); } } release;
   const esp_partition_t* target = esp_ota_get_next_update_partition(nullptr);
   if (target == nullptr) return send_error(r, 500, "no_partition");
   esp_ota_handle_t handle = 0;
@@ -795,12 +802,13 @@ esp_err_t post_ota(httpd_req_t* r) {
   mbedtls_sha256_init(&sha);
   mbedtls_sha256_starts(&sha, 0);
   image_board::Scanner board_scanner;   // the mark of the board the image was built for, found while it arrives
-  static std::uint8_t chunk[2048];
+  std::vector<std::uint8_t> chunk_buffer(2048);   // of its own: the two servers (80 and 443) run in different tasks
+  std::uint8_t* const chunk = chunk_buffer.data();
   std::size_t got = 0;
   bool first = true;
   std::int64_t last_chunk_us = esp_timer_get_time();
   while (got < total) {
-    const int n = httpd_req_recv(r, reinterpret_cast<char*>(chunk), sizeof chunk < total - got ? sizeof chunk : total - got);
+    const int n = httpd_req_recv(r, reinterpret_cast<char*>(chunk), chunk_buffer.size() < total - got ? chunk_buffer.size() : total - got);
     if (n == HTTPD_SOCK_ERR_TIMEOUT) { if (esp_timer_get_time() - last_chunk_us > 15000000) { esp_ota_abort(handle); mbedtls_sha256_free(&sha); return send_error(r, 408, "upload_stalled"); } continue; }
     last_chunk_us = esp_timer_get_time();
     if (n <= 0) { esp_ota_abort(handle); mbedtls_sha256_free(&sha); return send_error(r, 400, "upload_interrupted"); }
