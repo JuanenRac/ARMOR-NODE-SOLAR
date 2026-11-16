@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The copy of the running firmware to the other slot waits for an install or a manual write that is on:** `start_copy()` takes the same lock as `install()` and the manual writes (not only the flag of its own job) and gives it back when it ends, so two writers can no longer open the same slot.
 - **The manual firmware upload and the change of boot slot take the same lock as an installation from GitHub and a copy of the slot:** only one of them writes or reads the slot at a time (a second one is answered `409 ota_busy`), and the buffers of the upload and of the slot check are no longer shared between the two web servers. Before, an upload could overlap another writer or an upload through the other server and end in a corrupt image. Not run on a board; the build is checked in CI.
 - **A battery order is re-checked when it is executed:** the run stops with `battery_changed`, before anything is written, when the first `info` it reads is not the battery that was armed (model, serial, board and firmware), and `execute` asks again for the conditions of the arm step (battery present, idle, no critical alarm). Moving the console cable to another module inside the arm window can no longer write to the wrong battery.
 - **Switching the battery writes off in the panel is immediate:** saving the settings applies the new switch and the service password to the maintenance channel at once and forgets the orders armed so far; switching them on still needs a restart.
