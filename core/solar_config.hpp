@@ -162,6 +162,7 @@ struct Clock {
 struct BatteryWrite {
   bool enabled = false;
   std::string service_password;
+  std::string expert_mode = "blocklist";   // the expert console: "blocklist" (default), "strict" (plain readings only) or "off" (only what must never be sent is refused)
 };
 
 // The summary of the whole system (core/solar_system.hpp) and the alerts the node raises on its own. Everything is OFF until the owner turns it on: the message needs the broker to
@@ -565,6 +566,10 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
   if (const json::Value* battery = document.get("battery"); battery != nullptr && battery->is_object()) {
     read_bool(*battery, "write_enabled", s.battery.enabled, "battery.write_enabled", problems);
     read_secret(*battery, "service_password", s.battery.service_password, "battery.service_password", problems);
+    if (const json::Value* mode = battery->get("expert_mode"); mode != nullptr) {
+      if (mode->is_string() && (mode->text == "blocklist" || mode->text == "strict" || mode->text == "off")) s.battery.expert_mode = mode->text;
+      else bad(problems, "battery.expert_mode", "invalid");
+    }
   }
 }
 
@@ -809,7 +814,7 @@ inline std::string to_json(const Settings& s, bool secrets) {
   w.key("capture").begin_object().field("enabled", s.capture_enabled).field("frames", s.capture_frames).end_object();
   w.key("summary").begin_object().field("publish", s.summary.publish).field("alerts", s.summary.alerts).field("every_s", s.summary.every_s).field("soc_low_percent", s.summary.soc_low_percent)
       .field("cell_over_mv", s.summary.cell_over_mv).field("temperature_high_c", s.summary.temperature_high_c).field("temperature_low_c", s.summary.temperature_low_c).end_object();
-  w.key("battery").begin_object().field("write_enabled", s.battery.enabled);
+  w.key("battery").begin_object().field("write_enabled", s.battery.enabled).field("expert_mode", s.battery.expert_mode);
   if (secrets) w.field("service_password", s.battery.service_password); else w.field("service_password_set", !s.battery.service_password.empty());
   w.end_object();
   w.end_object();

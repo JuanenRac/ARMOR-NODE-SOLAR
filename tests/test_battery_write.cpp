@@ -339,8 +339,35 @@ static void test_values_are_bounded() {
   CHECK(op_from_name("set_clock", op) && op == Op::kSetClock && !op_from_name("preflight", op) && !op_from_name("format", op) && !op_from_name("", op));
 }
 
+static void test_expert_modes() {
+  // the default mode refuses the words that change what the battery keeps and the switching of the power outputs, even as a later word
+  for (const char* line : {"ctrl cfet on", "ctrl dfet off", "ctrl cfet", "setlowcfg 1", "shut", "trst", "statc", "logc", "datac event", "totalcoul 5", "config 1", "prot bov dis", "help prot", "CTRL CFET ON"}) {
+    CHECK(expert_line(line).empty());
+    CHECK(expert_line(line, ExpertMode::kStrict).empty());
+  }
+  // "off" lifts those but never the words of the shared list
+  CHECK(expert_line("ctrl cfet on", ExpertMode::kOff) == "ctrl cfet on" && expert_line("shut", ExpertMode::kOff) == "shut");
+  CHECK(expert_line("updata", ExpertMode::kOff).empty() && expert_line("pwr eepw", ExpertMode::kOff).empty());
+  // "strict" takes the plain readings only
+  CHECK(expert_line("pwr", ExpertMode::kStrict) == "pwr" && expert_line("bat 3", ExpertMode::kStrict) == "bat 3" && expert_line("datalist event 0", ExpertMode::kStrict) == "datalist event 0");
+  CHECK(expert_line("nonsense 1", ExpertMode::kStrict).empty() && expert_line("nonsense 1") == "nonsense 1");
+  // a line that is not a plain reading needs accept_risk; a reading does not
+  bench::Battery b;
+  Plan plan; std::string why;
+  CHECK(build_plan(request(Op::kExpertCommand, "{\"line\":\"pwr\"}", identity_of(b)), plan, why));
+  CHECK(!build_plan(request(Op::kExpertCommand, "{\"line\":\"nonsense 1\"}", identity_of(b)), plan, why) && why == refusal::kRiskNotAccepted);
+  CHECK(build_plan(request(Op::kExpertCommand, "{\"line\":\"nonsense 1\",\"accept_risk\":true}", identity_of(b)), plan, why));
+  Request strict = request(Op::kExpertCommand, "{\"line\":\"nonsense 1\",\"accept_risk\":true}", identity_of(b));
+  strict.expert_mode = ExpertMode::kStrict;
+  CHECK(!build_plan(strict, plan, why) && why == refusal::kExpertBlocked);
+  // the names of the modes
+  ExpertMode mode = ExpertMode::kOff;
+  CHECK(parse_expert_mode("blocklist", mode) && mode == ExpertMode::kBlocklist && parse_expert_mode("strict", mode) && mode == ExpertMode::kStrict && parse_expert_mode("off", mode) && mode == ExpertMode::kOff);
+  CHECK(!parse_expert_mode("", mode) && !parse_expert_mode("Strict", mode) && std::string(to_text(ExpertMode::kStrict)) == "strict");
+}
+
 static void test_expert_line() {
-  CHECK(expert_line("pwr") == "pwr" && expert_line("  bat   3 ") == "bat 3" && expert_line("ctrl cfet on") == "ctrl cfet on" && expert_line("datalist event 0") == "datalist event 0");
+  CHECK(expert_line("pwr") == "pwr" && expert_line("  bat   3 ") == "bat 3" && expert_line("ctrl bat on") == "ctrl bat on" && expert_line("datalist event 0") == "datalist event 0");
   for (const char* blocked : {"updata", "eepe 0", "eepw 0 1 2 3", "eepr 0 0 16", "tbar X", "tmbar", "flaw 0 1 2", "flae", "mm 1 2 3", "login x", "logout", "re 1 info", "m2s", "save", "UPDATA", "Tbar X123456789", "rtcw 1 2", "socw 1 2", "urates 9600", "setprt lg"}) CHECK(expert_line(blocked).empty());
   CHECK(expert_line("pwr tbar").empty() && expert_line("help eepe").empty());                  // not even as a later word
   for (const char* bad : {"", " ", "pwr;shut", "pwr\nshut", "pwr\r", "pwr|x", "pwr&", "$(x)", "bat `1`", "ctrl cfet on\x01", "caf\xC3\xA9"}) CHECK(expert_line(bad).empty());
@@ -686,9 +713,16 @@ static void test_the_rest_of_the_writes() {
   CHECK(r.outcome == "ok" && e2.serial.empty());
   // the expert console: what is sent is the checked line; a reply the battery refuses is shown, not hidden
   bench::Battery x;
-  run_plan(plan_of(Op::kExpertCommand, "{\"line\":\"ctrl dfet off\"}", x), x, r);
-  CHECK(r.outcome == "ok" && x.outputs["dfet"] == "OFF");
-  run_plan(plan_of(Op::kExpertCommand, "{\"line\":\"nonsense 1\"}", x), x, r);
+  {
+    // with the console "off" (only what must never be sent is refused) the switching of an output goes through, once the risk is accepted
+    Plan open; std::string why;
+    Request wide = request(Op::kExpertCommand, "{\"line\":\"ctrl dfet off\",\"accept_risk\":true}", identity_of(x));
+    wide.expert_mode = ExpertMode::kOff;
+    CHECK(build_plan(wide, open, why));
+    run_plan(open, x, r);
+    CHECK(r.outcome == "ok" && x.outputs["dfet"] == "OFF");
+  }
+  run_plan(plan_of(Op::kExpertCommand, "{\"line\":\"nonsense 1\",\"accept_risk\":true}", x), x, r);
   CHECK(r.outcome == "ok" && r.transcript.find("Invalid command") != std::string::npos);
 }
 
@@ -888,6 +922,7 @@ int main() {
   test_image_checks();
   test_values_are_bounded();
   test_expert_line();
+  test_expert_modes();
   test_preconditions();
   test_the_token();
   test_reads_and_the_clock();
