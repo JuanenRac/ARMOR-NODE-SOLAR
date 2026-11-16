@@ -279,8 +279,39 @@ struct Request {
   Op op = Op::kPreflight;
   json::Value params;                      // an object (possibly empty)
   Identity identity;                       // what the arm step read
+  ExpertMode expert_mode = ExpertMode::kBlocklist;   // battery.expert_mode of the node
   int local_year = 0, local_month = 0, local_day = 0, local_hour = 0, local_minute = 0, local_second = 0;   // the time to write, for set_clock / pcb_setup
 };
+
+// How much of the expert console is open (setting battery.expert_mode). "blocklist" (the default): everything except the words below and the switching of the power outputs; a line that
+// is not a plain reading needs `accept_risk`. "strict": only the plain readings. "off": only the words that must never be sent at all are refused, and a line that is not a plain reading
+// still needs `accept_risk`.
+enum class ExpertMode { kBlocklist, kStrict, kOff };
+inline const char* to_text(ExpertMode mode) { return mode == ExpertMode::kStrict ? "strict" : mode == ExpertMode::kOff ? "off" : "blocklist"; }
+inline bool parse_expert_mode(std::string_view text, ExpertMode& out) {
+  if (text == "blocklist") out = ExpertMode::kBlocklist;
+  else if (text == "strict") out = ExpertMode::kStrict;
+  else if (text == "off") out = ExpertMode::kOff;
+  else return false;
+  return true;
+}
+
+// Words that change what the battery keeps or what it does: they have typed operations (with their checks and read-backs), so the console of the "blocklist" and "strict" modes does not take them.
+inline const std::vector<const char*>& expert_extra_blocked_words() {
+  static const std::vector<const char*> blocked = {"setlowcfg", "shut", "trst", "statc", "logc", "datac", "totalcoul", "config", "prot"};
+  return blocked;
+}
+// The words that switch the power outputs of the battery (charge and discharge FETs): not through the console unless the mode is "off".
+inline bool expert_power_word(std::string_view word) { return word == "cfet" || word == "dfet"; }
+// The plain readings: no `accept_risk` is needed for them, and they are the only ones "strict" takes.
+inline const std::vector<const char*>& expert_reading_words() {
+  static const std::vector<const char*> readings = {"pwr", "bat", "info", "soh", "stat", "help", "datalist"};
+  return readings;
+}
+inline bool expert_reading_word(std::string_view word) {
+  for (const char* r : expert_reading_words()) if (word == r) return true;
+  return false;
+}
 
 // The words that may not be sent through the expert console: they have their own typed operations (or must never be sent at all).
 inline const std::vector<const char*>& expert_blocked_words() {
@@ -293,7 +324,7 @@ inline bool expert_blocked_word(std::string_view word) {
 }
 
 // An expert line: one command, ASCII, at most 48 characters, words of letters, digits and a few signs; its first word may not be one of the blocked ones. Returns the clean line or "".
-inline std::string expert_line(std::string_view text) {
+inline std::string expert_line(std::string_view text, ExpertMode mode = ExpertMode::kBlocklist) {
   std::string out;
   bool gap = false;
   for (char c : text) {
@@ -311,6 +342,10 @@ inline std::string expert_line(std::string_view text) {
   std::string first = out.substr(0, space);
   for (char& c : first) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
   if (expert_blocked_word(first)) return "";
+  if (mode == ExpertMode::kStrict && !expert_reading_word(first)) return "";
+  if (mode != ExpertMode::kOff) {
+    for (const char* w : expert_extra_blocked_words()) if (first == w) return "";
+  }
   // no later word may be a blocked one either (`help` followed by a name is harmless, but a line like "pwr tbar" is not worth the doubt)
   std::size_t pos = space;
   while (pos != std::string::npos) {
@@ -318,9 +353,17 @@ inline std::string expert_line(std::string_view text) {
     std::string w = out.substr(pos + 1, next == std::string::npos ? std::string::npos : next - pos - 1);
     for (char& c : w) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
     if (expert_blocked_word(w)) return "";
+    if (mode != ExpertMode::kOff && (expert_power_word(w) || [&] { for (const char* b : expert_extra_blocked_words()) if (w == b) return true; return false; }())) return "";
     pos = next;
   }
   return out;
+}
+
+// The first word of a clean expert line, in lower case.
+inline std::string expert_first_word(const std::string& line) {
+  std::string first = line.substr(0, line.find(' '));
+  for (char& c : first) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  return first;
 }
 
 inline std::string two(int v) { char b[8]; std::snprintf(b, sizeof b, "%02d", v); return b; }
@@ -612,8 +655,9 @@ inline bool build_plan(const Request& request, Plan& plan, std::string& why) {
       break;
     }
     case Op::kExpertCommand: {
-      const std::string line = expert_line(p.string_or("line", ""));
+      const std::string line = expert_line(p.string_or("line", ""), request.expert_mode);
       if (line.empty()) return bad(refusal::kExpertBlocked);
+      if (!expert_reading_word(expert_first_word(line)) && !p.bool_or("accept_risk", false)) return bad(refusal::kRiskNotAccepted);   // a line that is not a plain reading may change the battery
       Step s; s.phase = kPhaseWrite; s.label = "expert"; s.send = line; s.write = true; s.tolerate_invalid = true; s.tolerate_unknown = true; s.timeout_ms = 8'000;
       steps.push_back(s);
       plan.canonical = "expert_command " + line;

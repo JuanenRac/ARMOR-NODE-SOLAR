@@ -37,6 +37,7 @@ bat::Guard g_guard;
 bat::ImageStage g_stage;
 std::string g_node;
 bool g_enabled = false;
+bat::ExpertMode g_expert_mode = bat::ExpertMode::kBlocklist;   // battery.expert_mode, under g_lock when it changes
 std::string g_password;
 
 std::uint64_t uptime_ms() { return static_cast<std::uint64_t>(esp_timer_get_time()) / 1000ULL; }
@@ -220,7 +221,7 @@ void arm(const Context& ctx, bat::Op op, const json::Value& in) {
     const std::string pre = bat::preconditions(op, facts, params);
     if (pre != bat::refusal::kNone) { reject(ctx, pre.c_str()); return; }
     bat::Request request;
-    request.op = op; request.params = params; request.identity = result.identity;
+    request.op = op; request.params = params; request.identity = result.identity; request.expert_mode = g_expert_mode;
     if (needs_clock(op) && !fill_local_time(request)) { reject(ctx, bat::refusal::kClockNotSet); return; }
     bat::Plan plan;
     std::string why;
@@ -264,7 +265,7 @@ void execute(const Context& ctx, bat::Op op, const json::Value& in) {
     std::lock_guard<std::mutex> guard(g_lock);
     if (!g_guard.peek(ctx.port, armed)) { reject(ctx, bat::refusal::kNotArmed); return; }
     bat::Request request;
-    request.op = op; request.params = params; request.identity = armed.identity;
+    request.op = op; request.params = params; request.identity = armed.identity; request.expert_mode = g_expert_mode;
     std::string why;
     // the conditions of the arm step are checked again: the battery may have started to move current or raised an alarm since
     {
@@ -384,6 +385,7 @@ bool busy() {
 void apply(const config::Settings& settings) {
   std::lock_guard<std::mutex> guard(g_lock);
   g_password = settings.battery.service_password;
+  bat::parse_expert_mode(settings.battery.expert_mode, g_expert_mode);   // a tightening applies at once
   if (settings.battery.enabled) return;   // switching it ON still waits for the restart; switching it OFF is immediate
   g_enabled = false;
   for (int port = 1; port <= bat::Guard::kPorts; ++port) g_guard.forget(port);   // an order armed a moment ago is no longer valid
@@ -393,6 +395,7 @@ void start(const config::Settings& settings) {
   g_node = settings.node_id;
   g_enabled = settings.battery.enabled;
   g_password = settings.battery.service_password;
+  bat::parse_expert_mode(settings.battery.expert_mode, g_expert_mode);
   if (g_node.empty()) return;
   g_ready = xSemaphoreCreateBinary();
   if (g_ready == nullptr || xTaskCreate(worker, "battery-ops", 12288, nullptr, 4, nullptr) != pdPASS) { ESP_LOGE(kTag, "the battery maintenance task could not be started: it stays off"); g_ready = nullptr; return; }
