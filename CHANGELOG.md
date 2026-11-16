@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A battery order is re-checked when it is executed:** the run stops with `battery_changed`, before anything is written, when the first `info` it reads is not the battery that was armed (model, serial, board and firmware), and `execute` asks again for the conditions of the arm step (battery present, idle, no critical alarm). Moving the console cable to another module inside the arm window can no longer write to the wrong battery.
+- **Switching the battery writes off in the panel is immediate:** saving the settings applies the new switch and the service password to the maintenance channel at once and forgets the orders armed so far; switching them on still needs a restart.
+
 - **The order channel of the node can check a signature before it reads anything:** `node_control::Options` has an optional `authorize` hook that sees each order that arrives on `armor/control/...` and drops it, before it can arm anything, when the node says no. A node that does not set it behaves as before.
 
 ## [0.6.7] - System summary, own alerts, exchange capture, random Bluetooth PIN and guarded firmware upload

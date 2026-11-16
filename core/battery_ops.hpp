@@ -174,6 +174,7 @@ struct Plan {
   std::string summary;                     // one line for the person
   bool atomic = false;
   bool uses_image = false;
+  Identity expected;                       // the battery the arm step read: the first info of the run must show the same one (invalid = nothing to compare)
   std::size_t image_size = 0;
   std::uint32_t image_crc32 = 0;
   // Checks of the captures after the last step; returns "" when everything is as it should be, else why not.
@@ -333,6 +334,7 @@ inline bool build_plan(const Request& request, Plan& plan, std::string& why) {
   if (info == nullptr || request.op == Op::kPreflight) { why = refusal::kUnknownOp; return false; }
   plan.atomic = info->atomic;
   const Identity& id = request.identity;
+  plan.expected = id;
   const json::Value& p = request.params;
   const ModelProfile* profile = model_profile(id.model);
   std::vector<Step>& steps = plan.steps;

@@ -519,6 +519,18 @@ static void test_a_battery_that_does_not_answer() {
   CHECK(none.finished() && none.result().outcome == "rejected" && none.result().code == refusal::kNoPassword);
 }
 
+static void test_a_battery_that_is_not_the_armed_one_stops_the_run() {
+  bench::Battery armed, other;
+  other.serial = "ZZZ0000000000";
+  Plan clock = plan_of(Op::kSetClock, "{}", armed);
+  RunResult r;
+  run_plan(clock, other, r);                                                                     // the cable now goes to another module
+  CHECK(r.outcome == "failed" && r.code == refusal::kBatteryChanged && r.writes_done == 0 && !r.wrote && other.writes.empty());
+  bench::Battery same;
+  run_plan(clock, same, r);
+  CHECK(r.outcome == "ok" && r.writes_done == 1);                                                // the same battery goes on
+}
+
 static void test_the_password_is_never_shown() {
   bench::Battery b;
   Plan clock = plan_of(Op::kSetClock, "{}", b);
@@ -880,6 +892,7 @@ int main() {
   test_the_token();
   test_reads_and_the_clock();
   test_a_battery_that_does_not_answer();
+  test_a_battery_that_is_not_the_armed_one_stops_the_run();
   test_the_password_is_never_shown();
   test_soc_operations();
   test_cancel_rules();
