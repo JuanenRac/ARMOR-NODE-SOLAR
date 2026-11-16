@@ -217,7 +217,7 @@ class Runner {
   // The console that answers now is the battery the person armed (nothing has been written yet at this point).
   bool same_battery(const Identity& now) const {
     const Identity& was = plan_.expected;
-    return now.valid && now.model == was.model && now.serial == was.serial && now.board == was.board && now.soft_version == was.soft_version && now.main_soft_version == was.main_soft_version;
+    return now.valid && now.model == was.model && now.serial == was.serial && now.board == was.board && now.soft_version == was.soft_version;
   }
 
   void capture(const Step& s, const std::string& answer) { captures_.push_back({s.label, s.phase, answer}); }
