@@ -210,7 +210,14 @@ class Runner {
     if (contains(rx_, "Test result:fail")) { capture(s, answer); fail("step_failed:" + s.label); return; }
     for (const std::string& need : s.must_contain) if (rx_.find(need) == std::string::npos) { capture(s, answer); fail("step_failed:" + s.label); return; }
     capture(s, answer);
+    if (s.label == "info" && s.phase == kPhasePreflight && plan_.expected.valid && !same_battery(parse_info(rx_))) { fail(refusal::kBatteryChanged); return; }
     step_ok(now_ms);
+  }
+
+  // The console that answers now is the battery the person armed (nothing has been written yet at this point).
+  bool same_battery(const Identity& now) const {
+    const Identity& was = plan_.expected;
+    return now.valid && now.model == was.model && now.serial == was.serial && now.board == was.board && now.soft_version == was.soft_version && now.main_soft_version == was.main_soft_version;
   }
 
   void capture(const Step& s, const std::string& answer) { captures_.push_back({s.label, s.phase, answer}); }

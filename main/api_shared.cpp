@@ -22,6 +22,7 @@ extern "C" {
 #include "esp_timer.h"
 }
 #include "chip_temp.hpp"
+#include "battery_maintenance.hpp"
 #include "clock_sync.hpp"
 #include "github_update.hpp"
 #include "core/board_s3.hpp"
@@ -237,6 +238,7 @@ PutResult put_config(std::string_view document, config::Problems& problems, bool
   restart_required = needs_restart(*before, *after);
   if (before->time.zone != after->time.zone) clocksync::set_zone(after->time.zone);
   manager::set_capture(after->capture_enabled, after->capture_frames);
+  maintenance::apply(*after);
   return PutResult::kSaved;
 }
 

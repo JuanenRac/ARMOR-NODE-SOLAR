@@ -266,6 +266,15 @@ void execute(const Context& ctx, bat::Op op, const json::Value& in) {
     bat::Request request;
     request.op = op; request.params = params; request.identity = armed.identity;
     std::string why;
+    // the conditions of the arm step are checked again: the battery may have started to move current or raised an alarm since
+    {
+      const manager::BatteryPortFacts now_facts = manager::battery_port_facts(static_cast<std::size_t>(ctx.port - 1));
+      bat::Facts facts;
+      facts.pylontech_port = now_facts.pylontech; facts.present = now_facts.present; facts.current_ma = now_facts.current_ma; facts.critical_alarm = now_facts.critical_alarm;
+      facts.identity = armed.identity; facts.typed_serial = typed;
+      const std::string pre = bat::preconditions(op, facts, params);
+      if (pre != bat::refusal::kNone) { g_guard.forget(ctx.port); reject(ctx, pre.c_str()); return; }
+    }
     if (needs_clock(op) && !fill_local_time(request)) { g_guard.forget(ctx.port); reject(ctx, bat::refusal::kClockNotSet); return; }
     if (!bat::build_plan(request, plan, why)) { g_guard.forget(ctx.port); reject(ctx, why.c_str()); return; }
     bat::Armed spent;
@@ -338,9 +347,11 @@ void handle(const std::string& payload) {
   ctx.op = in.string_or("op", "");
   ctx.port = static_cast<int>(in.integer_or("port", 0, 1, 10));
   if (!bat::valid_command_id(ctx.command_id) || ctx.port == 0) return;   // not an order this node can answer
-  if (!g_enabled) { reject(ctx, bat::refusal::kDisabled); return; }
+  bool enabled = false, has_password = false;
+  { std::lock_guard<std::mutex> guard(g_lock); enabled = g_enabled; has_password = !g_password.empty(); }
+  if (!enabled) { reject(ctx, bat::refusal::kDisabled); return; }
   if (!node_control::working() && ctx.action != "cancel") { reject(ctx, bat::refusal::kDisabled); return; }   // paused or in standby by the server's order: no battery is written (a running operation can still be cancelled)
-  if (g_password.empty()) { reject(ctx, bat::refusal::kNoPassword); return; }
+  if (!has_password) { reject(ctx, bat::refusal::kNoPassword); return; }
   if (ctx.action == "stage") { stage(ctx, in); return; }
   if (ctx.action == "cancel") {
     Reply r;
@@ -368,6 +379,14 @@ bool busy() {
   std::lock_guard<std::mutex> guard(g_lock);
   for (int port = 1; port <= bat::Guard::kPorts; ++port) if (g_guard.busy(port)) return true;
   return false;
+}
+
+void apply(const config::Settings& settings) {
+  std::lock_guard<std::mutex> guard(g_lock);
+  g_password = settings.battery.service_password;
+  if (settings.battery.enabled) return;   // switching it ON still waits for the restart; switching it OFF is immediate
+  g_enabled = false;
+  for (int port = 1; port <= bat::Guard::kPorts; ++port) g_guard.forget(port);   // an order armed a moment ago is no longer valid
 }
 
 void start(const config::Settings& settings) {
