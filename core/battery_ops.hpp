@@ -274,15 +274,6 @@ inline const Capture* find_capture(const std::vector<Capture>& all, std::string_
 }
 }  // namespace detail
 
-// What the person asked for, as the node gets it.
-struct Request {
-  Op op = Op::kPreflight;
-  json::Value params;                      // an object (possibly empty)
-  Identity identity;                       // what the arm step read
-  ExpertMode expert_mode = ExpertMode::kBlocklist;   // battery.expert_mode of the node
-  int local_year = 0, local_month = 0, local_day = 0, local_hour = 0, local_minute = 0, local_second = 0;   // the time to write, for set_clock / pcb_setup
-};
-
 // How much of the expert console is open (setting battery.expert_mode). "blocklist" (the default): everything except the words below and the switching of the power outputs; a line that
 // is not a plain reading needs `accept_risk`. "strict": only the plain readings. "off": only the words that must never be sent at all are refused, and a line that is not a plain reading
 // still needs `accept_risk`.
@@ -295,6 +286,15 @@ inline bool parse_expert_mode(std::string_view text, ExpertMode& out) {
   else return false;
   return true;
 }
+
+// What the person asked for, as the node gets it.
+struct Request {
+  Op op = Op::kPreflight;
+  json::Value params;                      // an object (possibly empty)
+  Identity identity;                       // what the arm step read
+  ExpertMode expert_mode = ExpertMode::kBlocklist;   // battery.expert_mode of the node
+  int local_year = 0, local_month = 0, local_day = 0, local_hour = 0, local_minute = 0, local_second = 0;   // the time to write, for set_clock / pcb_setup
+};
 
 // Words that change what the battery keeps or what it does: they have typed operations (with their checks and read-backs), so the console of the "blocklist" and "strict" modes does not take them.
 inline const std::vector<const char*>& expert_extra_blocked_words() {
