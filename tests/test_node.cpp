@@ -1144,6 +1144,26 @@ static std::string signed_battery_order(const char* nonce, const char* key) {
   return body.substr(0, body.size() - 1) + ",\"sig\":\"" + command_sig::signature_of(key, body) + "\"}";
 }
 
+static void test_the_pairing_pin_the_access_point_key_and_the_slot_erase_options() {
+  config::Settings base = valid_settings();
+  config::Settings out;
+  config::Problems problems;
+  CHECK(base.ble_passkey_pin.empty() && base.ap.setup_password.empty() && !base.ota_invalidate_rejected);   // as the node always was
+  CHECK(config::load(R"({"ble":{"passkey_mode":"fixed","passkey_pin":"042042"},"ap":{"setup_password":"a-good-setup-key"},"security":{"ota_invalidate_rejected":true}})", base, out, problems));
+  CHECK(out.ble_passkey == config::BlePasskeyMode::kFixed && out.ble_passkey_pin == "042042" && out.ap.setup_password == "a-good-setup-key" && out.ota_invalidate_rejected);
+  const std::string shown = config::to_json(out, false);
+  CHECK(shown.find("042042") == std::string::npos && shown.find("a-good-setup-key") == std::string::npos);   // secrets are not shown
+  CHECK(shown.find("\"passkey_pin_set\":true") != std::string::npos && shown.find("\"setup_password_set\":true") != std::string::npos && shown.find("\"ota_invalidate_rejected\":true") != std::string::npos);
+  const std::string stored = config::to_json(out, true);
+  CHECK(stored.find("\"passkey_pin\":\"042042\"") != std::string::npos && stored.find("\"setup_password\":\"a-good-setup-key\"") != std::string::npos);
+  problems.clear();
+  CHECK(!config::load(R"({"ble":{"passkey_mode":"fixed"}})", base, out, problems) && has(problems, "ble.passkey_pin", "required"));
+  problems.clear();
+  CHECK(!config::load(R"({"ble":{"passkey_pin":"12ab56"}})", base, out, problems) && has(problems, "ble.passkey_pin", "invalid"));
+  problems.clear();
+  CHECK(!config::load(R"({"ap":{"setup_password":"short"}})", base, out, problems) && has(problems, "ap.setup_password", "invalid_key"));
+}
+
 static void test_the_signature_of_the_battery_orders_and_of_the_control_orders() {
   config::Settings base = valid_settings();
   config::Settings out;
@@ -1172,6 +1192,7 @@ static void test_the_signature_of_the_battery_orders_and_of_the_control_orders()
 }
 
 int main() {
+  test_the_pairing_pin_the_access_point_key_and_the_slot_erase_options();
   test_the_signature_of_the_battery_orders_and_of_the_control_orders();
   test_stored_settings_after_an_update();
   test_abort_of_an_exchange();

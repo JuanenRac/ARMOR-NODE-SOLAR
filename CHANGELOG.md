@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A refused firmware can be erased from its slot:** the setting `security.ota_invalidate_rejected` (off by default, shown in the web panel in eight languages) erases the first sector of the slot a downloaded image was written to when that image is refused after it was complete (another project, another version than the release, not newer, a bad signature, or no way to boot it) and when a copy of the running slot does not end well, so a later fault cannot start it. The slot that runs is never touched.
+
+- **The Bluetooth pairing PIN can be a fixed one:** `ble.passkey_mode` now also takes `fixed`, with the six digits in `ble.passkey_pin` (kept and sealed like the node's passwords, never shown by the panel; the mode needs the PIN). The default is as before: the PIN derived from the setup code.
+
+- **The set-up access point can have a Wi-Fi password of its own:** the new setting `ap.setup_password` (8 to 63 characters, a secret, shown in the web panel) replaces the setup code of the label as the password of the access point a node without users opens. Empty by default, so nodes already installed keep their password; with it set, the code of the label no longer opens that Wi-Fi.
+
+- **The panel shows the switches of the signed orders:** the web panel gets the key of the signed orders (`battery.command_key`) and the switches `battery.require_sig` and `security.control_require_sig`, in eight languages.
+
 - **The orders of the server to the batteries and to the node itself can be required to be signed:** the new settings `battery.command_key` (the key of this node, a secret), `battery.require_sig` and `security.control_require_sig` (both off by default) make the node read a battery order, or an order to the node itself (restart, pause, standby...), only when it carries a good signature made with that key; a signed order is checked even with them off, a repeated one is refused, and with no valid key every order is refused. The settings are refused when a signature is required and there is no key.
 
 - **The expert console of the batteries has three modes, and the default is narrower:** `battery.expert_mode` (a selector in the node panel) is `blocklist` (the default: the blocked words now also include the ones that change what the battery keeps, such as `setlowcfg`, `shut`, `trst`, `statc`, `logc`, `datac`, `totalcoul`, `config` and `prot`, and the switching of the charge and discharge outputs, `cfet` and `dfet`), `strict` (plain readings only) or `off` (only the words that must never be sent are refused). Any line that is not a plain reading needs `accept_risk`. The typed operations are not affected.

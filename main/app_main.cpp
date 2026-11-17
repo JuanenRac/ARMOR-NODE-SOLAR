@@ -33,6 +33,7 @@ extern "C" {
 #include "psram_mem.hpp"
 #include "improv_serial.hpp"
 #include "ble_provision.hpp"
+#include "github_update.hpp"
 #include "battery_maintenance.hpp"
 #include "clock_sync.hpp"
 #include "mqtt_link.hpp"
@@ -52,13 +53,14 @@ void setup_reminder_task(void*) {
     if (!armor::store::users_empty()) vTaskDelete(nullptr);
     const armor::network::Status n = armor::network::status();
     bool random_pin = false;
-    armor::store::with_settings([&](const armor::config::Settings& s) { random_pin = s.ble_passkey == armor::config::BlePasskeyMode::kRandomDisplay; });
+    std::string fixed_pin;   // the PIN the operator chose (ble.passkey_mode "fixed"), empty otherwise
+    armor::store::with_settings([&](const armor::config::Settings& s) { random_pin = s.ble_passkey == armor::config::BlePasskeyMode::kRandomDisplay; if (s.ble_passkey == armor::config::BlePasskeyMode::kFixed) fixed_pin = s.ble_passkey_pin; });
     if (random_pin) {
       ESP_LOGW(kTag, "SETUP: this node has no user yet. Join the Wi-Fi \"%s\", open http://192.168.4.1/ and enter the setup code %s (to pair over Bluetooth the PIN is random and appears here when a phone starts pairing)",
                n.ap_ssid.empty() ? "ARMOR-SETUP-..." : n.ap_ssid.c_str(), armor::store::setup_code().c_str());
     } else {
     ESP_LOGW(kTag, "SETUP: this node has no user yet. Join the Wi-Fi \"%s\", open http://192.168.4.1/ and enter the setup code %s (to pair over Bluetooth the phone asks for the PIN %06u)",
-             n.ap_ssid.empty() ? "ARMOR-SETUP-..." : n.ap_ssid.c_str(), armor::store::setup_code().c_str(), static_cast<unsigned>(armor::auth::ble_passkey_from(armor::store::setup_code())));
+             n.ap_ssid.empty() ? "ARMOR-SETUP-..." : n.ap_ssid.c_str(), armor::store::setup_code().c_str(), static_cast<unsigned>(armor::auth::ble_effective_passkey(fixed_pin, armor::store::setup_code())));
     }
     vTaskDelay(pdMS_TO_TICKS(15000));
   }
@@ -152,6 +154,7 @@ extern "C" void app_main() {
   // The ports run first: on the bench their statistics are the first thing to look at, with or without a network. A node in setup reads nothing yet.
   if (!setup) armor::manager::start(settings, [](const std::string& topic, const std::string& payload) { armor::mqtt_link::publish(topic, payload); });
 
+  armor::github_update::set_invalidate_rejected(settings.ota_invalidate_rejected);   // security.ota_invalidate_rejected
   const armor::netplan::Plan plan = armor::netplan::plan_network(settings, setup, armor::store::setup_code(), armor::store::mac_tail(), armor::store::mac_sum());
   const bool network_ok = armor::network::start(settings, plan);
   if (network_ok && !plan.ap.enabled) {
