@@ -20,6 +20,7 @@ extern "C" {
 #include "freertos/task.h"
 }
 #include "core/battery_ops.hpp"
+#include "core/command_sig.hpp"
 #include "core/battery_stage.hpp"
 #include "core/json.hpp"
 #include "entropy.hpp"
@@ -39,6 +40,9 @@ std::string g_node;
 bool g_enabled = false;
 bat::ExpertMode g_expert_mode = bat::ExpertMode::kBlocklist;   // battery.expert_mode, under g_lock when it changes
 std::string g_password;
+std::string g_command_key;   // battery.command_key, under g_lock when it changes
+bool g_require_sig = false;  // battery.require_sig, under g_lock when it changes
+command_sig::NonceCache g_nonces;   // only the worker task reads it
 
 std::uint64_t uptime_ms() { return static_cast<std::uint64_t>(esp_timer_get_time()) / 1000ULL; }
 
@@ -338,7 +342,14 @@ void stage(const Context& ctx, const json::Value& in) {
   say(r);
 }
 
-void handle(const std::string& payload) {
+void handle(const std::string& received) {
+  // The signature of the server, when asked for: the order is read without its nonce and signature; a refused one is dropped before it can arm anything. FAIL CLOSED.
+  std::string key;
+  bool require = false;
+  { std::lock_guard<std::mutex> guard(g_lock); key = g_command_key; require = g_require_sig; }
+  std::string payload;
+  const std::int64_t wall = mqtt_link::clock_is_set() ? static_cast<std::int64_t>(mqtt_link::wall_clock_ms()) : 0;
+  if (!command_sig::control_authorized(require, key, received, g_nonces, wall, payload)) { ESP_LOGW(kTag, "a battery order was dropped: it does not carry a good signature"); return; }
   json::Value in;
   if (!json::parse(payload, in) || !in.is_object()) return;
   if (in.string_or("kind", "") != "solar_battery_command" || in.string_or("node_id", "") != g_node) return;
@@ -385,6 +396,8 @@ bool busy() {
 void apply(const config::Settings& settings) {
   std::lock_guard<std::mutex> guard(g_lock);
   g_password = settings.battery.service_password;
+  g_command_key = settings.battery.command_key;
+  g_require_sig = settings.battery.require_sig;
   bat::parse_expert_mode(settings.battery.expert_mode, g_expert_mode);   // a tightening applies at once
   if (settings.battery.enabled) return;   // switching it ON still waits for the restart; switching it OFF is immediate
   g_enabled = false;
@@ -395,6 +408,8 @@ void start(const config::Settings& settings) {
   g_node = settings.node_id;
   g_enabled = settings.battery.enabled;
   g_password = settings.battery.service_password;
+  g_command_key = settings.battery.command_key;
+  g_require_sig = settings.battery.require_sig;
   bat::parse_expert_mode(settings.battery.expert_mode, g_expert_mode);
   if (g_node.empty()) return;
   g_ready = xSemaphoreCreateBinary();

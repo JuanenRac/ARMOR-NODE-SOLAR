@@ -21,6 +21,7 @@
 
 #include "board_s3.hpp"
 #include "admin_sources.hpp"
+#include "command_sig.hpp"
 #include "json.hpp"
 #include "frame_capture.hpp"
 #include "mqtt_tls.hpp"
@@ -162,6 +163,10 @@ struct Clock {
 struct BatteryWrite {
   bool enabled = false;
   std::string service_password;
+  // The key of this node for the orders of the server (the `command_key` of GET /api/v1/admin/nodes/{id}/token): 64 lowercase hexadecimal digits, a secret like the password, never shown again.
+  // With `require_sig` on (off by default) a battery order is read only when the server signed it with this key; with no valid key none is read. A signed order is checked even with it off.
+  std::string command_key;
+  bool require_sig = false;
   std::string expert_mode = "blocklist";   // the expert console: "blocklist" (default), "strict" (plain readings only) or "off" (only what must never be sent is refused)
 };
 
@@ -215,6 +220,8 @@ struct Settings {
   // also refuses an image that carries no mark at all (an old image); turn it off to go back to a version that predates the marks.
   bool ota_check_board = true;
   bool ota_require_board_mark = true;
+  // The orders of the server to the node itself (armor/control/...) are read only when signed with battery.command_key (off by default; with no valid key every order is refused).
+  bool control_require_sig = false;
   // The capture of the exchanges with the inverters and batteries for the bench (core/frame_capture.hpp): off, and 48 entries when it is turned on. It applies at once.
   bool capture_enabled = false;
   int capture_frames = framecap::kDefaultFrames;
@@ -549,6 +556,7 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
     read_bool(*security, "seal_secrets", s.seal_secrets, "security.seal_secrets", problems);
     read_bool(*security, "ota_check_board", s.ota_check_board, "security.ota_check_board", problems);
     read_bool(*security, "ota_require_board_mark", s.ota_require_board_mark, "security.ota_require_board_mark", problems);
+    read_bool(*security, "control_require_sig", s.control_require_sig, "security.control_require_sig", problems);
   }
   if (const json::Value* capture = document.get("capture"); capture != nullptr && capture->is_object()) {
     read_bool(*capture, "enabled", s.capture_enabled, "capture.enabled", problems);
@@ -566,6 +574,8 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
   if (const json::Value* battery = document.get("battery"); battery != nullptr && battery->is_object()) {
     read_bool(*battery, "write_enabled", s.battery.enabled, "battery.write_enabled", problems);
     read_secret(*battery, "service_password", s.battery.service_password, "battery.service_password", problems);
+    read_secret(*battery, "command_key", s.battery.command_key, "battery.command_key", problems);
+    read_bool(*battery, "require_sig", s.battery.require_sig, "battery.require_sig", problems);
     if (const json::Value* mode = battery->get("expert_mode"); mode != nullptr) {
       if (mode->is_string() && (mode->text == "blocklist" || mode->text == "strict" || mode->text == "off")) s.battery.expert_mode = mode->text;
       else bad(problems, "battery.expert_mode", "invalid");
@@ -643,6 +653,8 @@ inline Problems validate(const Settings& s) {
   if (s.retry_wifi_max_ms < s.retry_wifi_first_ms) bad(problems, "retry.wifi_max_ms", "invalid");     // the ceiling is never below the first wait
   if (s.retry_mqtt_max_ms < s.retry_mqtt_first_ms) bad(problems, "retry.mqtt_max_ms", "invalid");
   if (s.battery.enabled && s.battery.service_password.empty()) bad(problems, "battery.service_password", "required");
+  if (!s.battery.command_key.empty() && !command_sig::key_is_valid(s.battery.command_key)) bad(problems, "battery.command_key", "invalid");
+  if ((s.battery.require_sig || s.control_require_sig) && s.battery.command_key.empty()) bad(problems, "battery.command_key", "required");   // a signature nobody can check would shut the orders for good
   for (const char c : s.battery.service_password) if (static_cast<unsigned char>(c) < 0x21 || static_cast<unsigned char>(c) > 0x7E) { bad(problems, "battery.service_password", "invalid"); break; }
   if (!s.hostname.empty() && !net::valid_hostname(s.hostname)) bad(problems, "node.hostname", "invalid");
 
@@ -810,12 +822,14 @@ inline std::string to_json(const Settings& s, bool secrets) {
   w.key("ui").begin_object().field("language", s.language).end_object();
   w.key("time").begin_object().field("ntp_enabled", s.time.ntp_enabled).field("ntp", s.time.ntp).field("zone", s.time.zone).end_object();
   w.key("system").begin_object().field("auto_restart_hours", s.auto_restart_hours).field("login_limit_per_minute", s.login_limit_per_minute).end_object();
-  w.key("security").begin_object().field("seal_secrets", s.seal_secrets).field("ota_check_board", s.ota_check_board).field("ota_require_board_mark", s.ota_require_board_mark).end_object();
+  w.key("security").begin_object().field("seal_secrets", s.seal_secrets).field("ota_check_board", s.ota_check_board).field("ota_require_board_mark", s.ota_require_board_mark).field("control_require_sig", s.control_require_sig).end_object();
   w.key("capture").begin_object().field("enabled", s.capture_enabled).field("frames", s.capture_frames).end_object();
   w.key("summary").begin_object().field("publish", s.summary.publish).field("alerts", s.summary.alerts).field("every_s", s.summary.every_s).field("soc_low_percent", s.summary.soc_low_percent)
       .field("cell_over_mv", s.summary.cell_over_mv).field("temperature_high_c", s.summary.temperature_high_c).field("temperature_low_c", s.summary.temperature_low_c).end_object();
   w.key("battery").begin_object().field("write_enabled", s.battery.enabled).field("expert_mode", s.battery.expert_mode);
   if (secrets) w.field("service_password", s.battery.service_password); else w.field("service_password_set", !s.battery.service_password.empty());
+  w.field("require_sig", s.battery.require_sig);
+  if (secrets) w.field("command_key", s.battery.command_key); else w.field("command_key_set", !s.battery.command_key.empty());
   w.end_object();
   w.end_object();
   return w.str();
