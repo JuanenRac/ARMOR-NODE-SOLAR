@@ -12,6 +12,7 @@
 #include "../core/ant_bms.hpp"
 #include "../core/ant_settings.hpp"
 #include "../core/auth.hpp"
+#include "../core/command_sig.hpp"
 #include "../core/netplan.hpp"
 #include "../core/poller.hpp"
 #include "../core/soft_uart.hpp"
@@ -1136,7 +1137,42 @@ static void test_stored_settings_after_an_update() {
   CHECK(!config::load_stored("{broken", base, out, dropped));
 }
 
+static const char* kBatteryKey = "156a3ba893545ebfde6009ac5393395fcb033e467f7ee6fb1839548da19a66b3";
+
+static std::string signed_battery_order(const char* nonce, const char* key) {
+  const std::string body = std::string("{\"kind\":\"solar_battery_command\",\"node_id\":\"solar-1\",\"timestamp_ms\":1000000,\"command_id\":\"c000000000000001\",\"action\":\"cancel\",\"port\":1,\"nonce\":\"") + nonce + "\"}";
+  return body.substr(0, body.size() - 1) + ",\"sig\":\"" + command_sig::signature_of(key, body) + "\"}";
+}
+
+static void test_the_signature_of_the_battery_orders_and_of_the_control_orders() {
+  config::Settings base = valid_settings();
+  config::Settings out;
+  config::Problems problems;
+  CHECK(!base.battery.require_sig && !base.control_require_sig && base.battery.command_key.empty());
+  CHECK(config::load(std::string("{\"battery\":{\"command_key\":\"") + kBatteryKey + "\",\"require_sig\":true},\"security\":{\"control_require_sig\":true}}", base, out, problems));
+  CHECK(out.battery.command_key == kBatteryKey && out.battery.require_sig && out.control_require_sig);
+  const std::string shown = config::to_json(out, false);
+  CHECK(shown.find(kBatteryKey) == std::string::npos && shown.find("\"command_key_set\":true") != std::string::npos && shown.find("\"control_require_sig\":true") != std::string::npos);
+  CHECK(config::to_json(out, true).find(std::string("\"command_key\":\"") + kBatteryKey + "\"") != std::string::npos);
+  problems.clear();
+  CHECK(!config::load("{\"battery\":{\"command_key\":\"abc\"}}", base, out, problems) && has(problems, "battery.command_key", "invalid"));
+  problems.clear();
+  CHECK(!config::load("{\"battery\":{\"require_sig\":true}}", base, out, problems) && has(problems, "battery.command_key", "required"));   // a signature nobody can check
+  problems.clear();
+  CHECK(!config::load("{\"security\":{\"control_require_sig\":true}}", base, out, problems) && has(problems, "battery.command_key", "required"));
+  problems.clear();
+  CHECK(!config::load("{\"battery\":{\"require_sig\":\"yes\"}}", base, out, problems) && has(problems, "battery.require_sig", "invalid"));
+  // the orders themselves are checked by the shared code
+  command_sig::NonceCache cache;
+  std::string plain;
+  const std::string good = signed_battery_order("0123456789abcdef", kBatteryKey);
+  CHECK(!command_sig::control_authorized(true, kBatteryKey, good.substr(0, good.find(",\"nonce\"")) + "}", cache, 0, plain));   // unsigned
+  CHECK(command_sig::control_authorized(true, kBatteryKey, good, cache, 0, plain) && plain.find("\"nonce\"") == std::string::npos && plain.find("\"sig\"") == std::string::npos);
+  CHECK(!command_sig::control_authorized(true, kBatteryKey, good, cache, 0, plain));   // a repeat
+}
+
 int main() {
+  test_the_signature_of_the_battery_orders_and_of_the_control_orders();
   test_stored_settings_after_an_update();
   test_abort_of_an_exchange();
   test_pylontech_wake();
