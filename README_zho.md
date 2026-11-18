@@ -227,7 +227,7 @@ Python 检查：八种语言的面板文字、任务、保存路径、受锁保�
 </p>
 
 <details>
-<summary>目录树的文本版</summary>
+<summary>目录树的文本版本</summary>
 
 ```text
 ARMOR-NODE-SOLAR/
@@ -238,7 +238,7 @@ ARMOR-NODE-SOLAR/
 ├── docs/                                10 份指南：协议、消息、维护、硬件
 ├── tools/                               构建、打包和检查工具
 ├── .github/                             CI 工作流以及 Issue 和 Pull Request 模板
-├── images/                              横幅、图标和本 README 的两幅图
+├── images/                              横幅、图标、README 图片、屏幕截图
 ├── build.sh build.bat                   通过共享的项目工作流构建
 ├── test.sh test.bat                     通过共享工作流运行测试
 ├── run.sh run.bat                       通过共享的项目工作流启动
