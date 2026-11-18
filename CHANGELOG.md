@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The README trees list `firmware_base.lock` and the architecture picture is redrawn with rounded coordinates:** the file that records the version of the shared base this copy was synced from appears in the text tree of the eight READMEs, and the legend positions of the picture carry no floating-point noise.
 - **The repository structure picture lists `firmware_base.lock`:** the file that records the version of the shared base this copy was synced from now appears in the picture, in the eight languages.
 - **The shared tools of the manifest and the status lights gain an opt-in strict check of the evidence:** `sync_manifests.py` and `status_lights.py` take `--strict-evidence` (off by default; `ARMOR_STRICT_EVIDENCE=1` switches it on for `armor_ci_validate.py`).
 - **A refused firmware can be erased from its slot:** the setting `security.ota_invalidate_rejected` (off by default, shown in the web panel in eight languages) erases the first sector of the slot a downloaded image was written to when that image is refused after it was complete (another project, another version than the release, not newer, a bad signature, or no way to boot it) and when a copy of the running slot does not end well, so a later fault cannot start it. The slot that runs is never touched.

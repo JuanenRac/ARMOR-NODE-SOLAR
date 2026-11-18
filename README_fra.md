@@ -247,6 +247,7 @@ ARMOR-NODE-SOLAR/
 ├── SECURITY.md SUPPORT.md LICENSE       politique de sécurité, support et licence
 ├── CONTRIBUTING.md CODE_OF_CONDUCT.md   comment contribuer et le code de conduite
 ├── CMakeLists.txt                       le projet ESP-IDF
+├── firmware_base.lock                   la version de la base partagée dont cette copie a été synchronisée
 ├── partitions.csv                       la table de la flash
 ├── sdkconfig.defaults                   les réglages du firmware
 ├── sdkconfig.board.s3-eth               les réglages d'une carte
