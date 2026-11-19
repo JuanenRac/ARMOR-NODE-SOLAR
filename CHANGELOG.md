@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The screenshots of the README can be taken on a GitHub runner:** the manual workflow `screenshots.yml` (started by hand only, read-only token, no secrets) starts the stand-in of the node, takes the pages of the web panel with the Chromium of Playwright and keeps the pictures as an artifact; `ARMOR_SHOTS_CHANNEL=chromium` makes the script take that Chromium; `docs/SCREENSHOTS.md` says how to start it and use them.
+
 ## [0.6.8] - Signed battery orders, a narrower expert console, re-checked battery orders, set-up password and slot copy locks
 
 - **The structure generator can write a figure read from the code:** `tools/make_structure.py` resolves `{{fact:NAME|LAST}}` in the descriptions of `docs/structure.json` where the documentation tools are next to the repository, and writes LAST (the figure it had when last written) everywhere else, so a repository still builds on its own.
