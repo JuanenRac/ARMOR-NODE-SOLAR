@@ -61,7 +61,7 @@ Cada línea es una parte de este repositorio y la luz dice hasta dónde llega ho
 | Protocolos y datos | 🟡 | Las tramas, sumas de control y lecturas de Voltronic, Pylontech y ANT-BMS se comprueban contra las tramas documentadas y muestras grabadas; ninguno ha hablado todavía con un inversor o una batería reales. |
 | Interfaz | 🟡 | El panel web se ha ejercitado en un navegador contra una simulación del nodo, no en una placa. |
 | Hardware | 🔴 | Ninguna placa construida ni inversor o batería conectados: nada ha funcionado todavía con equipos reales. |
-| Seguridad | 🟡 | El código de configuración, el acceso con límite de contraseñas erróneas, el PIN Bluetooth y las actualizaciones firmadas están probados en el host; no ha habido una revisión independiente. |
+| Seguridad | 🟠 | El código de configuración, el acceso con límite de contraseñas erróneas, el PIN Bluetooth y las actualizaciones firmadas están probados en el host; no ha habido una revisión independiente. |
 | Actualizaciones | 🟠 | Las comprobaciones de hash y de firma Ed25519 y la lógica de vuelta atrás pasan en el host; una actualización por aire nunca se ha ejecutado en una placa. |
 | Escritura en los equipos | 🟠 | La escritura en baterías Pylontech está desactivada por defecto y solo se ha probado contra un simulador. |
 | Integración | 🟠 | Los mensajes del nodo se validan contra los esquemas compartidos y los vectores de conformidad de ARMOR-COMMON. Su cliente MQTT se prueba contra un Mosquitto real en los tests; ninguna placa los ha enviado aún a un servidor. |
