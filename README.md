@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-183212%20checks-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-31%20host%20programs-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.6.7-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
@@ -40,7 +40,7 @@
 | Maturity | Functional |
 | Role | Solar field node for ESP32-S3: inverters and batteries (family: Field Nodes, parent: ARMOR-COMMON) |
 | Stack | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 183212 checks in 31 host programs and 10 Python checks (`ctest`) |
+| Tests | 31 host programs and 10 Python checks (`ctest`) |
 | Equipment | Voltronic / MPP Solar inverters, Pylontech batteries, ANT-BMS; 10 serial ports |
 | Runs on | ESP32-S3-WROOM-1 N16R8 or Waveshare ESP32-S3-ETH; host tests on any computer |
 | On real hardware | None yet: no board built and no inverter or battery connected (host tests, the build and the panel in a browser only) |
@@ -61,7 +61,7 @@ Each line is one part of this repository and the light says how far it is today.
 | Protocols and data | 🟡 | The Voltronic, Pylontech and ANT-BMS frames, checksums and readings are checked against the documented frames and recorded samples; none has talked to a real inverter or battery yet. |
 | Interface | 🟡 | The web panel is exercised in a browser against a mock of the node, not on a board. |
 | Hardware | 🔴 | No board built and no inverter or battery connected: nothing has run on real equipment yet. |
-| Security | 🟡 | The set-up code, the login with a limit on wrong passwords, the Bluetooth PIN and the signed updates are tested on the host; there has been no independent review. |
+| Security | 🟠 | The set-up code, the login with a limit on wrong passwords, the Bluetooth PIN and the signed updates are tested on the host; there has been no independent review. |
 | Updates | 🟠 | The hash and Ed25519 signature checks and the rollback logic pass on the host; an update over the air has never been run on a board. |
 | Writing to equipment | 🟠 | Writing to Pylontech batteries is off by default and has only been tested against a simulator. |
 | Integration | 🟠 | The messages of the node are validated against the shared schemas and conformance vectors of ARMOR-COMMON. Its MQTT client is played against a real Mosquitto in the tests; no board has sent them to a server yet. |
@@ -199,7 +199,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-31 host test programs and 10 Python checks run under `ctest`; 183212 checks counted by the host programs, built with `-Werror`.
+31 host test programs and 10 Python checks run under `ctest`, built with `-Werror`.
 
 Python checks: the panel texts in eight languages, the tasks, the save paths, the Bluetooth session under its lock and the routes the panel calls (and, in some nodes, the HTTP codes or the glyphs of the fonts)
 

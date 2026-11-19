@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 o successiva">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Linguaggio">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-183212%20checks-2ea44f.svg" alt="Test">
+  <img src="https://img.shields.io/badge/Tests-31%20host%20programs-2ea44f.svg" alt="Test">
   <img src="https://img.shields.io/badge/Version-0.6.7-0f6cbd.svg" alt="Versione">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturità">
 </p>
@@ -40,7 +40,7 @@
 | Maturità | Funzionale |
 | Ruolo | Nodo di campo solare per ESP32-S3: inverter e batterie (famiglia: Field Nodes, padre: ARMOR-COMMON) |
 | Tecnologia | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Test | 183212 verifiche in 31 programmi host e 10 verifiche Python (`ctest`) |
+| Test | 31 programmi host e 10 verifiche Python (`ctest`) |
 | Apparecchiature | Inverter Voltronic / MPP Solar, batterie Pylontech, ANT-BMS; 10 porte seriali |
 | Gira su | ESP32-S3-WROOM-1 N16R8 o Waveshare ESP32-S3-ETH; test su host su qualsiasi computer |
 | Su hardware reale | Ancora nessuno: nessuna scheda montata né inverter o batteria collegati (solo test su computer, la compilazione e il pannello in un browser) |
@@ -61,7 +61,7 @@ Ogni riga è una parte di questo repository e il semaforo dice a che punto è og
 | Protocolli e dati | 🟡 | I frame, i checksum e le letture di Voltronic, Pylontech e ANT-BMS sono verificati contro i frame documentati e campioni registrati; nessuno ha ancora parlato con un inverter o una batteria reali. |
 | Interfaccia | 🟡 | Il pannello web è stato provato in un browser contro una simulazione del nodo, non su una scheda. |
 | Hardware | 🔴 | Nessuna scheda costruita e nessun inverter o batteria collegati: nulla ha ancora funzionato su apparecchiature reali. |
-| Sicurezza | 🟡 | Il codice di configurazione, l'accesso con limite di password errate, il PIN Bluetooth e gli aggiornamenti firmati sono testati sull'host; non c'è stata una revisione indipendente. |
+| Sicurezza | 🟠 | Il codice di configurazione, l'accesso con limite di password errate, il PIN Bluetooth e gli aggiornamenti firmati sono testati sull'host; non c'è stata una revisione indipendente. |
 | Aggiornamenti | 🟠 | I controlli di hash e firma Ed25519 e la logica di ripristino passano sull'host; un aggiornamento via etere non è mai stato eseguito su una scheda. |
 | Scrittura sulle apparecchiature | 🟠 | La scrittura sulle batterie Pylontech è disattivata per impostazione predefinita ed è stata provata solo contro un simulatore. |
 | Integrazione | 🟠 | I messaggi del nodo sono validati contro gli schemi condivisi e i vettori di conformità di ARMOR-COMMON. Il suo client MQTT viene provato contro un vero Mosquitto nei test; nessuna scheda li ha ancora inviati a un server. |
@@ -199,7 +199,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-31 programmi di test su host e 10 verifiche Python girano con `ctest`; 183212 verifiche contate dai programmi host, compilati con `-Werror`.
+31 programmi di test su host e 10 verifiche Python girano con `ctest`, compilati con `-Werror`.
 
 Verifiche Python: i testi del pannello in otto lingue, i task, i percorsi di salvataggio, la sessione Bluetooth sotto il suo lock e i percorsi chiamati dal pannello (e, in alcuni nodi, i codici HTTP o i glifi dei caratteri)
 

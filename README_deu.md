@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 oder neuer">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Sprache">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-183212%20checks-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-31%20host%20programs-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.6.7-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Reifegrad">
 </p>
@@ -40,7 +40,7 @@
 | Reifegrad | Funktionsfähig |
 | Rolle | Solar-Feldknoten für ESP32-S3: Wechselrichter und Batterien (Familie: Field Nodes, übergeordnet: ARMOR-COMMON) |
 | Technik | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 183212 Prüfungen in 31 Host-Programmen und 10 Python-Prüfungen (`ctest`) |
+| Tests | 31 Host-Programmen und 10 Python-Prüfungen (`ctest`) |
 | Geräte | Voltronic- / MPP-Solar-Wechselrichter, Pylontech-Batterien, ANT-BMS; 10 serielle Ports |
 | Läuft auf | ESP32-S3-WROOM-1 N16R8 oder Waveshare ESP32-S3-ETH; Host-Tests auf jedem Computer |
 | Auf echter Hardware | Noch keiner: keine Platine aufgebaut und kein Wechselrichter oder keine Batterie angeschlossen (nur Computertests, der Build und das Panel im Browser) |
@@ -61,7 +61,7 @@ Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heut
 | Protokolle und Daten | 🟡 | Die Telegramme, Prüfsummen und Messwerte von Voltronic, Pylontech und ANT-BMS werden gegen die dokumentierten Telegramme und aufgezeichnete Beispiele geprüft; keines hat bisher mit einem echten Wechselrichter oder einer echten Batterie gesprochen. |
 | Oberfläche | 🟡 | Das Web-Panel wurde in einem Browser gegen eine Nachbildung des Knotens erprobt, nicht auf einer Platine. |
 | Hardware | 🔴 | Keine Platine gebaut und kein Wechselrichter oder keine Batterie angeschlossen: Bisher lief nichts auf echten Geräten. |
-| Sicherheit | 🟡 | Der Einrichtungscode, die Anmeldung mit Begrenzung falscher Passwörter, die Bluetooth-PIN und die signierten Aktualisierungen sind auf dem Host getestet; es gab keine unabhängige Prüfung. |
+| Sicherheit | 🟠 | Der Einrichtungscode, die Anmeldung mit Begrenzung falscher Passwörter, die Bluetooth-PIN und die signierten Aktualisierungen sind auf dem Host getestet; es gab keine unabhängige Prüfung. |
 | Aktualisierungen | 🟠 | Die Hash- und Ed25519-Signaturprüfungen und die Rückfalllogik bestehen auf dem Host; eine Aktualisierung über die Luft wurde nie auf einer Platine ausgeführt. |
 | Schreiben auf Geräte | 🟠 | Das Schreiben auf Pylontech-Batterien ist standardmäßig aus und wurde nur gegen einen Simulator getestet. |
 | Integration | 🟠 | Die Nachrichten des Knotens werden gegen die gemeinsamen Schemas und Konformitätsvektoren von ARMOR-COMMON geprüft. Sein MQTT-Client wird in den Tests gegen einen echten Mosquitto gespielt; noch keine Platine hat sie an einen Server geschickt. |
@@ -199,7 +199,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-31 Host-Testprogramme und 10 Python-Prüfungen laufen unter `ctest`; 183212 Prüfungen, gezählt von den Host-Programmen, mit `-Werror` gebaut.
+31 Host-Testprogramme und 10 Python-Prüfungen laufen unter `ctest`, mit `-Werror` gebaut.
 
 Python-Prüfungen: die Panel-Texte in acht Sprachen, die Tasks, die Speicherpfade, die Bluetooth-Sitzung unter ihrer Sperre und die vom Panel aufgerufenen Routen (und in manchen Knoten die HTTP-Codes oder die Glyphen der Schriften)
 
