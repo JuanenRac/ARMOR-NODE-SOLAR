@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The contracts it says it was checked against are 0.8.1.5:** the information message of the node carries the version of the contracts that the reverse-dependency run of ARMOR-COMMON last checked it against.
+
 ## [0.6.8] - Signed battery orders, a narrower expert console, re-checked battery orders, set-up password and slot copy locks
 
 - **The structure generator can write a figure read from the code:** `tools/make_structure.py` resolves `{{fact:NAME|LAST}}` in the descriptions of `docs/structure.json` where the documentation tools are next to the repository, and writes LAST (the figure it had when last written) everywhere else, so a repository still builds on its own.
