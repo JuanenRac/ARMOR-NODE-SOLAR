@@ -150,3 +150,101 @@ inline bool parse_fws(const std::string& payload, std::vector<std::string>& acti
 }
 
 }  // namespace armor::solar::voltronic::pi18
+
+// ---- PI17: Infini-Solar 5 kW, LV 6 kW, WP and TWIN ----------------------------------------------------------------------------------------
+//   Request:  ^P<three digits: the command's length + 1><command><CR>, with NO CRC (^P003GS, ^P003PS, ^P004MOD, ^P003WS)
+//   Reply:    the same frames as PI18 (pi18::parse_reply and pi18::ReplyFramer)
+// Written from the makers' two documents (the 5 kW one and the LV 6K / WP / TWIN one). Their templates and their field lists do not agree everywhere: the field lists are followed.
+// NOTHING here has been connected to an inverter. Only reading commands are built.
+namespace armor::solar::voltronic::pi17 {
+
+inline bool build_command(std::string_view command, std::vector<std::uint8_t>& out) {
+  out.clear();
+  bool known = false;
+  for (const char* name : {"GS", "PS", "MOD", "WS", "PI", "ID", "VFW"}) known = known || command == name;
+  if (!known) return false;
+  const std::size_t length = command.size() + 1;
+  const std::string head = std::string("^P00") + static_cast<char>('0' + length);
+  out.assign(head.begin(), head.end());
+  out.insert(out.end(), command.begin(), command.end());
+  out.push_back('\r');
+  return true;
+}
+
+// The comma separated numbers of a payload; an empty field (reserved) is 0. False when one is not a number.
+inline bool numbers(const std::string& payload, std::vector<double>& out) {
+  out.clear();
+  const std::vector<std::string> f = pi18::split_commas(payload);
+  if (f.size() > 40) return false;
+  for (const std::string& field : f) {
+    double value = 0;
+    if (!field.empty() && !detail::number(field, value)) return false;
+    out.push_back(value);
+  }
+  return true;
+}
+
+// GS: PV voltages 1 and 2 (x0.1 V), PV currents, battery V x10, capacity %, battery current x10 (+ charging), grid V R S T x10, grid Hz x100, grid currents, output V R S T x10,
+// output Hz x100, output currents, inner temperature, highest component temperature, ...
+inline bool parse_gs(const std::string& payload, Status& out) {
+  std::vector<double> v;
+  if (!numbers(payload, v) || v.size() < 22) return false;
+  const std::vector<std::string> f = pi18::split_commas(payload);
+  if (f[4].empty() || f[5].empty()) return false;
+  Status s = out;
+  s.battery_v = v[4] / 10;
+  s.battery_percent = v[5];
+  s.battery_charge_a = v[6] > 0 ? v[6] / 10 : 0;
+  s.battery_discharge_a = v[6] < 0 ? -v[6] / 10 : 0;
+  s.grid_v = v[7] / 10; s.grid_hz = v[10] / 100;
+  s.out_v = v[14] / 10; s.out_hz = v[17] / 100;
+  s.heatsink_c = v.size() > 22 ? v[22] : v[21];
+  s.pv_v = (v[1] > v[0] ? v[1] : v[0]) / 10;
+  hold_limits(s);
+  out = s;
+  return true;
+}
+
+// PS: PV powers 1 and 2 (W), the battery power or nothing, the grid's active power R S T and total, the output's active power R S T and total, apparent power R S T and total,
+// load %, output connected, PV 1 and 2 working, battery direction (1 charging, 2 discharging), DC/AC direction (1 AC to DC), line direction. It completes what GS filled.
+inline bool parse_ps(const std::string& payload, Status& out) {
+  std::vector<double> v;
+  if (!numbers(payload, v) || v.size() < 22) return false;
+  const std::vector<std::string> f = pi18::split_commas(payload);
+  Status s = out;
+  s.pv_w = v[0] + v[1]; s.has_pv_w = true;
+  s.pv_a = s.pv_v > 1.0 ? s.pv_w / s.pv_v : 0.0;
+  s.out_w = f[10].empty() ? v[7] : v[10];
+  s.out_va = f[14].empty() ? v[11] : v[14];
+  s.load_percent = v[15];
+  s.load_on = v[16] == 1;
+  s.charging = v[19] == 1;
+  s.ac_charging = s.charging && v[20] == 1;
+  s.scc_charging = s.charging && s.pv_w > 0;
+  hold_limits(s);
+  out = s;
+  return true;
+}
+
+// MOD: 00 power on, 01 standby, 02 bypass, 03 battery, 04 fault, 05 hybrid (line, grid), 06 charge.
+inline bool parse_mod(const std::string& payload, char& mode) {
+  if (payload.size() != 2 || payload[0] != '0' || payload[1] < '0' || payload[1] > '6') return false;
+  static const char kLetters[7] = {'P', 'S', 'L', 'B', 'F', 'L', 'L'};
+  mode = kLetters[payload[1] - '0'];
+  return true;
+}
+
+// WS: one 0/1 flag per warning, A to V.
+inline bool parse_ws(const std::string& payload, std::vector<std::string>& active) {
+  static const char* const kNames[22] = {"pv1_loss", "pv2_loss", "pv_voltage_high", "pv2_voltage_high", "battery_under", "battery_low", "battery_open", "battery_voltage_high",
+                                         "battery_low_hybrid", "grid_voltage_high", "grid_voltage_low", "grid_frequency_high", "grid_frequency_low", "grid_average_voltage_high",
+                                         "grid_voltage_loss", "grid_frequency_loss", "islanding", "grid_phase_error", "over_temperature", "overload", "emergency_power_off",
+                                         "grid_wave_loss"};
+  active.clear();
+  std::vector<double> v;
+  if (!numbers(payload, v) || v.size() < 20) return false;
+  for (std::size_t i = 0; i < 22 && i < v.size(); ++i) if (v[i] >= 1) active.push_back(kNames[i]);
+  return true;
+}
+
+}  // namespace armor::solar::voltronic::pi17

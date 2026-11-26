@@ -68,10 +68,10 @@ class ModbusDriver final : public Driver {
   struct Block { std::uint16_t first, count; bool essential; const char* name; };
   static constexpr std::size_t kMaxRegisters = 40;
 
-  std::size_t blocks() const { return map_ == ModbusMap::kSmg2 ? 3 : 2; }
+  std::size_t blocks() const { return map_ == ModbusMap::kSrneMppt ? 2 : 3; }
   Block block() const {
     static constexpr Block kSmg2[3] = {{201, 34, true, "registers 201..234"}, {100, 2, false, "faults 100..101"}, {108, 2, false, "warnings 108..109"}};
-    static constexpr Block kSrneHybrid[2] = {{0x0100, 15, true, "registers 0x0100..0x010E"}, {0x0210, 18, true, "registers 0x0210..0x0221"}};
+    static constexpr Block kSrneHybrid[3] = {{0x0100, 15, true, "registers 0x0100..0x010E"}, {0x0210, 18, true, "registers 0x0210..0x0221"}, {0x0204, 4, false, "fault codes 0x0204..0x0207"}};
     static constexpr Block kSrneMppt[2] = {{0x0100, 10, true, "registers 0x0100..0x0109"}, {0x010B, 3, false, "state and faults 0x010B..0x010D"}};
     return map_ == ModbusMap::kSmg2 ? kSmg2[at_] : map_ == ModbusMap::kSrneHybrid ? kSrneHybrid[at_] : kSrneMppt[at_];
   }
@@ -135,7 +135,10 @@ class ModbusDriver final : public Driver {
         }
       }
     } else if (map_ == ModbusMap::kSrneHybrid) {
-      if (b.first == 0x0100) {
+      if (b.first == 0x0204) {   // up to four fault codes at once, 0: none
+        for (std::uint16_t reg = 0x204; reg < 0x208; ++reg) if (u(reg) > 0) warn(("fault_code_" + std::to_string(static_cast<int>(u(reg)))).c_str());
+        out_.warnings_known = true;
+      } else if (b.first == 0x0100) {
         o.battery_percent = u(0x100);
         o.battery_v = u(0x101) * 0.1;
         const double current = s(0x102) * 0.1;   // positive: discharging

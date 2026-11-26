@@ -26,6 +26,7 @@ using namespace armor;
 using namespace armor::solar;
 using Bytes = std::vector<std::uint8_t>;
 
+static std::vector<std::uint8_t> as_bytes(const std::string& text) { return std::vector<std::uint8_t>(text.begin(), text.end()); }
 static bool near(double a, double b) { return std::fabs(a - b) < 1e-6; }
 static bool has(const std::string& text, const char* part) { return text.find(part) != std::string::npos; }
 
@@ -59,7 +60,8 @@ static void test_jbd() {
   CHECK(d.begin() == hex("DD A5 03 00 FF FD 77") && !d.inverter());
   CHECK(give(d, hex("DD 03 00 1B 17 00 00 00 02 D0 03 E8 00 00 20 78 00 00 00 00 00 00 10 48 03 0F 02 0B 76 0B 82 FB FF 77"), next) == drivers::Rx::kNext);
   CHECK(next == hex("DD A5 04 00 FF FC 77"));
-  CHECK(give(d, hex("DD 04 00 1E 0F 66 0F 63 0F 63 0F 64 0F 3E 0F 63 0F 37 0F 5B 0F 65 0F 3B 0F 63 0F 63 0F 3C 0F 66 0F 3D F9 F9 77"), next) == drivers::Rx::kDone);
+  CHECK(give(d, hex("DD 04 00 1E 0F 66 0F 63 0F 63 0F 64 0F 3E 0F 63 0F 37 0F 5B 0F 65 0F 3B 0F 63 0F 63 0F 3C 0F 66 0F 3D F9 F9 77"), next) == drivers::Rx::kNext);
+  CHECK(next == hex("DD A5 05 00 FF FB 77") && give(d, hex("DD 05 00 04 41 42 43 31 FF 05 77"), next) == drivers::Rx::kDone && d.out().modules.front().board_version == "ABC1");
   const pylontech::Module& m = d.out().modules.front();
   CHECK(near(m.voltage_v, 58.88) && near(m.current_a, 0) && near(m.capacity_ah, 7.2) && near(m.full_capacity_ah, 10) && m.soc_percent == 72);
   CHECK(m.cells_v.size() == 15 && near(m.cells_v.front(), 3.942) && near(m.cells_v.back(), 3.901) && m.cell_count == 15);
@@ -69,7 +71,18 @@ static void test_jbd() {
   CHECK(give(d, hex("DD 03 00 1B 17 01 00 00 02 D0 03 E8 00 00 20 78 00 00 00 00 00 00 10 48 03 0F 02 0B 76 0B 82 FB FF 77"), next) == drivers::Rx::kBad && std::string(d.error()) == "crc");
   d.begin();
   CHECK(give(d, hex("DD 03 00 1B 17 00 00 00 02 D0 03 E8 00 00 20 78 00 00 00 00 00 00 10 48 03 0F 02 0B 76 0B 82 FB FF 77"), next) == drivers::Rx::kNext);
-  CHECK(d.timeout(next) == drivers::Rx::kDone && d.out().modules.front().cells_v.empty());
+  CHECK(d.timeout(next) == drivers::Rx::kDone && d.out().modules.front().cells_v.empty() && d.out().modules.front().board_version == "ABC1");
+  // the version is asked once: a board that has answered is not asked again, and one that never does is left alone after the first try
+  d.begin();
+  give(d, hex("DD 03 00 1B 17 00 00 00 02 D0 03 E8 00 00 20 78 00 00 00 00 00 00 10 48 03 0F 02 0B 76 0B 82 FB FF 77"), next);
+  CHECK(give(d, hex("DD 04 00 02 0F 66 FF 89 77"), next) == drivers::Rx::kDone);
+  drivers::JbdDriver mute;
+  mute.begin();
+  give(mute, hex("DD 03 00 1B 17 00 00 00 02 D0 03 E8 00 00 20 78 00 00 00 00 00 00 10 48 03 0F 02 0B 76 0B 82 FB FF 77"), next);
+  CHECK(give(mute, hex("DD 04 00 02 0F 66 FF 89 77"), next) == drivers::Rx::kNext && mute.timeout(next) == drivers::Rx::kDone && mute.out().modules.front().board_version.empty());
+  mute.begin();
+  give(mute, hex("DD 03 00 1B 17 00 00 00 02 D0 03 E8 00 00 20 78 00 00 00 00 00 00 10 48 03 0F 02 0B 76 0B 82 FB FF 77"), next);
+  CHECK(give(mute, hex("DD 04 00 02 0F 66 FF 89 77"), next) == drivers::Rx::kDone);
 }
 
 static Bytes daly(std::uint8_t id, const std::string& data) {
@@ -95,11 +108,23 @@ static void test_daly() {
   CHECK(give(d, daly(0x94, "04 02 00 00 00 00 00 00"), next) == drivers::Rx::kNext && next[2] == 0x95);
   CHECK(give(d, daly(0x95, "01 0C E4 0C E5 0C E6 00"), next) == drivers::Rx::kMore);
   CHECK(give(d, daly(0x95, "02 0C E7 00 00 00 00 00"), next) == drivers::Rx::kNext && next[2] == 0x96);
-  CHECK(give(d, daly(0x96, "01 41 43 00 00 00 00 00"), next) == drivers::Rx::kNext && next[2] == 0x98);
+  CHECK(give(d, daly(0x96, "01 41 43 00 00 00 00 00"), next) == drivers::Rx::kNext && next[2] == 0x97);
+  CHECK(give(d, daly(0x97, "05 00 00 00 00 00 00 00"), next) == drivers::Rx::kNext && next[2] == 0x98);
   CHECK(give(d, daly(0x98, "00 00 00 00 00 00 00 00"), next) == drivers::Rx::kDone);
   const pylontech::Module& m = d.out().modules.front();
   CHECK(near(m.voltage_v, 52.8) && near(m.current_a, -12.5) && m.soc_percent == 87 && m.base_state == "Dischg" && near(m.capacity_ah, 50));
-  CHECK(m.cells_v.size() == 4 && near(m.cells_v[3], 3.303) && m.temperatures_c.size() == 2 && near(m.temperatures_c[0], 25) && m.system_alarm_state == "Normal");
+  CHECK(m.cells_v.size() == 4 && near(m.cells_v[3], 3.303) && m.temperatures_c.size() == 2 && near(m.temperatures_c[0], 25) && m.system_alarm_state == "Normal" && m.balancing == 2);
+  // cell frames numbered from 0, as the document says
+  drivers::DalyDriver zero;
+  zero.begin();
+  give(zero, daly(0x90, "02 10 02 10 74 B3 03 69"), next);
+  give(zero, daly(0x93, "02 01 01 05 00 00 C3 50"), next);
+  CHECK(give(zero, daly(0x94, "04 00 00 00 00 00 00 00"), next) == drivers::Rx::kNext && next[2] == 0x95);
+  CHECK(give(zero, daly(0x95, "00 0C E4 0C E5 0C E6 00"), next) == drivers::Rx::kMore && give(zero, daly(0x95, "01 0C E7 00 00 00 00 00"), next) == drivers::Rx::kNext && next[2] == 0x97);
+  CHECK(zero.timeout(next) == drivers::Rx::kNext && next[2] == 0x98 && give(zero, daly(0x98, "00 00 00 00 00 00 00 00"), next) == drivers::Rx::kNext && next[2] == 0x92);
+  CHECK(give(zero, daly(0x92, "42 01 3C 02 00 00 00 00"), next) == drivers::Rx::kDone);
+  const pylontech::Module& z = zero.out().modules.front();
+  CHECK(z.cells_v.size() == 4 && near(z.cells_v[0], 3.300) && near(z.cells_v[3], 3.303) && near(z.temperature_high_c, 26) && near(z.temperature_low_c, 20) && z.has_temperature);
   // only the first question is essential
   d.begin();
   CHECK(d.timeout(next) == drivers::Rx::kBad);
@@ -128,7 +153,8 @@ static void test_jk() {
   Bytes next;
   d.begin();
   // two cells, tube 25, box -1 (101), battery 22, 52.80 V, current (10000 - 9500) = +5.00 A, 64 %
-  CHECK(give(d, jk_frame("79 06 01 0C E4 02 0C EE 80 00 19 81 00 65 82 00 16 83 14 A0 84 25 1C 85 40 8A 00 02 8B 00 00"), next) == drivers::Rx::kDone);
+  CHECK(give(d, jk_frame("79 06 01 0C E4 02 0C EE 80 00 19 81 00 65 82 00 16 83 14 A0 84 25 1C 85 40 8A 00 02 8B 00 00 B7 56 31 2E 32 00 00 00 00 00 00 00 00 00 00 00"), next) == drivers::Rx::kDone);
+  CHECK(d.out().modules.front().soft_version == "V1.2");
   const pylontech::Module& m = d.out().modules.front();
   CHECK(near(m.voltage_v, 52.8) && near(m.current_a, 5.0) && m.soc_percent == 64 && m.cells_v.size() == 2 && near(m.cells_v[1], 3.31) && m.cell_count == 2);
   CHECK(m.temperatures_c.size() == 3 && near(m.temperatures_c[1], -1) && near(m.temperature_low_c, -1) && near(m.temperature_high_c, 25));
@@ -186,7 +212,8 @@ static void test_modbus() {
   dc[0] = 55; dc[1] = 512; dc[2] = 0x10000 - 200; dc[7] = 3000; dc[8] = 40; dc[9] = 1200;
   ac[0] = 5; ac[3] = 0; ac[6] = 2300; ac[8] = 5000; ac[11] = 700; ac[12] = 760; ac[15] = 14; ac[16] = 350; ac[17] = 400;
   CHECK(give(srne, modbus_reply(dc), next) == drivers::Rx::kNext && next == drivers::modbus_read(1, 0x0210, 18));
-  CHECK(give(srne, modbus_reply(ac), next) == drivers::Rx::kDone);
+  CHECK(give(srne, modbus_reply(ac), next) == drivers::Rx::kNext && next == drivers::modbus_read(1, 0x0204, 4));
+  CHECK(give(srne, modbus_reply({1, 14, 0, 0}), next) == drivers::Rx::kDone && srne.out().warnings_known && srne.out().warnings.size() == 2 && srne.out().warnings[1] == "fault_code_14");
   CHECK(srne.out().mode == 'B' && near(srne.out().status.battery_a(), 20) && near(srne.out().status.out_v, 230) && near(srne.out().status.out_w, 700) && near(srne.out().status.heatsink_c, 40));
 
   drivers::ModbusDriver mppt(drivers::ModbusMap::kSrneMppt);
@@ -369,7 +396,7 @@ static void test_pi00_port() {
   none.run(silent, 3500);
   CHECK(has(silent.diagnosis(), "automatic, in turn") && has(silent.diagnosis(), "pi30 = 51 50 49 47 53 B7 A9 0D") && has(silent.diagnosis(), "pi00, no CRC = 51 50 49 47 53 0D") && has(silent.diagnosis(), "pi18 = 5E 50 30 30 35 47 53"));
   none.run(silent, 12000);
-  CHECK(none.sent.size() >= 4 && none.sent[0] == ask("QPIGS", true) && none.sent[1] == ask("QPIGS", false) && none.sent[2][0] == '^' && none.sent[3] == ask("QPIGS", true));
+  CHECK(none.sent.size() >= 5 && none.sent[0] == ask("QPIGS", true) && none.sent[1] == ask("QPIGS", false) && none.sent[2][0] == '^' && none.sent[3][0] == '^' && none.sent[3] != none.sent[2] && none.sent[4] == ask("QPIGS", true));
 
   // chosen by hand, with the PI00 arrangement of the answers
   Poller fixed(config::Kind::kVoltronic, "solar-1", "infini-1", 5, 0, "pi00");
@@ -412,6 +439,125 @@ static void test_pi00_port() {
   noise.answers = {{ask("QPIGS", false), plain(std::string("12") + '\x02')}};
   noise.run(damaged, 6000);
   CHECK(noise.messages.empty() && damaged.stats().last_error == "crc");
+}
+
+// ---- PI16, PI17, the PIP-GK letters, VE.Direct HEX and the Phoenix inverter (invented frames) ----------------------------------------------
+static const char* kPi16Qpigs = "227.0 000400 50.0 0001.8 229.0 00420 49.9 001.9 012 421.0 421.0 053.1 ---.- 081 00510 00200 ----- 188.0 ---.- ---.- 029.0 A---101001";
+
+static void test_pi16_and_variants() {
+  voltronic::Status s;
+  bool pi16 = false;
+  CHECK(voltronic::parse_qpigs_pi00(kPi16Qpigs, s, &pi16) && pi16 && near(s.grid_v, 227) && near(s.out_w, 420) && near(s.pv_w, 710) && near(s.pv_v, 188) && near(s.battery_v, 53.1) && near(s.heatsink_c, 29));
+  CHECK(voltronic::parse_qpigs_pi00(kPi00Qpigs, s, &pi16) && !pi16);
+  std::string broken = kPi16Qpigs;
+  broken.back() = '7';
+  CHECK(!voltronic::parse_qpigs_pi00(broken, s));
+  std::vector<std::string> flags;
+  CHECK(voltronic::parse_qpiws_pi00("1-0000000000--01", flags, true) && flags.size() == 2 && flags[0] == "inverter_fault" && flags[1] == "battery_low");
+  CHECK(voltronic::parse_qpiws_pi00("1", flags, false) && flags[0] == "pv_fail" && !voltronic::parse_qpiws_pi00("2", flags, true));
+  char mode = 0;
+  CHECK(voltronic::parse_qmod("C", mode) && mode == 'L' && voltronic::parse_qmod("Y", mode) && mode == 'L' && voltronic::parse_qmod("E", mode) && mode == 'H');
+  // the two digits of a fault code among the flags of the MAX and PIP-MK
+  std::string warnings(36, '0');
+  warnings[5] = '1'; warnings[31] = '5'; warnings[32] = '3';
+  CHECK(voltronic::parse_qpiws(warnings, flags) && flags.size() == 1 && flags[0] == "line_fail");
+  warnings[30] = '2';
+  CHECK(!voltronic::parse_qpiws(warnings, flags));
+}
+
+static Bytes pi17_reply(const std::string& payload) {
+  const std::size_t n = payload.size() + 3;
+  std::string head = "^D";
+  head += static_cast<char>('0' + n / 100); head += static_cast<char>('0' + (n / 10) % 10); head += static_cast<char>('0' + n % 10);
+  head += payload;
+  Bytes f(head.begin(), head.end());
+  const auto crc = voltronic::wire_crc(f.data(), f.size());
+  f.push_back(crc[0]); f.push_back(crc[1]); f.push_back('\r');
+  return f;
+}
+static Bytes ask17(const char* command) {
+  Bytes out;
+  voltronic::pi17::build_command(command, out);
+  return out;
+}
+static const char* kPi17Gs = "3200,2900,0050,0040,0528,076,-00125,2300,0000,0000,5000,0010,0000,0000,2301,0000,0000,5001,0035,0000,0000,038,045,025,0";
+static const char* kPi17Ps = "00900,00300,,00000,00000,00000,00000,00800,00000,00000,00800,00850,00000,00000,00850,016,1,1,1,2,2,0";
+
+static void test_pi17() {
+  CHECK(ask17("GS") == hex("5E 50 30 30 33 47 53 0D") && ask17("MOD") == hex("5E 50 30 30 34 4D 4F 44 0D"));
+  Bytes refused;
+  CHECK(!voltronic::pi17::build_command("POP", refused) && refused.empty());
+  voltronic::Status s;
+  CHECK(voltronic::pi17::parse_gs(kPi17Gs, s) && near(s.battery_v, 52.8) && near(s.battery_discharge_a, 12.5) && near(s.grid_v, 230) && near(s.out_v, 230.1) && near(s.out_hz, 50.01) && near(s.heatsink_c, 45) && near(s.pv_v, 320));
+  CHECK(voltronic::pi17::parse_ps(kPi17Ps, s) && near(s.pv_w, 1200) && near(s.out_w, 800) && near(s.out_va, 850) && near(s.load_percent, 16) && s.load_on && !s.charging);
+  CHECK(!voltronic::pi17::parse_gs("1,2,3", s) && !voltronic::pi17::parse_ps("a,b", s));
+  char mode = 0;
+  std::vector<std::string> flags;
+  CHECK(voltronic::pi17::parse_mod("06", mode) && mode == 'L' && !voltronic::pi17::parse_mod("07", mode));
+  CHECK(voltronic::pi17::parse_ws("0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0", flags) && flags.size() == 2 && flags[0] == "battery_low" && flags[1] == "overload" && !voltronic::pi17::parse_ws("0,1", flags));
+
+  // "auto" reaches it after the three other forms, and keeps it
+  Poller p(config::Kind::kVoltronic, "solar-1", "infini-3", 5, 0, "auto");
+  Unit unit;
+  unit.answers = {{ask17("GS"), pi17_reply(kPi17Gs)}, {ask17("PS"), pi17_reply(kPi17Ps)}, {ask17("MOD"), pi17_reply("03")}, {ask17("WS"), pi17_reply("0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0")}};
+  unit.run(p, 20000);
+  CHECK(p.detail() == "pi17" && !unit.messages.empty() && has(unit.messages.front(), "\"pv_w\":1200") && has(unit.messages.front(), "\"mode\":\"battery\"") && has(unit.messages.front(), "battery_low") && !has(unit.messages.front(), "warnings_known"));
+  Poller damaged(config::Kind::kVoltronic, "solar-1", "infini-3", 5, 0, "pi17");
+  Unit bad;
+  Bytes corrupt = pi17_reply(kPi17Gs);
+  corrupt[9] ^= 1;
+  bad.answers = {{ask17("GS"), corrupt}};
+  bad.run(damaged, 3000);
+  CHECK(bad.messages.empty() && damaged.stats().last_error == "crc" && has(damaged.diagnosis(), "asked: ^P003GS | 5E 50"));
+}
+
+static Bytes hex_answer(std::uint16_t id, std::uint32_t value, std::size_t size, std::uint8_t flags = 0) {
+  std::vector<std::uint8_t> bytes{static_cast<std::uint8_t>(id), static_cast<std::uint8_t>(id >> 8), flags};
+  for (std::size_t i = 0; i < size; ++i) bytes.push_back(static_cast<std::uint8_t>(value >> (8 * i)));
+  unsigned sum = 7;
+  for (const std::uint8_t b : bytes) sum += b;
+  bytes.push_back(static_cast<std::uint8_t>(0x55 - sum));
+  static const char kDigits[] = "0123456789ABCDEF";
+  Bytes out{':', '7'};
+  for (const std::uint8_t b : bytes) { out.push_back(static_cast<std::uint8_t>(kDigits[b >> 4])); out.push_back(static_cast<std::uint8_t>(kDigits[b & 15])); }
+  out.push_back('\n');
+  return out;
+}
+
+static void test_vedirect_hex_and_inverter() {
+  drivers::VedirectHexDriver d;
+  Bytes next;
+  CHECK(as_bytes(":78DED00D4\n") == d.begin() && !d.inverter());
+  CHECK(give(d, as_bytes("\r\nV\t26000"), next) == drivers::Rx::kMore);                       // a text block in between
+  CHECK(give(d, d.request(0xED8D), next) == drivers::Rx::kMore);                              // our own question heard back is too short to be an answer
+  CHECK(give(d, hex_answer(0xED8D, 2648, 2), next) == drivers::Rx::kNext && next == d.request(0xED8F));
+  CHECK(give(d, hex_answer(0xED8F, 0xFFF1, 2), next) == drivers::Rx::kNext);                  // -1.5 A
+  CHECK(give(d, hex_answer(0x0FFF, 8760, 2), next) == drivers::Rx::kNext);
+  CHECK(give(d, hex_answer(0xEDEC, 29815, 2), next) == drivers::Rx::kNext);                   // 25.0 C
+  CHECK(give(d, hex_answer(0x1000, 200, 2), next) == drivers::Rx::kNext && next == d.request(0x0303));
+  CHECK(give(d, hex_answer(0x0303, 41, 4), next) == drivers::Rx::kDone);
+  const pylontech::Module& m = d.out().modules.front();
+  CHECK(near(m.voltage_v, 26.48) && near(m.current_a, -1.5) && m.soc_percent == 88 && m.has_temperature && near(m.temperature_c, 25.0) && near(m.full_capacity_ah, 200) && m.cycles == 41);
+  // a damaged or refused voltage loses the cycle, any other register is left out
+  d.begin();
+  Bytes wrong = hex_answer(0xED8D, 2648, 2);
+  wrong[8] = wrong[8] == '0' ? '1' : '0';
+  CHECK(give(d, wrong, next) == drivers::Rx::kBad && std::string(d.error()) == "crc");
+  d.begin();
+  CHECK(give(d, hex_answer(0xED8D, 0, 2, 1), next) == drivers::Rx::kBad && std::string(d.error()) == "nak");
+  d.begin();
+  CHECK(d.timeout(next) == drivers::Rx::kBad);
+  d.begin();
+  give(d, hex_answer(0xED8D, 2648, 2), next);
+  CHECK(d.timeout(next) == drivers::Rx::kNext && give(d, hex_answer(0x0FFF, 0xFFFF, 2), next) == drivers::Rx::kNext && d.timeout(next) == drivers::Rx::kNext);
+  CHECK(d.timeout(next) == drivers::Rx::kNext && d.timeout(next) == drivers::Rx::kDone && d.out().modules.front().soc_percent < 0 && !d.out().modules.front().has_temperature);
+
+  drivers::VedirectDriver phoenix(drivers::VedirectUse::kInverter);
+  phoenix.begin();
+  CHECK(phoenix.inverter() && give(phoenix, vedirect("\r\nV\t25600"), next) == drivers::Rx::kMore);
+  CHECK(give(phoenix, vedirect("\r\nV\t25600\r\nAC_OUT_V\t23000\r\nAC_OUT_I\t12\r\nAC_OUT_S\t276\r\nMODE\t2\r\nAR\t0\r\nWARN\t256"), next) == drivers::Rx::kDone);
+  CHECK(near(phoenix.out().status.out_v, 230) && near(phoenix.out().status.out_va, 276) && near(phoenix.out().status.battery_v, 25.6) && phoenix.out().mode == 'B' && phoenix.out().status.load_on);
+  CHECK(phoenix.out().warnings.size() == 1 && phoenix.out().warnings.front() == "overload");
 }
 
 static void test_driver_through_the_poller() {
@@ -475,7 +621,10 @@ static void test_odd_answers() {
   CHECK(give(daly_driver, daly(0x90, "02 10 02 10 79 18 03 E8"), next) == drivers::Rx::kNext);
   CHECK(give(daly_driver, daly(0x93, "01 01 01 05 00 00 00 00"), next) == drivers::Rx::kNext);
   CHECK(daly_driver.timeout(next) == drivers::Rx::kNext && next[2] == 0x98);                                              // no counts: no cells and no sensors are asked
-  CHECK(give(daly_driver, daly(0x98, "01"), next) == drivers::Rx::kDone && daly_driver.out().modules.front().system_alarm_state == "Alarm");
+  CHECK(give(daly_driver, daly(0x98, "01"), next) == drivers::Rx::kNext && next[2] == 0x91);                             // no list of cells: their extremes
+  CHECK(give(daly_driver, daly(0x91, "0D 02 01 0C E4 02 00 00"), next) == drivers::Rx::kNext && next[2] == 0x92);
+  CHECK(daly_driver.timeout(next) == drivers::Rx::kDone && daly_driver.out().modules.front().system_alarm_state == "Alarm");
+  CHECK(near(daly_driver.out().modules.front().cell_high_v, 3.33) && near(daly_driver.out().modules.front().cell_low_v, 3.3));
   CHECK(daly_driver.out().modules.front().base_state == "Charge" && daly_driver.out().modules.front().soc_percent == 100);
 
   drivers::JkDriver jk_driver;
@@ -588,6 +737,9 @@ int main() {
   test_pi41_and_pi34();
   test_pi00_frames();
   test_pi00_port();
+  test_pi16_and_variants();
+  test_pi17();
+  test_vedirect_hex_and_inverter();
   test_driver_through_the_poller();
   test_odd_answers();
   test_driver_timeouts_through_the_poller();
