@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The lights of ports 9 and 10 are no longer swapped on the base board:** the default is now LED 9 on GPIO 3 and LED 10 on GPIO 45, as the board is wired. A configuration already saved on a node does not change by itself: set the two pins on the Ports page of its panel (first to *none* if the panel refuses to give one pin to both).
+
 ## [0.7.0] - Readings page and update check fixed, more internal memory and complete battery sheets
 
 - **No more empty batteries in a stack:** the console of a Pylontech lists sixteen places, and a stack of two sent fourteen empty ones that the Readings page drew as cards. The message now ends at the last battery that is there (or was, since the node started); an empty place between two batteries is still told. Same contract. Tried on a computer only.
