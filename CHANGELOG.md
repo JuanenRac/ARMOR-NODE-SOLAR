@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.7.1] - Older inverters without CRC, and the lights of ports 9 and 10
+
 - **Older inverters that expect no CRC can be asked (PI00):** a new inverter protocol, `pi00`, sends each question as its letters and a carriage return, with no CRC, and reads the answer with or without one, in the PI30 arrangement or in the PI00 document's own. *Automatic* now asks in turn with PI30 (with CRC), without CRC, and then PI18. While it is still looking, the raw view of the port shows the exact bytes of every question it sends. Decoded from the public description and tested on a computer with invented frames: not tried on an inverter.
 - **The lights of ports 9 and 10 are no longer swapped on the base board:** the default is now LED 9 on GPIO 3 and LED 10 on GPIO 45, as the board is wired. A configuration already saved on a node does not change by itself: set the two pins on the Ports page of its panel (first to *none* if the panel refuses to give one pin to both).
 
