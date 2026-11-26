@@ -745,19 +745,25 @@ function ring(percent) {
   return node;
 }
 
+// The cells of a battery in rows as even as they can be: 15 are three rows of five, 16 four of four.
+const cellColumns = count => (count % 5 === 0 ? 5 : count % 4 === 0 ? 4 : count < 5 ? count : 5);
+
 function cellBars(x, limits) {
   const cells = x.cells_v || [];
   if (!cells.length) return el("p", { class: "muted" }, t("rv_noCells"));
   const low = Math.min(...cells), high = Math.max(...cells), abnormal = x.soh_abnormal || [];
-  return el("div", { class: "rv-cells" }, cells.map((v, i) => {
+  const box = el("div", { class: "rv-cells" }, cells.map((v, i) => {
     const level = cellLevel(v, limits);
     const bar = el("i");
-    bar.style.height = Math.max(6, Math.min(100, (v - limits[0]) / (limits[3] - limits[0]) * 100)) + "%";
-    const mark = high - low >= 0.01 ? (v === high ? " top" : v === low ? " low" : "") : "";
+    bar.style.width = Math.max(6, Math.min(100, (v - limits[0]) / (limits[3] - limits[0]) * 100)) + "%";
+    // (the marks of the highest and the lowest cell have names of their own: a bare "top" is the header of the page in style.css)
+    const mark = high - low >= 0.01 ? (v === high ? " rv-max" : v === low ? " rv-min" : "") : "";
     const cell = el("div", { class: "rv-cell " + levelClass(level) + mark + (abnormal.includes(i) ? " soh" : ""), title: t("rv_cell", i + 1) + ": " + v.toFixed(3) + " V" },
-      el("div", { class: "rv-tube" }, bar), el("b", {}, v.toFixed(3)), el("small", {}, String(i + 1)));
+      el("small", {}, String(i + 1)), el("b", {}, v.toFixed(3)), el("span", { class: "rv-tube" }, bar));
     return level === 2 ? blink(cell) : cell;
   }));
+  box.style.setProperty("--cols", String(cellColumns(cells.length)));
+  return box;
 }
 
 function moduleCard(x, limits, key) {
@@ -837,7 +843,8 @@ function bankSummary(list) {
   if (!banks.length && !inverters.length) return null;
   const sum = (items, f) => items.reduce((a, m) => a + (f(m) || 0), 0);
   const modules = sum(banks, m => m.modules);
-  const known = banks.length > 0 && banks.every(m => isNum(m.capacity_ah) && m.full_capacity_ah > 0);
+  // a stack that says it holds more than its full capacity is not counted: the total would be wrong (the state of charge then comes from the stacks' own)
+  const known = banks.length > 0 && banks.every(m => isNum(m.capacity_ah) && m.full_capacity_ah > 0 && m.capacity_ah <= m.full_capacity_ah * 1.05);
   const withSoc = banks.filter(m => isNum(m.soc_percent));
   const soc = known ? sum(banks, m => m.capacity_ah) * 100 / sum(banks, m => m.full_capacity_ah) : withSoc.length ? sum(withSoc, m => m.soc_percent * m.modules) / sum(withSoc, m => m.modules) : undefined;
   const power = sum(banks, m => (isNum(m.power_w) ? m.power_w : m.voltage_v * m.current_a));
