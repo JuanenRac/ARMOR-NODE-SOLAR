@@ -8,7 +8,8 @@
 //   Voltronic / MPP Solar inverter:  QPIGS (the readings), QMOD (the mode), QPIWS (the warnings), each answered before the next is asked. A reading is
 //                                    published only when all three came back whole: a missing warning list must not look like "no warnings".
 //                                    Three dialects: "pi30" (that one), "revo" (QPIGS arranged differently, no warnings asked, replies that may end with a
-//                                    one-byte checksum) and "pi18" (^P005GS, ^P006MOD, ^P005FWS). "auto" (the default) asks in pi30, then in pi18, and
+//                                    one-byte checksum), "pi00" (the same words with NO CRC, as the oldest units want them) and "pi18" (^P005GS, ^P006MOD,
+//                                    ^P005FWS). "auto" (the default) asks in pi30, then without CRC, then in pi18, and
 //                                    keeps to the one that answered; a reply that ends with the checksum instead of the CRC makes it revo.
 //   Pylontech battery (console):     `pwr` (the table of the modules), then for every module that is there `bat <n>` (its cells and remaining charge), and every half hour
 //                                    `info <n>` (model, rated capacity) and `stat <n>` (cycles), whose answers are kept in between. The extras are optional: if they do not
@@ -116,6 +117,7 @@ class Poller {
     else if (dialect == "revo") { dialect_ = Dialect::kRevo; auto_ = false; }
     else if (dialect == "pi41") { dialect_ = Dialect::kPi41; auto_ = false; }
     else if (dialect == "pi34") { dialect_ = Dialect::kPi34; auto_ = false; }
+    else if (dialect == "pi00") { dialect_ = Dialect::kPi00; auto_ = false; }
     else if (dialect == "pi30") auto_ = false;
     known_ = !auto_;
     driver_ = protocols::make_driver(kind, dialect);
@@ -136,25 +138,38 @@ class Poller {
   // Three lines put before the raw dump: what was asked last (its name and its bytes in hexadecimal), what has been counted and the last error.
   std::string diagnosis() const {
     if (kind_ == config::Kind::kRaw) return "";
-    return "asked: " + asking() + " | " + (last_tx_.empty() ? std::string("nothing sent yet") : last_sent_hex()) + "\nbytes sent " + std::to_string(stats_.bytes_tx) + ", heard " +
+    return "asked: " + asking() + (tx_plain_ ? " (no CRC)" : "") + " | " + (last_tx_.empty() ? std::string("nothing sent yet") : last_sent_hex()) + "\n" + tried() + "bytes sent " + std::to_string(stats_.bytes_tx) + ", heard " +
            std::to_string(stats_.bytes_rx) + ", answers " + std::to_string(stats_.replies_ok) + ", refused " + std::to_string(stats_.replies_bad) + ", silences " +
            std::to_string(stats_.timeouts) + "\nlast error: " + (stats_.last_error.empty() ? std::string("none") : stats_.last_error) + "\n";
   }
-  std::string last_sent_hex() const {
+  std::string last_sent_hex() const { return hex_of(last_tx_); }
+  static std::string hex_of(const std::vector<std::uint8_t>& bytes) {
     std::string out;
     static const char kDigits[] = "0123456789ABCDEF";
-    for (const std::uint8_t b : last_tx_) {
+    for (const std::uint8_t b : bytes) {
       if (!out.empty()) out += ' ';
       out += kDigits[b >> 4];
       out += kDigits[b & 15];
     }
     return out;
   }
+  // While "auto" has not found the dialect: every first question it sends in turn, byte by byte (built again here, nothing is stored).
+  std::string tried() const {
+    if (kind_ != config::Kind::kVoltronic || !auto_ || known_) return "";
+    std::vector<std::uint8_t> frame;
+    voltronic::build_command("QPIGS", frame);
+    std::string out = "automatic, in turn (now " + std::string(dialect_name()) + "): pi30 = " + hex_of(frame);
+    voltronic::build_plain_command("QPIGS", frame);
+    out += "; pi00, no CRC = " + hex_of(frame);
+    voltronic::pi18::build_command("GS", frame);
+    return out + "; pi18 = " + hex_of(frame) + "\n";
+  }
   std::string asking() const {
     if (driver_) return driver_->command();
     std::string text;
     // a Voltronic question is its letters, a CRC (two bytes that may look like text) and CR
-    if (kind_ == config::Kind::kVoltronic && dialect_ != Dialect::kPi18 && last_tx_.size() > 3) { text.assign(last_tx_.begin(), last_tx_.end() - 3); return text; }
+    const std::size_t tail = tx_plain_ ? 1 : 3;   // CR, and the CRC when there is one
+    if (kind_ == config::Kind::kVoltronic && last_tx_.size() > tail && last_tx_[0] != '^') { text.assign(last_tx_.begin(), last_tx_.end() - static_cast<std::ptrdiff_t>(tail)); return text; }
     for (const std::uint8_t b : last_tx_) { if (b < 0x20 || b >= 0x7F || text.size() >= 24) break; text += static_cast<char>(b); }
     return text;
   }
@@ -247,7 +262,7 @@ class Poller {
 
  private:
   enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt, kDriver };
-  enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34 };
+  enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34, kPi00 };
   // What `info`, `stat`, `data event` and `soh` said of one module. at_ms: the last full round; tried_ms and misses: the tries while something is still missing.
   struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0, tried_ms = 0; int misses = 0; bool valid = false; };
 
@@ -294,11 +309,13 @@ class Poller {
     deadline_ms_ = now_ms + timeout_ms;
   }
   void send_query(const char* text, std::uint64_t now_ms) {
+    tx_plain_ = dialect_ == Dialect::kPi00;
     if (dialect_ == Dialect::kPi18) voltronic::pi18::build_command(text, pending_);
+    else if (tx_plain_) voltronic::build_plain_command(text, pending_);
     else voltronic::build_command(text, pending_);
     deadline_ms_ = now_ms + kVoltronicTimeoutMs;
   }
-  const char* dialect_name() const { return dialect_ == Dialect::kPi18 ? "pi18" : dialect_ == Dialect::kRevo ? "revo" : dialect_ == Dialect::kPi41 ? "pi41" : dialect_ == Dialect::kPi34 ? "pi34" : "pi30"; }
+  const char* dialect_name() const { return dialect_ == Dialect::kPi18 ? "pi18" : dialect_ == Dialect::kRevo ? "revo" : dialect_ == Dialect::kPi41 ? "pi41" : dialect_ == Dialect::kPi34 ? "pi34" : dialect_ == Dialect::kPi00 ? "pi00" : "pi30"; }
 
   void begin_cycle(std::uint64_t now_ms) {
     cycle_started_ms_ = now_ms;
@@ -368,10 +385,31 @@ class Poller {
 
   // The dialect answered: it is the one from now on (an inverter that only knows it can be met again after three misses).
   void learn(Dialect dialect) {
+    if (dialect == Dialect::kPi30) { crc_reply_seen_ = false; pi00_crc_replies_ = false; }
     if (!auto_) return;
     dialect_ = dialect;
     known_ = true;
     misses_ = 0;
+  }
+  // The order "auto" asks in: with CRC, without it, PI18.
+  static Dialect next_dialect(Dialect dialect) { return dialect == Dialect::kPi30 ? Dialect::kPi00 : dialect == Dialect::kPi00 ? Dialect::kPi18 : Dialect::kPi30; }
+  // An answer that says nothing certain while the dialect is looked for: the cycle is given up and `dialect` is asked soon, without being taken as the one.
+  void try_next(Dialect dialect, const char* why, std::uint64_t now_ms) {
+    dialect_ = dialect;
+    fail(why, now_ms);
+    next_cycle_ms_ = now_ms + 100;
+  }
+  // A reply to a question without CRC. False when there is nothing more to do with it; otherwise `ok` and `text` are what the rest reads.
+  bool take_pi00(const std::vector<std::uint8_t>& frame, bool looking, bool& ok, std::string& text, std::uint64_t now_ms) {
+    if (ok) {
+      // It came with a CRC. A refusal while looking, or the first such answer, may be a plain PI30 unit that missed the first question: PI30 is asked once more.
+      if (looking && (text == "NAK" || !crc_reply_seen_)) { crc_reply_seen_ = true; try_next(Dialect::kPi30, "format", now_ms); return false; }
+      if (text != "NAK") pi00_crc_replies_ = true;   // from here on a reply of this unit that lost its CRC is a damaged one
+      return true;
+    }
+    ok = !pi00_crc_replies_ && voltronic::parse_reply_plain(frame.data(), frame.size(), text);
+    if (looking && ok && text == "NAK") { try_next(Dialect::kPi18, "nak", now_ms); return false; }
+    return true;
   }
   // A whole reply of the other dialect arrived while looking for it: start over in that one, soon.
   void switch_to(Dialect dialect, std::uint64_t now_ms) {
@@ -383,24 +421,33 @@ class Poller {
   void on_pi30_frame(const std::vector<std::uint8_t>& frame, std::uint64_t now_ms) {
     std::string text;
     const bool looking = auto_ && !known_;
-    const bool crc_ok = voltronic::parse_reply(frame.data(), frame.size(), text);
+    bool crc_ok = voltronic::parse_reply(frame.data(), frame.size(), text);   // for pi00: whether the reply is usable
     if (dialect_ == Dialect::kPi18) {
       if (looking && crc_ok) switch_to(Dialect::kPi30, now_ms);
       return;
     }
+    if (dialect_ == Dialect::kPi00 && !take_pi00(frame, looking, crc_ok, text, now_ms)) return;
     if (step_ == Step::kQpigs2 || step_ == Step::kQpgs) { on_optional(crc_ok, text, now_ms); return; }
     if (is_identity_step()) { on_identity(crc_ok, text, now_ms); return; }
     if (!crc_ok) {
       // only the REVO dialect ends a reply with the checksum: a reply that fits it (and no CRC) makes the port REVO
       std::string revo_text;
-      if ((dialect_ == Dialect::kRevo || looking) && voltronic::parse_reply_revo(frame.data(), frame.size(), revo_text)) {
+      if (dialect_ != Dialect::kPi00 && (dialect_ == Dialect::kRevo || looking) && voltronic::parse_reply_revo(frame.data(), frame.size(), revo_text)) {
         // While the dialect is being looked for, a reply with no CRC that only fits the one-byte checksum counts as REVO if it also reads as the reading of a REVO inverter: one corrupted standard
         // reply in 256 fits the checksum by chance, and must not make the port a REVO one.
         decltype(status_) probe{};
         if (dialect_ != Dialect::kRevo && step_ == Step::kQpigs && !voltronic::parse_qpigs_revo(revo_text, probe)) { fail("crc", now_ms); return; }
         text = revo_text;
         learn(Dialect::kRevo);
-      } else { fail("crc", now_ms); return; }
+      } else {
+        // an answer that reads as QPIGS but has no CRC: the unit may be a PI00 one, so it is asked without CRC next (nothing is taken from this one)
+        std::string plain;
+        voltronic::Status probe;
+        if (looking && step_ == Step::kQpigs && voltronic::parse_reply_plain(frame.data(), frame.size(), plain) &&
+            (voltronic::parse_qpigs(plain, probe) || voltronic::parse_qpigs_pi00(plain, probe))) try_next(Dialect::kPi00, "crc", now_ms);
+        else fail("crc", now_ms);
+        return;
+      }
     }
     if (text == "NAK") {
       learn(dialect_);
@@ -411,24 +458,30 @@ class Poller {
     }
     const bool revo = dialect_ == Dialect::kRevo;
     if (step_ == Step::kQpigs) {
-      const bool read = revo ? voltronic::parse_qpigs_revo(text, status_)
+      pi00_layout_ = dialect_ == Dialect::kPi00 && voltronic::parse_qpigs_pi00(text, status_);
+      const bool read = pi00_layout_ ? true
+                        : revo ? voltronic::parse_qpigs_revo(text, status_)
                         : dialect_ == Dialect::kPi41 ? voltronic::parse_qpigs_pi41(text, status_)
                         : dialect_ == Dialect::kPi34 ? voltronic::parse_qpigs_pi34(text, status_)
                                                      : voltronic::parse_qpigs(text, status_);
-      if (!read) { fail("format", now_ms); return; }
+      if (!read) {
+        if (looking && dialect_ == Dialect::kPi00) try_next(Dialect::kPi18, "format", now_ms);
+        else fail("format", now_ms);
+        return;
+      }
       learn(dialect_);
       ++stats_.replies_ok;
       if (dialect_ == Dialect::kPi34) { stats_.last_error.clear(); finish(now_ms); return; }   // a charge controller is not asked for QMOD
       step_ = Step::kQmod;
       send_query("QMOD", now_ms);
     } else if (step_ == Step::kQmod) {
-      if (!voltronic::parse_qmod(text, mode_)) { mode_missed("format", now_ms); return; }
+      if (!(dialect_ == Dialect::kPi00 ? voltronic::parse_qmod_pi00(text, mode_) : voltronic::parse_qmod(text, mode_))) { mode_missed("format", now_ms); return; }
       mode_ever_ = true;
       ++stats_.replies_ok;
       after_mode(now_ms);
     } else if (step_ == Step::kQpiws) {
       std::vector<std::string> flags;
-      if (!voltronic::parse_qpiws(text, flags)) { warnings_missed("format", now_ms); return; }
+      if (!(pi00_layout_ ? voltronic::parse_qpiws_pi00(text, flags) : voltronic::parse_qpiws(text, flags))) { warnings_missed("format", now_ms); return; }
       // the names are those of the PI30 documents: another family's flags mean other things and are not named
       if (dialect_ != Dialect::kPi41) { warnings_ = flags; warnings_read_ = true; }
       warnings_ever_ = true;
@@ -498,7 +551,7 @@ class Poller {
   // ten minutes (QPIRI), and the energy the panels have made in all every five (QET). A question that gets no good answer twice in a row is dropped, and the reading goes out either way.
   bool is_identity_step() const { return step_ == Step::kQid || step_ == Step::kQvfw || step_ == Step::kQpiri || step_ == Step::kQet; }
   void next_identity(std::uint64_t now_ms) {
-    if (!identity_wanted_ || dialect_ != Dialect::kPi30 || !known_) { finish(now_ms); return; }
+    if (!identity_wanted_ || (dialect_ != Dialect::kPi30 && dialect_ != Dialect::kPi00) || !known_) { finish(now_ms); return; }
     if (serial_.empty() && qid_tries_ < kIdentityTries) { step_ = Step::kQid; send_query("QID", now_ms); return; }
     if (firmware_.empty() && qvfw_tries_ < kIdentityTries) { step_ = Step::kQvfw; send_query("QVFW", now_ms); return; }
     if (qpiri_tries_ < kIdentityTries && (!have_ratings_ || now_ms - ratings_at_ms_ >= kRatingsEveryMs)) { step_ = Step::kQpiri; send_query("QPIRI", now_ms); return; }
@@ -799,7 +852,7 @@ class Poller {
     if (kind_ == config::Kind::kPylontech) wake_ = true;   // the console did not answer: the next try starts with a bare Enter
     if (kind_ == config::Kind::kVoltronic && auto_) {
       if (known_ && ++misses_ >= 3) { known_ = false; misses_ = 0; }
-      if (!known_) dialect_ = dialect_ == Dialect::kPi18 ? Dialect::kPi30 : Dialect::kPi18;   // look for the other one at the next try
+      if (!known_) dialect_ = next_dialect(dialect_);   // look for the next one at the next try
       abandon(now_ms);
       if (!known_) next_cycle_ms_ = now_ms + 300;
       return;
@@ -832,6 +885,8 @@ class Poller {
   voltronic::pi18::ReplyFramer framer18_;
   Dialect dialect_ = Dialect::kPi30;
   bool auto_ = true, known_ = false;   // "auto": the dialect is looked for; known: it answered (or it was chosen)
+  bool tx_plain_ = false;              // the last question went without CRC
+  bool crc_reply_seen_ = false, pi00_crc_replies_ = false, pi00_layout_ = false;   // pi00: a CRC reply was seen; its replies carry one; its QPIGS is the PI00 arrangement
   int misses_ = 0;
   voltronic::Status status_;
   bool pv2_wanted_ = false, pv2_absent_ = false, has_pv2_ = false;

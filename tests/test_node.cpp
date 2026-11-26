@@ -281,7 +281,9 @@ struct Bench {
       const std::vector<std::uint8_t> out = poller.next_tx(now);
       if (!out.empty()) {
         std::string command = as_text(out);
-        if (command.size() > 3 && command[0] == 'Q') command = command.substr(0, command.size() - 3);   // the CRC and CR are not part of the name
+        std::vector<std::uint8_t> plain;
+        if (command.size() > 1 && command[0] == 'Q' && voltronic::build_plain_command(command.substr(0, command.size() - 1), plain) && plain == out) command = "plain:" + command.substr(0, command.size() - 1);   // PI00: no CRC
+        else if (command.size() > 3 && command[0] == 'Q') command = command.substr(0, command.size() - 3);   // the CRC and CR are not part of the name
         else if (command.size() > 8 && command[0] == '^') command = "^" + command.substr(5, command.size() - 8);   // "^P005GS" + CRC + CR is "^GS"
         if (!command.empty() && command[0] == '\r') command.erase(0, 1);   // a bare Enter that wakes a console goes before the first `pwr`
         asked.push_back(command);
@@ -540,12 +542,12 @@ static void test_inverter_dialects() {
   pi30.run(6000);
   CHECK(pi30.messages.size() >= 1 && pi30.poller.detail() == "pi30" && pi30.asked[0] == "QPIGS");
 
-  // "auto" on a PI18 inverter that says nothing to the older frames: PI30 times out, then PI18 is tried and kept
+  // "auto" on a PI18 inverter that says nothing to the older frames: PI30 times out with CRC and without it, then PI18 is tried and kept
   Bench found(config::Kind::kVoltronic, 5);
   found.answers["^GS"] = reply18(kGs18); found.answers["^MOD"] = reply18("05"); found.answers["^FWS"] = reply18(kFwsClean);
   found.run(20000);
-  CHECK(found.asked[0] == "QPIGS" && found.asked[1] == "^GS" && found.messages.size() >= 2 && found.poller.detail() == "pi18");
-  CHECK(found.poller.stats().timeouts == 1);
+  CHECK(found.asked[0] == "QPIGS" && found.asked[1] == "plain:QPIGS" && found.asked[2] == "^GS" && found.messages.size() >= 2 && found.poller.detail() == "pi18");
+  CHECK(found.poller.stats().timeouts == 2);
   // it goes quiet: after three misses it looks again (and finds the older dialect if that is what comes back)
   found.answers.clear();
   found.answers["QPIGS"] = reply(kQpigs); found.answers["QMOD"] = reply("L"); found.answers["QPIWS"] = reply(std::string(32, '0'));

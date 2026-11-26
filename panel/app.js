@@ -636,7 +636,7 @@ function portCard(index) {
         cfg.kind === "raw" ? null : field("pollSeconds", base + "poll_s", { type: "number", min: 0, max: 3600, hint: t("pollHint") }),
         cfg.kind === "pylontech" ? field("modulesLabel", base + "modules", { type: "number", min: 0, max: 16, hint: t("modulesHint") }) : null,
         cfg.kind === "pylontech" ? field("cellsLabel", base + "cells_per_cycle", { type: "number", min: 0, max: 8, hint: t("cellsHint") }) : null,
-        cfg.kind === "voltronic" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["pi30", t("dialectPi30")], ["revo", t("dialectRevo")], ["pi18", t("dialectPi18")], ["pi41", "PI41 (LV5048)"], ["pi34", "PI34 (MPPT)"]], hint: t("dialectHint") }) : null,
+        cfg.kind === "voltronic" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["pi30", t("dialectPi30")], ["pi00", t("dialectPi00")], ["revo", t("dialectRevo")], ["pi18", t("dialectPi18")], ["pi41", "PI41 (LV5048)"], ["pi34", "PI34 (MPPT)"]], hint: t("dialectHint") }) : null,
         cfg.kind === "modbus" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["smg2", "Easun / ISolar SMG II"], ["srne-hybrid", "SRNE hybrid"], ["srne-mppt", "SRNE MPPT"]], hint: t("modbusHint") }) : null,
         cfg.kind === "vedirect" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["monitor", "BMV / SmartShunt"], ["mppt", "SmartSolar MPPT"]], hint: t("vedirectHint") }) : null,
         cfg.kind === "voltronic" && (cfg.dialect === "auto" || cfg.dialect === "pi30") ? field("parallelLabel", base + "parallel", { type: "number", min: 0, max: 10, hint: t("parallelHint") }) : null),
