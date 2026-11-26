@@ -67,14 +67,8 @@ class SystemSummary {
     s.kind = Kind::kBattery;
     s.device = device;
     s.stack = pylontech::summarise(modules);
-    // what the stack weighs in the state of charge of the system: its full capacity, only when every battery present says its own
-    double capacity = 0;
-    for (const pylontech::Module& m : modules) {
-      if (!m.present) continue;
-      if (m.full_capacity_ah <= 0) { capacity = 0; break; }
-      capacity += m.full_capacity_ah;
-    }
-    s.weight_ah = capacity;
+    // what the stack weighs in the state of charge of the system: its full capacity, when the stack has one (see pylontech::summarise)
+    s.weight_ah = s.stack.full_capacity_ah > 0 ? s.stack.full_capacity_ah : 0;
     s.at_ms = now_ms;
     s.valid = true;
   }

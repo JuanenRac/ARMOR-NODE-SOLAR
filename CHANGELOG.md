@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The sheets of all the batteries of a stack arrive in a few minutes:** a battery whose `info` or `stat` was not answered (or was refused) is asked again in the next cycles, one battery per cycle and without the event log, three times in a row and then every five minutes, instead of waiting for the next half-hourly round with the empty answer kept. What a battery said before is no longer lost when a later round gets no answer, and after a question that times out the next one waits for the line to be quiet, so a late answer is not read as the answer to the next question. Tried on a computer only.
+- **A stack's full capacity counts a battery without a sheet as the others:** when every battery that told its capacity told the same one and no two name different models, `full_capacity_ah` is the whole stack's; the battery itself still carries no `full_capacity_ah`, which is how a reader knows the total is an estimate, and the panel shows it with an approximately-equal sign. With different capacities or models there is still no total.
+
 ## [0.6.9] - Large battery banks without running out of memory, a Readings page and more equipment protocols
 
 - **The shared project tool is the current one:** the copy follows the shared repository, which now knows the new solar panel node.

@@ -506,7 +506,8 @@ struct Stack {
   double voltage_v = 0, current_a = 0, temperature_min_c = 0, temperature_max_c = 0;
   int soc_percent = -1;
   double cell_low_v = 0, cell_high_v = 0;
-  double capacity_ah = -1, full_capacity_ah = -1, energy_kwh = -1;   // the modules' add up (they are in parallel); -1 unless every present module said
+  double capacity_ah = -1, full_capacity_ah = -1, energy_kwh = -1;   // the modules' add up (they are in parallel); -1 unless every present module said (see full_estimated)
+  bool full_estimated = false;        // full_capacity_ah counts a module that has not told its own as the others (see shared_capacity)
   int cycles = -1;                    // of the most used module
   int health_percent = -1;            // the mean of the modules that know theirs
   std::string model;                  // the first module's
@@ -518,6 +519,24 @@ struct Stack {
   int charge_mos = -1, discharge_mos = -1;   // the first module's that says
   bool has_temperature = false;       // at least one module says its temperature
 };
+
+// The rated capacity to take for a module that has not told its own: that of the others, only when every one that told it told the same and no two present modules name different
+// models. -1: nothing is assumed (none told it, they differ, or the stack mixes models).
+inline double shared_capacity(const std::vector<Module>& modules) {
+  double capacity = -1;
+  const std::string* model = nullptr;
+  for (const Module& m : modules) {
+    if (!m.present) continue;
+    if (!m.model.empty()) {
+      if (model != nullptr && *model != m.model) return -1;
+      model = &m.model;
+    }
+    if (m.full_capacity_ah < 0) continue;
+    if (capacity >= 0 && (m.full_capacity_ah - capacity > 0.005 || capacity - m.full_capacity_ah > 0.005)) return -1;
+    capacity = m.full_capacity_ah;
+  }
+  return capacity;
+}
 
 inline Stack summarise(const std::vector<Module>& modules) {
   Stack s;
@@ -559,9 +578,14 @@ inline Stack summarise(const std::vector<Module>& modules) {
     for (const std::string* state : {&m.voltage_state, &m.current_state, &m.temperature_state, &m.cell_voltage_state, &m.cell_temperature_state, &m.mosfet_temperature_state, &m.system_alarm_state})
       if (*state != "Normal" && !state->empty()) s.alarm = true;
   }
-  // a total is the whole stack's or it is not told: the sum of only some modules reads as a half empty (or a small) bank
+  // A total is the whole stack's or it is not told: the sum of only some modules reads as a half empty (or a small) bank. In the full capacity a module without its sheet counts as
+  // the others when they are all alike: the message then has a total while that module has no full_capacity_ah, which is how a reader knows it is an estimate.
   if (with_capacity != s.modules) s.capacity_ah = -1;
-  if (with_full != s.modules) s.full_capacity_ah = -1;
+  if (with_full != s.modules) {
+    const double each = shared_capacity(modules);
+    if (each >= 0) { s.full_capacity_ah += each * (s.modules - with_full); s.full_estimated = true; }
+    else s.full_capacity_ah = -1;
+  }
   if (s.modules > 0) {
     s.voltage_v = voltage / s.modules;   // the modules of a stack are in parallel: the same voltage, so the mean is what the bus has
     s.current_a = current;               // and their currents add
