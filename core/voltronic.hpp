@@ -11,6 +11,8 @@
 //
 // Dialects of this protocol (see the poller): the standard one (PI30: Axpert, PIP, MKS, InfiniSolar clones ...), the REVO one (the same frames, another arrangement of QPIGS, and
 // replies that may end with a one-byte checksum instead of the CRC) and PI18 (core/voltronic_pi18.hpp: other frames altogether). Sources: the mpp-solar and esphome-pipsolar projects.
+// PI00 is the oldest form: the question is the text and CR, with NO CRC, and so are the replies of the units that document it (some answer with one anyway: both are taken). Its own
+// QPIGS, QMOD and QPIWS are decoded too (a unit that answers the PI30 arrangement to a question without CRC is read as PI30).
 //
 // Only reading commands are built here (Q...): a setting command (PCP, POP, PBT ...) changes how the inverter charges and feeds the house, and is
 // not something to send from an untested library.
@@ -52,6 +54,23 @@ inline bool build_command(std::string_view text, std::vector<std::uint8_t>& out)
   out.push_back(crc[0]);
   out.push_back(crc[1]);
   out.push_back('\r');
+  return true;
+}
+
+// The same question as PI00 asks it: the text and CR, with no CRC. The same rule says what may be asked (only what reads).
+inline bool build_plain_command(std::string_view text, std::vector<std::uint8_t>& out) {
+  if (!build_command(text, out)) return false;
+  out.resize(text.size());
+  out.push_back('\r');
+  return true;
+}
+
+// A reply with no CRC: '(' + text + CR. Nothing guards its integrity, so only printable ASCII is taken, and the text must then read as what was asked.
+inline bool parse_reply_plain(const std::uint8_t* frame, std::size_t length, std::string& text) {
+  text.clear();
+  if (length < 3 || frame[0] != '(' || frame[length - 1] != '\r') return false;
+  for (std::size_t i = 1; i + 1 < length; ++i) if (frame[i] < 0x20 || frame[i] > 0x7E) return false;
+  text.assign(reinterpret_cast<const char*>(frame) + 1, length - 2);
   return true;
 }
 
@@ -260,6 +279,44 @@ inline bool parse_qpigs_pi34(const std::string& text, Status& out) {
   return true;
 }
 
+// The QPIGS of the PI00 document (a hybrid inverter with up to three panel inputs): grid V, grid power (a sign digit, 0 positive, then the watts), grid Hz, grid current (same sign
+// digit), output V, W, Hz, A, load %, the two bus voltages, the two battery voltages, capacity %, the power of three panel inputs, their voltages, the temperature and ten status
+// digits (b7..b0, a0, a1). Its worked example carries one more number after the capacity (a battery current): it is taken when the reply has 23 fields instead of 22.
+inline bool parse_qpigs_pi00(const std::string& text, Status& out) {
+  const std::vector<std::string> f = split_fields(text);
+  if (f.size() != 22 && f.size() != 23) return false;
+  const std::size_t extra = f.size() - 22;
+  const std::string& bits = f.back();
+  std::uint32_t status = 0;
+  if (!detail::bits(bits, 10, status)) return false;
+  double v[22] = {};
+  for (std::size_t i = 0; i + 1 < f.size(); ++i) if (!detail::number(f[i], v[i])) return false;
+  Status s;
+  s.grid_v = v[0]; s.grid_hz = v[2]; s.out_v = v[4]; s.out_w = v[5]; s.out_hz = v[6];
+  s.out_va = v[4] * v[7];                                // the document gives the current, not the apparent power
+  s.load_percent = v[8]; s.bus_v = v[9]; s.battery_v = v[11]; s.battery_percent = v[13];
+  const std::size_t pv = 14 + extra;
+  std::size_t busiest = 0;
+  for (std::size_t i = 1; i < 3; ++i) if (v[pv + i] > v[pv + busiest]) busiest = i;
+  s.pv_w = v[pv] + v[pv + 1] + v[pv + 2]; s.has_pv_w = true;
+  s.pv_v = v[pv + 3 + busiest];                          // the input that works harder is the one shown
+  s.pv_a = s.pv_v > 1.0 ? s.pv_w / s.pv_v : 0.0;
+  s.heatsink_c = v[pv + 6];
+  // b3 load on; b2 b1: 00 nothing, 01 charging, 10 discharging; b0: 0 DC to AC, 1 AC to DC
+  const bool charging = bits[5] == '0' && bits[6] == '1';
+  s.load_on = bits[4] == '1';
+  s.charging = charging;
+  s.ac_charging = charging && bits[7] == '1';
+  s.scc_charging = charging && s.pv_w > 0;
+  if (extra != 0) {
+    if (charging) s.battery_charge_a = v[14];
+    else if (bits[5] == '1' && bits[6] == '0') s.battery_discharge_a = v[14];
+  }
+  hold_limits(s);
+  out = s;
+  return true;
+}
+
 // ---- QMOD: the mode ----------------------------------------------------------------------------------------------------------------
 
 // The letter of the reply: P power on, S standby, L line, B battery, F fault, H power saving, D shutdown. False for anything else.
@@ -270,6 +327,14 @@ inline bool parse_qmod(const std::string& text, char& mode) {
   mode = c;
   return true;
 }
+// PI00 has more letters: Y bypass, G grid and C charge (the line passes through: 'L') and T battery test ('B').
+inline bool parse_qmod_pi00(const std::string& text, char& mode) {
+  if (parse_qmod(text, mode)) return true;
+  if (text == "Y" || text == "G" || text == "C") { mode = 'L'; return true; }
+  if (text == "T") { mode = 'B'; return true; }
+  return false;
+}
+
 // ---- QPIGS2: the second PV input of an inverter that has two --------------------------------------------------------------------------
 // "(03.1 327.3 01026 ": the current (A), the voltage (V) and the power (W) of the second input. An inverter with one input answers NAK.
 struct Pv2 { double current_a = 0, voltage_v = 0, power_w = 0; };
@@ -348,6 +413,19 @@ inline bool parse_qpiws(const std::string& text, std::vector<std::string>& activ
     for (const std::string& known : active) if (known == name) seen = true;
     if (!seen) active.push_back(name);
   }
+  return true;
+}
+
+// The flags of the PI00 document (up to 128 characters, a0 first; the names of the first 25 are given, the rest are not documented).
+inline bool parse_qpiws_pi00(const std::string& text, std::vector<std::string>& active) {
+  static const char* const kNames[25] = {
+      "pv_fail", "auto_adjusting", "external_flash_fail", "pv_loss", "pv_low", "islanding", "initial_fail", "grid_voltage_high", "grid_voltage_low", "grid_frequency_high",
+      "grid_frequency_low", "feeding_voltage_high", "power_from_grid", "grid_fault", "battery_under", "battery_low", "battery_open", "battery_discharge_low", "overload",
+      "emergency_power_off", "pv1_loss", "pv2_loss", "over_temperature", "ground_loss", "fan_locked"};
+  active.clear();
+  if (text.empty() || text.size() > 128) return false;
+  for (char c : text) if (c != '0' && c != '1') return false;
+  for (std::size_t bit = 0; bit < text.size() && bit < 25; ++bit) if (text[bit] == '1') active.push_back(kNames[bit]);
   return true;
 }
 

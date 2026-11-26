@@ -136,7 +136,7 @@ struct PortConfig {
   int de = -1;        // an RS485 transceiver's driver-enable (and receiver-enable) pin, high while sending; -1: RS232 or none
   int poll_s = 0;     // seconds between two readings; 0: the kind's own
   int modules = 0;    // Pylontech: how many modules to ask cell by cell (0: all that answer, up to 16)
-  std::string dialect = "auto";   // inverter: "auto" (looks for it), "pi30", "revo", "pi18", "pi41" or "pi34"; modbus: "smg2", "srne-hybrid", "srne-mppt"; vedirect: "monitor", "mppt"
+  std::string dialect = "auto";   // inverter: "auto" (looks for it), "pi30", "pi00" (questions without CRC), "revo", "pi18", "pi41" or "pi34"; modbus: "smg2", "srne-hybrid", "srne-mppt"; vedirect: "monitor", "mppt"
   bool invert = false;            // the signals of the line arrive upside down (a device with TTL levels wired through a MAX3232 does): the UART flips them
   int cells_per_cycle = 0;        // Pylontech: the cells of this many modules per cycle, in rotation (0: every module every cycle); the others keep their last cells
   bool pv2 = false;               // inverter (standard dialect): also ask the second PV input (QPIGS2)
@@ -302,7 +302,7 @@ inline bool valid_dialect(Kind kind, const std::string& dialect) {
     for (const char* name : names) if (dialect == name) return true;
     return false;
   };
-  if (kind == Kind::kVoltronic) return among({"auto", "pi30", "revo", "pi18", "pi41", "pi34"});
+  if (kind == Kind::kVoltronic) return among({"auto", "pi30", "pi00", "revo", "pi18", "pi41", "pi34"});
   if (kind == Kind::kModbus) return among({"auto", "smg2", "srne-hybrid", "srne-mppt"});
   if (kind == Kind::kVedirect) return among({"auto", "monitor", "mppt"});
   return true;

@@ -5,6 +5,7 @@
 // documents describe. No equipment has been connected.
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -282,6 +283,137 @@ static void test_pi41_and_pi34() {
   CHECK(!m.empty() && has(m.front(), "\"kind\":\"inverter\"") && has(m.front(), "\"warnings_known\":false") && p.detail() == "pi34");
 }
 
+// ---- PI00: questions without CRC ---------------------------------------------------------------------------------------------------------
+// A stand-in that answers by the exact bytes it is asked with (invented frames).
+static Bytes plain(const std::string& text) {
+  Bytes f{'('};
+  f.insert(f.end(), text.begin(), text.end());
+  f.push_back('\r');
+  return f;
+}
+static Bytes ask(const char* command, bool crc) {
+  Bytes out;
+  if (crc) voltronic::build_command(command, out);
+  else voltronic::build_plain_command(command, out);
+  return out;
+}
+struct Unit {
+  std::vector<std::pair<Bytes, Bytes>> answers;
+  std::vector<Bytes> sent;
+  std::vector<std::string> messages;
+  std::uint64_t now = 0;
+  void run(Poller& p, std::uint64_t for_ms) {
+    const std::uint64_t until = now + for_ms;
+    for (; now < until; now += 100) {
+      const Bytes out = p.next_tx(now);
+      if (!out.empty()) {
+        sent.push_back(out);
+        for (const auto& a : answers)
+          if (a.first == out) { p.on_rx(a.second.data(), a.second.size(), now + 50); break; }
+      }
+      std::string topic, payload;
+      if (p.take_message(1700000000000ULL + now, topic, payload)) messages.push_back(payload);
+    }
+  }
+};
+
+static const char* kOldQpigs = "229.0 50.0 230.0 50.0 0300 0250 005 380 51.20 004 076 0031 0003 098.0 51.30 00000 00010110";
+static const char* kPi00Qpigs = "231.0 001200 50.0 0005.0 230.0 000690 50.0 003.0 023 380.0 379.0 052.4 000.0 064 00400 00250 00000 210.0 190.0 000.0 041.0 0000101010";
+
+static void test_pi00_frames() {
+  Bytes out;
+  CHECK(voltronic::build_plain_command("QPIGS", out) && out == hex("51 50 49 47 53 0D"));
+  CHECK(!voltronic::build_plain_command("PCP00", out) && out.empty() && !voltronic::build_plain_command("Q P", out));
+  std::string text;
+  const Bytes good = plain("L");
+  CHECK(voltronic::parse_reply_plain(good.data(), good.size(), text) && text == "L");
+  Bytes bad = plain(std::string("L") + '\x01');
+  CHECK(!voltronic::parse_reply_plain(bad.data(), bad.size(), text) && text.empty());
+  CHECK(!voltronic::parse_reply_plain(good.data(), good.size() - 1, text) && !voltronic::parse_reply_plain(good.data() + 1, good.size() - 1, text));
+
+  voltronic::Status s;
+  CHECK(voltronic::parse_qpigs_pi00(kPi00Qpigs, s) && near(s.grid_v, 231) && near(s.out_w, 690) && near(s.out_va, 690) && near(s.load_percent, 23) && near(s.bus_v, 380));
+  CHECK(near(s.battery_v, 52.4) && near(s.battery_percent, 64) && near(s.pv_w, 650) && near(s.pv_v, 210) && near(s.heatsink_c, 41) && s.load_on && s.charging && !s.ac_charging && s.scc_charging);
+  // the form of the document's worked example: a battery current after the capacity (discharging here)
+  CHECK(voltronic::parse_qpigs_pi00("231.0 001200 50.0 0005.0 230.0 000690 50.0 003.0 023 380.0 379.0 052.4 000.0 064 012.5 00000 00000 00000 000.0 000.0 000.0 030.0 0000110000", s) && near(s.battery_discharge_a, 12.5) && !s.charging && near(s.pv_w, 0));
+  CHECK(!voltronic::parse_qpigs_pi00(kOldQpigs, s) && !voltronic::parse_qpigs_pi00("", s));
+  CHECK(!voltronic::parse_qpigs_pi00(std::string(kPi00Qpigs).substr(0, std::strlen(kPi00Qpigs) - 1), s));   // nine status digits
+  std::string letters = kPi00Qpigs;
+  letters[1] = 'x';
+  CHECK(!voltronic::parse_qpigs_pi00(letters, s) && !voltronic::parse_qpigs(kPi00Qpigs, s));
+
+  char mode = 0;
+  CHECK(voltronic::parse_qmod_pi00("G", mode) && mode == 'L' && voltronic::parse_qmod_pi00("T", mode) && mode == 'B' && voltronic::parse_qmod_pi00("S", mode) && mode == 'S');
+  CHECK(!voltronic::parse_qmod_pi00("Z", mode) && !voltronic::parse_qmod_pi00("GG", mode) && !voltronic::parse_qmod("G", mode));
+  std::vector<std::string> flags;
+  std::string warnings(128, '0');
+  warnings[3] = '1'; warnings[18] = '1'; warnings[100] = '1';
+  CHECK(voltronic::parse_qpiws_pi00(warnings, flags) && flags.size() == 2 && flags[0] == "pv_loss" && flags[1] == "overload");
+  CHECK(!voltronic::parse_qpiws_pi00(warnings + "0", flags) && !voltronic::parse_qpiws_pi00("0a0", flags) && !voltronic::parse_qpiws_pi00("", flags));
+  CHECK(config::valid_dialect(config::Kind::kVoltronic, "pi00") && !config::valid_dialect(config::Kind::kModbus, "pi00"));
+}
+
+static void test_pi00_port() {
+  // "auto" on a unit that only understands questions without CRC: PI30 with CRC is silent, then the same question without it
+  Poller p(config::Kind::kVoltronic, "solar-1", "easun-1", 5, 0, "auto");
+  Unit old;
+  old.answers = {{ask("QPIGS", false), plain(kOldQpigs)}, {ask("QMOD", false), plain("B")}, {ask("QPIWS", false), plain(std::string(32, '0'))}};
+  old.run(p, 12000);
+  CHECK(old.sent.size() >= 4 && old.sent[0] == ask("QPIGS", true) && old.sent[1] == ask("QPIGS", false) && old.sent[2] == ask("QMOD", false) && old.sent[3] == ask("QPIWS", false));
+  CHECK(p.detail() == "pi00" && !old.messages.empty() && has(old.messages.front(), "\"mode\":\"battery\"") && has(old.messages.front(), "\"battery_v\":51.2"));
+  CHECK(has(p.diagnosis(), "(no CRC) | 51 ") && !has(p.diagnosis(), "automatic, in turn"));
+
+  // while it looks, the raw view says every question it sends in turn
+  Poller silent(config::Kind::kVoltronic, "solar-1", "easun-1", 5, 0, "auto");
+  Unit none;
+  none.run(silent, 3500);
+  CHECK(has(silent.diagnosis(), "automatic, in turn") && has(silent.diagnosis(), "pi30 = 51 50 49 47 53 B7 A9 0D") && has(silent.diagnosis(), "pi00, no CRC = 51 50 49 47 53 0D") && has(silent.diagnosis(), "pi18 = 5E 50 30 30 35 47 53"));
+  none.run(silent, 12000);
+  CHECK(none.sent.size() >= 4 && none.sent[0] == ask("QPIGS", true) && none.sent[1] == ask("QPIGS", false) && none.sent[2][0] == '^' && none.sent[3] == ask("QPIGS", true));
+
+  // chosen by hand, with the PI00 arrangement of the answers
+  Poller fixed(config::Kind::kVoltronic, "solar-1", "infini-1", 5, 0, "pi00");
+  Unit infini;
+  std::string warnings(128, '0');
+  warnings[22] = '1';
+  infini.answers = {{ask("QPIGS", false), plain(kPi00Qpigs)}, {ask("QMOD", false), plain("G")}, {ask("QPIWS", false), plain(warnings)}};
+  infini.run(fixed, 4000);
+  CHECK(!infini.messages.empty() && has(infini.messages.front(), "\"pv_w\":650") && has(infini.messages.front(), "\"mode\":\"line\"") && has(infini.messages.front(), "over_temperature") && fixed.detail() == "pi00");
+  CHECK(has(fixed.diagnosis(), "asked: QPIWS (no CRC) | "));
+
+  // a PI30 unit that missed the first question answers the second with a CRC: it is asked in PI30 again and stays PI30
+  Poller late(config::Kind::kVoltronic, "solar-1", "axpert-1", 5, 0, "auto");
+  Unit axpert;
+  axpert.run(late, 500);
+  axpert.answers = {{ask("QPIGS", false), reply(kOldQpigs)}, {ask("QPIGS", true), reply(kOldQpigs)}, {ask("QMOD", true), reply("L")}, {ask("QPIWS", true), reply(std::string(32, '0'))}};
+  axpert.run(late, 15000);
+  CHECK(late.detail() == "pi30" && !axpert.messages.empty());
+
+  // a unit that wants no CRC but answers with one: PI30 is silent when asked again, and PI00 is kept
+  Poller mixed(config::Kind::kVoltronic, "solar-1", "odd-1", 5, 0, "auto");
+  Unit odd;
+  odd.answers = {{ask("QPIGS", false), reply(kOldQpigs)}, {ask("QMOD", false), reply("L")}, {ask("QPIWS", false), reply(std::string(32, '0'))}};
+  odd.run(mixed, 30000);
+  CHECK(mixed.detail() == "pi00" && !odd.messages.empty());
+
+  // a refusal without CRC while looking goes on to the next protocol
+  Poller refused(config::Kind::kVoltronic, "solar-1", "easun-1", 5, 0, "auto");
+  Unit nak;
+  nak.answers = {{ask("QPIGS", false), plain("NAK")}};
+  nak.run(refused, 6000);
+  CHECK(nak.sent.size() >= 3 && nak.sent[2][0] == '^' && refused.detail().empty() && nak.messages.empty());
+
+  // damaged answers are named and nothing is published
+  Poller damaged(config::Kind::kVoltronic, "solar-1", "easun-1", 5, 0, "pi00");
+  Unit noise;
+  noise.answers = {{ask("QPIGS", false), plain(std::string(kOldQpigs).substr(0, 40))}};
+  noise.run(damaged, 3000);
+  CHECK(noise.messages.empty() && damaged.stats().last_error == "format");
+  noise.answers = {{ask("QPIGS", false), plain(std::string("12") + '\x02')}};
+  noise.run(damaged, 6000);
+  CHECK(noise.messages.empty() && damaged.stats().last_error == "crc");
+}
+
 static void test_driver_through_the_poller() {
   Poller p(config::Kind::kJbd, "solar-1", "bms-1", 10, 0);
   CHECK(!p.is_inverter() && p.next_tx(0) == hex("DD A5 03 00 FF FD 77"));
@@ -454,6 +586,8 @@ int main() {
   test_vedirect();
   test_inverter_that_does_not_answer_everything();
   test_pi41_and_pi34();
+  test_pi00_frames();
+  test_pi00_port();
   test_driver_through_the_poller();
   test_odd_answers();
   test_driver_timeouts_through_the_poller();

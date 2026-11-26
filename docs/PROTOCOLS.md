@@ -6,6 +6,7 @@ capability matrix in ARMOR-DOCS).
 
 | Device | Port and speed | Decoded | Not decoded |
 | --- | --- | --- | --- |
+| Older inverters that take questions without CRC (`pi00`) | RS232, 2400 baud 8N1 | `QPIGS`, `QMOD`, `QPIWS`, `QID`, `QVFW`, `QET` sent as text and `CR`; the answers in the PI30 or the PI00 arrangement, with or without CRC | Every setting command, on purpose; the ratings of the PI00 arrangement (`QPIRI`); the energy by year, month, day and hour |
 | Voltronic / MPP Solar inverters (Axpert, PIP, InfiniSolar and clones) | RS232, 2400 baud 8N1 | `QPIGS` (status), `QMOD` (mode), `QPIWS` (warnings and faults), `QPIRI` (ratings and settings), the CRC and the frames | Every setting command (`PCP`, `POP`, `PBT`...) on purpose; `QPIGS2` and parallel-system commands; `QVFW`, `QID` |
 | Pylontech US2000, US3000, US5000 (and the C versions) | Console RS232 115200 8N1 | The table of `pwr`: every module's voltage, current, temperatures, cell range, state of charge and states | The detail of one module (`pwr 1`, the cell voltages), `bat`, `info`, the event log |
 | Pylontech, RS485 | RS485, 9600 or 115200 | The frame: start, version, address, command, the length and its check, the checksum | The meaning of `INFO`, which differs between protocol versions: not decoded until a capture exists |
