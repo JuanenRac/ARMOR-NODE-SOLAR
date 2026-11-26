@@ -3,10 +3,11 @@
 //
 // Written from the makers' public protocol documents; none of these boards has been connected.
 //   DALY, 9600 8N1: thirteen-byte frames A5, address (0x40 from the host, 0x01 from the board), data id, length 8, eight bytes, sum of the twelve before. Asked: 0x90 (voltage,
-//     current, state of charge), 0x93 (state and remaining capacity), 0x94 (cell and sensor counts), 0x95 (cell voltages, three per frame), 0x96 (temperatures, seven per frame)
-//     and 0x98 (failures). Only 0x90 is essential.
+//     current, state of charge), 0x93 (state and remaining capacity), 0x94 (cell and sensor counts), 0x95 (cell voltages, three per frame), 0x96 (temperatures, seven per frame),
+//     0x97 (which cells are being balanced), 0x98 (failures) and, only when there are no cells or no sensors to read, 0x91 and 0x92 (the highest and lowest). Only 0x90 is essential.
+//     The document numbers the cell frames from 0 and boards in use number them from 1: the first number heard says which.
 //   JBD, 9600 8N1: DD A5 <command> 00 <checksum> 77 -> DD <command> <status> <length> <data> <checksum> 77; the checksum is 0x10000 less the sum of status, length and data.
-//     Asked: 0x03 (basic information) and 0x04 (cells).
+//     Asked: 0x03 (basic information), 0x04 (cells) and, once, 0x05 (the board's version).
 //   JK, 115200 8N1: 4E 57, length, terminal, command, source, type, identified data, record number, 68, four bytes of checksum (the last two: the sum of all before 68 included).
 //     Asked: the "read all data" request (command 0x06).
 #pragma once
@@ -57,22 +58,26 @@ class DalyDriver final : public Driver {
   Rx timeout(std::vector<std::uint8_t>& next) override { length_ = 0; return skip(next, "timeout"); }
 
  private:
-  static constexpr std::uint8_t kIds[6] = {0x90, 0x93, 0x94, 0x95, 0x96, 0x98};
+  static constexpr std::size_t kCount = 9;
+  static constexpr std::uint8_t kIds[kCount] = {0x90, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x91, 0x92};
 
   std::vector<std::uint8_t> ask() {
     length_ = 0;
     frames_ = 0;
     const std::uint8_t id = kIds[at_];
     frames_wanted_ = id == 0x95 ? (cells_ + 2) / 3 : id == 0x96 ? (sensors_ + 6) / 7 : 1;
-    static const char* const kNames[6] = {"0x90 voltage and current", "0x93 state", "0x94 counts", "0x95 cells", "0x96 temperatures", "0x98 failures"};
+    static const char* const kNames[kCount] = {"0x90 voltage and current", "0x93 state", "0x94 counts", "0x95 cells", "0x96 temperatures", "0x97 balance", "0x98 failures", "0x91 cell extremes",
+                                             "0x92 temperature extremes"};
     command_ = kNames[at_];
     return request(id);
   }
   Rx advance(std::vector<std::uint8_t>& next) {
     for (;;) {
-      if (++at_ >= 6) return finish();
-      // cells and temperatures are only asked for when the board said how many it has
-      if ((kIds[at_] == 0x95 && cells_ == 0) || (kIds[at_] == 0x96 && sensors_ == 0)) continue;
+      if (++at_ >= kCount) { at_ = kCount - 1; return finish(); }
+      // cells, their balance and temperatures are only asked for when the board said how many it has; the extremes only when the whole list was not read
+      const std::uint8_t id = kIds[at_];
+      if (((id == 0x95 || id == 0x97) && cells_ == 0) || (id == 0x96 && sensors_ == 0)) continue;
+      if ((id == 0x91 && !module_.cells_v.empty()) || (id == 0x92 && !module_.temperatures_c.empty())) continue;
       next = ask();
       return Rx::kNext;
     }
@@ -104,7 +109,9 @@ class DalyDriver final : public Driver {
         module_.cell_count = cells_ > 0 ? static_cast<int>(cells_) : -1;
         break;
       case 0x95: {
-        const std::size_t first = static_cast<std::size_t>(d[0] > 0 ? d[0] - 1 : 0) * 3;   // frame numbers start at 1
+        if (frames_ == 0) numbered_from_ = d[0] == 0 ? 0 : 1;
+        if (d[0] < numbered_from_ || d[0] == 0xFF) break;
+        const std::size_t first = static_cast<std::size_t>(d[0] - numbered_from_) * 3;
         for (std::size_t i = 0; i < 3 && first + i < cells_; ++i) {
           if (module_.cells_v.size() <= first + i) module_.cells_v.resize(first + i + 1, 0.0);
           module_.cells_v[first + i] = detail::bounded(detail::be16(d + 1 + 2 * i) * 0.001, 0, 10);
@@ -114,6 +121,20 @@ class DalyDriver final : public Driver {
       case 0x96:
         for (std::size_t i = 1; i < 8 && module_.temperatures_c.size() < sensors_; ++i) module_.temperatures_c.push_back(static_cast<double>(d[i]) - 40);
         module_.has_temperature = !module_.temperatures_c.empty();
+        break;
+      case 0x97: {
+        int balancing = 0;
+        for (std::size_t cell = 0; cell < cells_ && cell < 48; ++cell) if (d[cell / 8] & (1u << (cell % 8))) ++balancing;
+        module_.balancing = balancing;
+        break;
+      }
+      case 0x91:
+        module_.cell_high_v = detail::bounded(detail::be16(d) * 0.001, 0, 10);
+        module_.cell_low_v = detail::bounded(detail::be16(d + 3) * 0.001, 0, 10);
+        break;
+      case 0x92:
+        module_.temperatures_c = {static_cast<double>(d[0]) - 40, static_cast<double>(d[2]) - 40};
+        module_.has_temperature = true;
         break;
       default: {
         bool any = false;
@@ -125,6 +146,7 @@ class DalyDriver final : public Driver {
   }
 
   std::size_t at_ = 0, length_ = 0, frames_ = 0, frames_wanted_ = 1, cells_ = 0, sensors_ = 0;
+  std::uint8_t numbered_from_ = 1;
   std::array<std::uint8_t, 13> frame_{};
   pylontech::Module module_;
 };
@@ -162,8 +184,18 @@ class JbdDriver final : public Driver {
     unsigned sum = 0;
     for (std::size_t i = 2; i < 4 + n; ++i) sum += frame_[i];
     if (static_cast<std::uint16_t>(0x10000u - sum) != detail::be16(frame_.data() + 4 + n)) return bad("crc");
-    if (frame_[2] != 0) return bad("nak");
+    if (frame_[2] != 0) {
+      if (command_id_ != 0x05) return bad("nak");
+      version_asked_ = true;
+      return finish();
+    }
     const std::uint8_t* d = frame_.data() + 4;
+    if (command_id_ == 0x05) {
+      version_asked_ = true;
+      version_.clear();
+      for (std::size_t i = 0; i < n && i < 31; ++i) if (d[i] >= 0x20 && d[i] < 0x7F) version_ += static_cast<char>(d[i]);
+      return finish();
+    }
     if (command_id_ == 0x03) {
       if (!basic(d, n)) return bad("format");
       command_id_ = 0x04;
@@ -172,13 +204,18 @@ class JbdDriver final : public Driver {
       return Rx::kNext;
     }
     for (std::size_t i = 0; i + 1 < n && module_.cells_v.size() < 32; i += 2) module_.cells_v.push_back(detail::bounded(detail::be16(d + i) * 0.001, 0, 10));
-    return finish();
+    if (version_asked_) return finish();
+    command_id_ = 0x05;
+    command_ = "0x05 board version";
+    next = request(0x05);
+    return Rx::kNext;
   }
 
   // The cells are the extra: a board that answered the basic information is a reading without them.
   Rx timeout(std::vector<std::uint8_t>&) override {
     length_ = 0;
-    return command_id_ == 0x04 ? finish() : bad("timeout");
+    if (command_id_ == 0x05) version_asked_ = true;
+    return command_id_ == 0x03 ? bad("timeout") : finish();
   }
 
  private:
@@ -204,6 +241,7 @@ class JbdDriver final : public Driver {
     return true;
   }
   Rx finish() {
+    module_.board_version = version_;
     detail::finish_module(module_);
     out_.modules.assign(1, module_);
     return Rx::kDone;
@@ -211,6 +249,8 @@ class JbdDriver final : public Driver {
 
   std::size_t length_ = 0;
   std::uint8_t command_id_ = 0x03;
+  bool version_asked_ = false;
+  std::string version_;
   std::array<std::uint8_t, 80> frame_{};
   pylontech::Module module_;
 };
@@ -329,6 +369,7 @@ class JkDriver final : public Driver {
       else if (id == 0x8B) { m.protecting = detail::be16(d) != 0; m.system_alarm_state = m.protecting ? "Alarm" : "Normal"; }
       else if (id == 0xAA) m.full_capacity_ah = detail::bounded(detail::be32(d), 0, 100000);
       else if (id == 0xC0) version = d[0];
+      else if (id == 0xB7) for (std::size_t i = 0; i < size && d[i] >= 0x20 && d[i] < 0x7F; ++i) m.soft_version += static_cast<char>(d[i]);
       at += size;
     }
     if (!have_voltage) return bad("format");

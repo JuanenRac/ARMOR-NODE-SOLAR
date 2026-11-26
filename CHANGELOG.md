@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **PI17 inverters are read** (InfiniSolar 5 kW, LV 6K, WP and TWIN): a new inverter protocol, `pi17`, asks `^P003GS`, `^P003PS`, `^P004MOD` and `^P003WS` (no CRC) and reads status, powers, mode and warnings; *Automatic* tries it after PI18.
+- **PI16 hybrids are read by the `pi00` protocol:** the dashes of the values a model does not have, its status field and its warning flags.
+- **PIP-GK, PIP-MK and MAX answers are no longer refused:** the modes `C`, `Y` and `E`, and the two fault code digits among the warning flags.
+- **The warnings of a PI18 inverter are no longer told as unknown** when the inverter did answer them.
+- **More of the battery boards:** DALY tells how many cells are being balanced (and the cell and temperature extremes when there is no list), cell frames numbered from 0 are placed right; JBD tells its board version; JK its software version.
+- **SRNE hybrid inverters tell their fault codes.**
+- **Victron VE.Direct:** a Phoenix inverter, and a battery monitor in hexadecimal mode (it adds the capacity and the cycles; the node's transmit line must be wired).
+- All of it decoded from the public documents and tested on a computer with invented frames: none has been tried on equipment.
+
 - **Older inverters that expect no CRC can be asked (PI00):** a new inverter protocol, `pi00`, sends each question as its letters and a carriage return, with no CRC, and reads the answer with or without one, in the PI30 arrangement or in the PI00 document's own. *Automatic* now asks in turn with PI30 (with CRC), without CRC, and then PI18. While it is still looking, the raw view of the port shows the exact bytes of every question it sends. Decoded from the public description and tested on a computer with invented frames: not tried on an inverter.
 - **The lights of ports 9 and 10 are no longer swapped on the base board:** the default is now LED 9 on GPIO 3 and LED 10 on GPIO 45, as the board is wired. A configuration already saved on a node does not change by itself: set the two pins on the Ports page of its panel (first to *none* if the panel refuses to give one pin to both).
 

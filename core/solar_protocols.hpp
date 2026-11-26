@@ -22,8 +22,10 @@ struct Protocol {
   const char* message;   // which message its readings become: "inverter" or "battery"
 };
 
-constexpr std::array<Protocol, 15> kProtocols{{
+constexpr std::array<Protocol, 19> kProtocols{{
     {"pi30", "voltronic", "pi30", 2400, "inverter"},
+    {"pi00", "voltronic", "pi00", 2400, "inverter"},
+    {"pi17", "voltronic", "pi17", 2400, "inverter"},
     {"pi30-revo", "voltronic", "revo", 2400, "inverter"},
     {"pi18", "voltronic", "pi18", 2400, "inverter"},
     {"pi41", "voltronic", "pi41", 2400, "inverter"},
@@ -33,6 +35,8 @@ constexpr std::array<Protocol, 15> kProtocols{{
     {"modbus-srne-mppt", "modbus", "srne-mppt", 9600, "inverter"},
     {"vedirect-mppt", "vedirect", "mppt", 19200, "inverter"},
     {"vedirect-monitor", "vedirect", "monitor", 19200, "battery"},
+    {"vedirect-inverter", "vedirect", "inverter", 19200, "inverter"},
+    {"vedirect-monitor-hex", "vedirect", "monitor-hex", 19200, "battery"},
     {"pylontech-console", "pylontech", "", 115200, "battery"},
     {"ant-bms", "ant", "", 19200, "battery"},
     {"daly-uart", "daly", "", 9600, "battery"},
@@ -47,7 +51,10 @@ inline std::unique_ptr<drivers::Driver> make_driver(config::Kind kind, std::stri
   if (kind == config::Kind::kDaly) return std::make_unique<drivers::DalyDriver>();
   if (kind == config::Kind::kJbd) return std::make_unique<drivers::JbdDriver>();
   if (kind == config::Kind::kJk) return std::make_unique<drivers::JkDriver>();
-  if (kind == config::Kind::kVedirect) return std::make_unique<drivers::VedirectDriver>(dialect == "mppt");
+  if (kind == config::Kind::kVedirect) {
+    if (dialect == "monitor-hex") return std::make_unique<drivers::VedirectHexDriver>();
+    return std::make_unique<drivers::VedirectDriver>(dialect == "mppt" ? drivers::VedirectUse::kCharger : dialect == "inverter" ? drivers::VedirectUse::kInverter : drivers::VedirectUse::kMonitor);
+  }
   return nullptr;
 }
 

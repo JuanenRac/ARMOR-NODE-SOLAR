@@ -282,15 +282,26 @@ inline bool parse_qpigs_pi34(const std::string& text, Status& out) {
 // The QPIGS of the PI00 document (a hybrid inverter with up to three panel inputs): grid V, grid power (a sign digit, 0 positive, then the watts), grid Hz, grid current (same sign
 // digit), output V, W, Hz, A, load %, the two bus voltages, the two battery voltages, capacity %, the power of three panel inputs, their voltages, the temperature and ten status
 // digits (b7..b0, a0, a1). Its worked example carries one more number after the capacity (a battery current): it is taken when the reply has 23 fields instead of 22.
-inline bool parse_qpigs_pi00(const std::string& text, Status& out) {
+// PI16 (the "SUNNY" form of the same hybrids) sends the same arrangement, with dashes where a model has no such value and ten status characters whose first one is not a flag: both are
+// read here, and `pi16` is set when the reply carries either mark (its first warning flag then means "the device has a fault").
+inline bool parse_qpigs_pi00(const std::string& text, Status& out, bool* pi16 = nullptr) {
   const std::vector<std::string> f = split_fields(text);
   if (f.size() != 22 && f.size() != 23) return false;
   const std::size_t extra = f.size() - 22;
   const std::string& bits = f.back();
-  std::uint32_t status = 0;
-  if (!detail::bits(bits, 10, status)) return false;
+  if (bits.size() != 10) return false;
+  const bool lettered = (bits[0] >= 'A' && bits[0] <= 'Z');
+  bool dashes = lettered;
+  if (!lettered && bits[0] != '0' && bits[0] != '1' && bits[0] != '-') return false;
+  for (std::size_t i = 1; i < 10; ++i) {
+    if (bits[i] != '0' && bits[i] != '1' && bits[i] != '2' && bits[i] != '-') return false;
+    if (bits[i] == '-') dashes = true;
+  }
   double v[22] = {};
-  for (std::size_t i = 0; i + 1 < f.size(); ++i) if (!detail::number(f[i], v[i])) return false;
+  for (std::size_t i = 0; i + 1 < f.size(); ++i) {
+    if (f[i].find_first_not_of("-.") == std::string::npos) { dashes = true; continue; }   // "---.-": this model has no such value
+    if (!detail::number(f[i], v[i])) return false;
+  }
   Status s;
   s.grid_v = v[0]; s.grid_hz = v[2]; s.out_v = v[4]; s.out_w = v[5]; s.out_hz = v[6];
   s.out_va = v[4] * v[7];                                // the document gives the current, not the apparent power
@@ -314,23 +325,27 @@ inline bool parse_qpigs_pi00(const std::string& text, Status& out) {
   }
   hold_limits(s);
   out = s;
+  if (pi16 != nullptr) *pi16 = dashes;
   return true;
 }
 
 // ---- QMOD: the mode ----------------------------------------------------------------------------------------------------------------
 
-// The letter of the reply: P power on, S standby, L line, B battery, F fault, H power saving, D shutdown. False for anything else.
+// The letter of the reply: P power on, S standby, L line, B battery, F fault, H power saving, D shutdown. The PIP-GK and MK documents add C (charging from the line) and Y
+// (bypass), both told as line, and E (ECO), told as power saving. False for anything else.
 inline bool parse_qmod(const std::string& text, char& mode) {
   if (text.size() != 1) return false;
-  const char c = text[0];
+  char c = text[0];
+  if (c == 'C' || c == 'Y') c = 'L';
+  else if (c == 'E') c = 'H';
   if (c != 'P' && c != 'S' && c != 'L' && c != 'B' && c != 'F' && c != 'H' && c != 'D') return false;
   mode = c;
   return true;
 }
-// PI00 has more letters: Y bypass, G grid and C charge (the line passes through: 'L') and T battery test ('B').
+// PI00 and PI16 have two letters more: G grid (the line passes through: 'L') and T battery test ('B').
 inline bool parse_qmod_pi00(const std::string& text, char& mode) {
   if (parse_qmod(text, mode)) return true;
-  if (text == "Y" || text == "G" || text == "C") { mode = 'L'; return true; }
+  if (text == "G") { mode = 'L'; return true; }
   if (text == "T") { mode = 'B'; return true; }
   return false;
 }
@@ -405,7 +420,8 @@ inline const char* warning_name(std::size_t bit) {
 inline bool parse_qpiws(const std::string& text, std::vector<std::string>& active) {
   active.clear();
   if (text.empty() || text.size() > 64) return false;   // some firmwares add flags after the thirty-six the documents name: they are not read
-  for (char c : text) if (c != '0' && c != '1') return false;
+  // the MAX, GK and MK documents put the two digits of a fault code among the flags (places 31 to 33): any digit is let through there and only a '1' counts as a flag
+  for (std::size_t i = 0; i < text.size(); ++i) if (text[i] != '0' && text[i] != '1' && !(i >= 31 && i <= 33 && text[i] >= '2' && text[i] <= '9')) return false;
   for (std::size_t bit = 0; bit < text.size() && bit < 36; ++bit) {
     if (text[bit] != '1' || warning_name(bit)[0] == '\0') continue;
     const std::string name = warning_name(bit);
@@ -417,15 +433,16 @@ inline bool parse_qpiws(const std::string& text, std::vector<std::string>& activ
 }
 
 // The flags of the PI00 document (up to 128 characters, a0 first; the names of the first 25 are given, the rest are not documented).
-inline bool parse_qpiws_pi00(const std::string& text, std::vector<std::string>& active) {
+// PI16 writes '-' for a flag a model does not have, and its first flag is "the device has a fault".
+inline bool parse_qpiws_pi00(const std::string& text, std::vector<std::string>& active, bool pi16 = false) {
   static const char* const kNames[25] = {
       "pv_fail", "auto_adjusting", "external_flash_fail", "pv_loss", "pv_low", "islanding", "initial_fail", "grid_voltage_high", "grid_voltage_low", "grid_frequency_high",
       "grid_frequency_low", "feeding_voltage_high", "power_from_grid", "grid_fault", "battery_under", "battery_low", "battery_open", "battery_discharge_low", "overload",
       "emergency_power_off", "pv1_loss", "pv2_loss", "over_temperature", "ground_loss", "fan_locked"};
   active.clear();
   if (text.empty() || text.size() > 128) return false;
-  for (char c : text) if (c != '0' && c != '1') return false;
-  for (std::size_t bit = 0; bit < text.size() && bit < 25; ++bit) if (text[bit] == '1') active.push_back(kNames[bit]);
+  for (char c : text) if (c != '0' && c != '1' && c != '-') return false;
+  for (std::size_t bit = 0; bit < text.size() && bit < 25; ++bit) if (text[bit] == '1') active.push_back(bit == 0 && pi16 ? "inverter_fault" : kNames[bit]);
   return true;
 }
 

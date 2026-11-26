@@ -9,7 +9,7 @@
 //                                    published only when all three came back whole: a missing warning list must not look like "no warnings".
 //                                    Three dialects: "pi30" (that one), "revo" (QPIGS arranged differently, no warnings asked, replies that may end with a
 //                                    one-byte checksum), "pi00" (the same words with NO CRC, as the oldest units want them) and "pi18" (^P005GS, ^P006MOD,
-//                                    ^P005FWS). "auto" (the default) asks in pi30, then without CRC, then in pi18, and
+//                                    ^P005FWS) and "pi17" (^P003GS, ^P003PS, ^P004MOD, ^P003WS, no CRC). PI16 hybrids answer "pi00". "auto" (the default) asks in pi30, then without CRC, then in pi18 and pi17, and
 //                                    keeps to the one that answered; a reply that ends with the checksum instead of the CRC makes it revo.
 //   Pylontech battery (console):     `pwr` (the table of the modules), then for every module that is there `bat <n>` (its cells and remaining charge), and every half hour
 //                                    `info <n>` (model, rated capacity) and `stat <n>` (cycles), whose answers are kept in between. The extras are optional: if they do not
@@ -118,6 +118,7 @@ class Poller {
     else if (dialect == "pi41") { dialect_ = Dialect::kPi41; auto_ = false; }
     else if (dialect == "pi34") { dialect_ = Dialect::kPi34; auto_ = false; }
     else if (dialect == "pi00") { dialect_ = Dialect::kPi00; auto_ = false; }
+    else if (dialect == "pi17") { dialect_ = Dialect::kPi17; auto_ = false; }
     else if (dialect == "pi30") auto_ = false;
     known_ = !auto_;
     driver_ = protocols::make_driver(kind, dialect);
@@ -162,7 +163,9 @@ class Poller {
     voltronic::build_plain_command("QPIGS", frame);
     out += "; pi00, no CRC = " + hex_of(frame);
     voltronic::pi18::build_command("GS", frame);
-    return out + "; pi18 = " + hex_of(frame) + "\n";
+    out += "; pi18 = " + hex_of(frame);
+    voltronic::pi17::build_command("GS", frame);
+    return out + "; pi17 = " + hex_of(frame) + "\n";
   }
   std::string asking() const {
     if (driver_) return driver_->command();
@@ -261,8 +264,8 @@ class Poller {
   std::uint64_t last_rx_ms() const { return last_rx_ms_; }
 
  private:
-  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt, kDriver };
-  enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34, kPi00 };
+  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kPs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt, kDriver };
+  enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34, kPi00, kPi17 };
   // What `info`, `stat`, `data event` and `soh` said of one module. at_ms: the last full round; tried_ms and misses: the tries while something is still missing.
   struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0, tried_ms = 0; int misses = 0; bool valid = false; };
 
@@ -311,11 +314,12 @@ class Poller {
   void send_query(const char* text, std::uint64_t now_ms) {
     tx_plain_ = dialect_ == Dialect::kPi00;
     if (dialect_ == Dialect::kPi18) voltronic::pi18::build_command(text, pending_);
+    else if (dialect_ == Dialect::kPi17) voltronic::pi17::build_command(text, pending_);
     else if (tx_plain_) voltronic::build_plain_command(text, pending_);
     else voltronic::build_command(text, pending_);
     deadline_ms_ = now_ms + kVoltronicTimeoutMs;
   }
-  const char* dialect_name() const { return dialect_ == Dialect::kPi18 ? "pi18" : dialect_ == Dialect::kRevo ? "revo" : dialect_ == Dialect::kPi41 ? "pi41" : dialect_ == Dialect::kPi34 ? "pi34" : dialect_ == Dialect::kPi00 ? "pi00" : "pi30"; }
+  const char* dialect_name() const { return dialect_ == Dialect::kPi18 ? "pi18" : dialect_ == Dialect::kRevo ? "revo" : dialect_ == Dialect::kPi41 ? "pi41" : dialect_ == Dialect::kPi34 ? "pi34" : dialect_ == Dialect::kPi00 ? "pi00" : dialect_ == Dialect::kPi17 ? "pi17" : "pi30"; }
 
   void begin_cycle(std::uint64_t now_ms) {
     cycle_started_ms_ = now_ms;
@@ -337,7 +341,7 @@ class Poller {
       has_pv2_ = false;
       warnings_read_ = false;
       units_.clear();
-      if (dialect_ == Dialect::kPi18) { step_ = Step::kGs; send_query("GS", now_ms); }
+      if (dialect_ == Dialect::kPi18 || dialect_ == Dialect::kPi17) { step_ = Step::kGs; send_query("GS", now_ms); }
       else { step_ = Step::kQpigs; send_query("QPIGS", now_ms); }
     } else {
       step_ = Step::kPwr;
@@ -391,8 +395,10 @@ class Poller {
     known_ = true;
     misses_ = 0;
   }
-  // The order "auto" asks in: with CRC, without it, PI18.
-  static Dialect next_dialect(Dialect dialect) { return dialect == Dialect::kPi30 ? Dialect::kPi00 : dialect == Dialect::kPi00 ? Dialect::kPi18 : Dialect::kPi30; }
+  // The order "auto" asks in: with CRC, without it, PI18, PI17.
+  static Dialect next_dialect(Dialect dialect) {
+    return dialect == Dialect::kPi30 ? Dialect::kPi00 : dialect == Dialect::kPi00 ? Dialect::kPi18 : dialect == Dialect::kPi18 ? Dialect::kPi17 : Dialect::kPi30;
+  }
   // An answer that says nothing certain while the dialect is looked for: the cycle is given up and `dialect` is asked soon, without being taken as the one.
   void try_next(Dialect dialect, const char* why, std::uint64_t now_ms) {
     dialect_ = dialect;
@@ -422,7 +428,7 @@ class Poller {
     std::string text;
     const bool looking = auto_ && !known_;
     bool crc_ok = voltronic::parse_reply(frame.data(), frame.size(), text);   // for pi00: whether the reply is usable
-    if (dialect_ == Dialect::kPi18) {
+    if (dialect_ == Dialect::kPi18 || dialect_ == Dialect::kPi17) {
       if (looking && crc_ok) switch_to(Dialect::kPi30, now_ms);
       return;
     }
@@ -458,7 +464,7 @@ class Poller {
     }
     const bool revo = dialect_ == Dialect::kRevo;
     if (step_ == Step::kQpigs) {
-      pi00_layout_ = dialect_ == Dialect::kPi00 && voltronic::parse_qpigs_pi00(text, status_);
+      pi00_layout_ = dialect_ == Dialect::kPi00 && voltronic::parse_qpigs_pi00(text, status_, &pi16_);
       const bool read = pi00_layout_ ? true
                         : revo ? voltronic::parse_qpigs_revo(text, status_)
                         : dialect_ == Dialect::kPi41 ? voltronic::parse_qpigs_pi41(text, status_)
@@ -481,7 +487,7 @@ class Poller {
       after_mode(now_ms);
     } else if (step_ == Step::kQpiws) {
       std::vector<std::string> flags;
-      if (!(pi00_layout_ ? voltronic::parse_qpiws_pi00(text, flags) : voltronic::parse_qpiws(text, flags))) { warnings_missed("format", now_ms); return; }
+      if (!(pi00_layout_ ? voltronic::parse_qpiws_pi00(text, flags, pi16_) : voltronic::parse_qpiws(text, flags))) { warnings_missed("format", now_ms); return; }
       // the names are those of the PI30 documents: another family's flags mean other things and are not named
       if (dialect_ != Dialect::kPi41) { warnings_ = flags; warnings_read_ = true; }
       warnings_ever_ = true;
@@ -602,13 +608,14 @@ class Poller {
     voltronic::pi18::Kind kind = voltronic::pi18::Kind::kData;
     std::string payload;
     const bool ok = voltronic::pi18::parse_reply(frame.data(), frame.size(), kind, payload);
-    if (dialect_ != Dialect::kPi18) {
+    if (dialect_ != Dialect::kPi18 && dialect_ != Dialect::kPi17) {
       if (auto_ && !known_ && ok) switch_to(Dialect::kPi18, now_ms);
       return;
     }
     if (!ok) { fail("crc", now_ms); return; }
-    if (kind == voltronic::pi18::Kind::kNak) { learn(Dialect::kPi18); fail("nak", now_ms); return; }
+    if (kind == voltronic::pi18::Kind::kNak) { learn(dialect_); fail("nak", now_ms); return; }
     if (kind != voltronic::pi18::Kind::kData) { fail("format", now_ms); return; }
+    if (dialect_ == Dialect::kPi17) { on_pi17_data(payload, now_ms); return; }
     if (step_ == Step::kGs) {
       if (!voltronic::pi18::parse_gs(payload, status_)) { fail("format", now_ms); return; }
       learn(Dialect::kPi18);
@@ -622,6 +629,34 @@ class Poller {
       send_query("FWS", now_ms);
     } else if (step_ == Step::kFws) {
       if (!voltronic::pi18::parse_fws(payload, warnings_)) { fail("format", now_ms); return; }
+      warnings_read_ = true;
+      ++stats_.replies_ok;
+      stats_.last_error.clear();
+      finish(now_ms);
+    }
+  }
+
+  // PI17: GS, then PS (the powers), MOD and WS. The reading is whole after WS.
+  void on_pi17_data(const std::string& payload, std::uint64_t now_ms) {
+    const auto next = [this, now_ms](Step step, const char* command) {
+      ++stats_.replies_ok;
+      step_ = step;
+      send_query(command, now_ms);
+    };
+    if (step_ == Step::kGs) {
+      status_ = voltronic::Status();
+      if (!voltronic::pi17::parse_gs(payload, status_)) { fail("format", now_ms); return; }
+      learn(Dialect::kPi17);
+      next(Step::kPs, "PS");
+    } else if (step_ == Step::kPs) {
+      if (!voltronic::pi17::parse_ps(payload, status_)) { fail("format", now_ms); return; }
+      next(Step::kMod, "MOD");
+    } else if (step_ == Step::kMod) {
+      if (!voltronic::pi17::parse_mod(payload, mode_)) { fail("format", now_ms); return; }
+      next(Step::kFws, "WS");
+    } else if (step_ == Step::kFws) {
+      if (!voltronic::pi17::parse_ws(payload, warnings_)) { fail("format", now_ms); return; }
+      warnings_read_ = true;
       ++stats_.replies_ok;
       stats_.last_error.clear();
       finish(now_ms);
@@ -886,7 +921,7 @@ class Poller {
   Dialect dialect_ = Dialect::kPi30;
   bool auto_ = true, known_ = false;   // "auto": the dialect is looked for; known: it answered (or it was chosen)
   bool tx_plain_ = false;              // the last question went without CRC
-  bool crc_reply_seen_ = false, pi00_crc_replies_ = false, pi00_layout_ = false;   // pi00: a CRC reply was seen; its replies carry one; its QPIGS is the PI00 arrangement
+  bool crc_reply_seen_ = false, pi00_crc_replies_ = false, pi00_layout_ = false, pi16_ = false;   // pi00: a CRC reply was seen; its replies carry one; its QPIGS is the PI00 arrangement
   int misses_ = 0;
   voltronic::Status status_;
   bool pv2_wanted_ = false, pv2_absent_ = false, has_pv2_ = false;
