@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.7.0] - Readings page and update check fixed, more internal memory and complete battery sheets
+
 - **The Readings page is drawn with its own style sheet again:** the node did not register `/readings.css`, so the browser got a 404 and the page came out as a plain list.
 - **The Readings page is easier to read:** the cells of a battery are an even grid (three rows of five for 15 cells, four of four for 16) with the highest and the lowest marked, the batteries of a stack are one, two or four to a row, and the figures are aligned. A stack that says it holds more than its full capacity no longer gives a state of charge of the whole system over 100 %. The stand-in node serves only the files the firmware registers, and can replay recorded readings (`--readings`).
 - **The look for a new version no longer answers "the request is too large":** GitHub's answer about a release grows with its files and its notes and passed the 24 kB the node kept. It is now read piece by piece as it arrives and only the tag and the names and addresses of the files are kept, so its length no longer matters (up to 512 kB). Tested on a computer with a real answer; not tried on a board.
