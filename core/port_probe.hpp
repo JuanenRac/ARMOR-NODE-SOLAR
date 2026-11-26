@@ -126,7 +126,7 @@ inline bool read_only(const Bytes& f) {
   if (n < 4) return false;
   const auto is = [&f, n](std::string_view text) { return n == text.size() && std::equal(f.begin(), f.end(), text.begin(), [](std::uint8_t a, char b) { return a == static_cast<std::uint8_t>(b); }); };
   if (is("pwr\r")) return true;                 // the Pylontech console's table of the modules
-  if (is(":78DED0034\n")) return true;          // VE.Direct HEX "get" (7) of register 0xED8D; "set" is 8
+  if (is(":78DED00D4\n")) return true;          // VE.Direct HEX "get" (7) of register 0xED8D; "set" is 8
   // Voltronic: a question (Q...), with CRC or without
   for (const char* name : {"QPI", "QPIGS"}) {
     const std::string_view text(name);
