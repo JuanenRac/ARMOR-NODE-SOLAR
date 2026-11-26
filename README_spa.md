@@ -21,14 +21,14 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 o posterior">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Lenguaje">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-34%20host%20programs-2ea44f.svg" alt="Pruebas">
+  <img src="https://img.shields.io/badge/Tests-35%20host%20programs-2ea44f.svg" alt="Pruebas">
   <img src="https://img.shields.io/badge/Version-0.6.8-0f6cbd.svg" alt="Versión">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Madurez">
 </p>
 
 ---
 
-**Comprobación de honestidad - qué funciona hoy:** El firmware compila en el contenedor ESP-IDF 5.5.5, su núcleo (los ajustes, el intercambio con cada tipo de equipo, la aritmética de la UART emulada, el canal Bluetooth, las comprobaciones de versión y firma: 19.884 comprobaciones en 34 programas de test) se prueba en un ordenador con equipos de pega, los mensajes que hace los acepta ARMOR-COMMON y el panel se ejercitó en un navegador contra un nodo de pega. **Nunca ha corrido en una placa y no se ha conectado ningún inversor ni batería**: el Wi-Fi, el panel sobre TLS, la actualización, las UART de hardware y emuladas y los formatos de los protocolos (escritos a partir de documentos públicos y de memoria) están sin probar. Las tramas ANT-BMS de sus tests las capturaron otras personas en sus propias unidades: este proyecto no ha leído ninguna por sí mismo.
+**Comprobación de honestidad - qué funciona hoy:** El firmware compila en el contenedor ESP-IDF 5.5.5, su núcleo (los ajustes, el intercambio con cada tipo de equipo, la aritmética de la UART emulada, el canal Bluetooth, las comprobaciones de versión y firma: 19.884 comprobaciones en 35 programas de test) se prueba en un ordenador con equipos de pega, los mensajes que hace los acepta ARMOR-COMMON y el panel se ejercitó en un navegador contra un nodo de pega. **Nunca ha corrido en una placa y no se ha conectado ningún inversor ni batería**: el Wi-Fi, el panel sobre TLS, la actualización, las UART de hardware y emuladas y los formatos de los protocolos (escritos a partir de documentos públicos y de memoria) están sin probar. Las tramas ANT-BMS de sus tests las capturaron otras personas en sus propias unidades: este proyecto no ha leído ninguna por sí mismo.
 
 ---
 
@@ -40,7 +40,7 @@
 | Madurez | Funcional |
 | Función | Nodo de campo solar para ESP32-S3: inversores y baterías (familia: Field Nodes, padre: ARMOR-COMMON) |
 | Tecnología | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Pruebas | 34 programas de host y 11 de Python (`ctest`) |
+| Pruebas | 35 programas de host y 12 de Python (`ctest`) |
 | Equipos | Inversores Voltronic / MPP Solar, baterías Pylontech, ANT-BMS; 10 puertos serie |
 | Funciona en | ESP32-S3-WROOM-1 N16R8 o Waveshare ESP32-S3-ETH; pruebas de host en cualquier ordenador |
 | En hardware real | Ninguno todavía: ninguna placa montada ni inversor o batería conectado (solo tests en ordenador, la compilación y el panel en un navegador) |
@@ -57,7 +57,7 @@ Cada línea es una parte de este repositorio y la luz dice hasta dónde llega ho
 | Área | Estado | Qué significa aquí |
 |---|---|---|
 | Software | 🟢 | El firmware compila en el contenedor ESP-IDF 5.5.5 para las dos placas (Wi-Fi y Ethernet). |
-| Pruebas | 🟢 | Pasan 19.884 comprobaciones en 34 programas de host (`ctest`): los ajustes, el intercambio con cada tipo de equipo, la UART emulada, el canal Bluetooth y las comprobaciones de versión. |
+| Pruebas | 🟢 | Pasan 19.884 comprobaciones en 35 programas de host (`ctest`): los ajustes, el intercambio con cada tipo de equipo, la UART emulada, el canal Bluetooth y las comprobaciones de versión. |
 | Protocolos y datos | 🟡 | Las tramas, sumas de control y lecturas de Voltronic, Pylontech y ANT-BMS se comprueban contra las tramas documentadas y muestras grabadas; ninguno ha hablado todavía con un inversor o una batería reales. |
 | Interfaz | 🟡 | El panel web se ha ejercitado en un navegador contra una simulación del nodo, no en una placa. |
 | Hardware | 🔴 | Ninguna placa construida ni inversor o batería conectados: nada ha funcionado todavía con equipos reales. |
@@ -75,6 +75,7 @@ Cada línea es una parte de este repositorio y la luz dice hasta dónde llega ho
 * **Página de Lecturas del panel:** todo el sistema sumado, una sección por puerto y una tarjeta por batería con sus 15 o 16 celdas como barras coloreadas según la tensión, estado de carga, corriente, temperaturas, salud y un parpadeo suave ante una alarma. Las lecturas se piden puerto a puerto y los datos de los puertos se guardan en la memoria externa, para que cuatro pilas de baterías dejen libre la memoria interna (comprobado solo en el host).
 * **Inversores Voltronic / MPP Solar** (Axpert, PIP, InfiniSolar y clones), RS232 a 2400 baudios: las tramas y su CRC, y las lecturas `QPIGS` (red, salida, batería, FV, bits de estado), `QMOD` (modo), `QPIWS` (avisos y averías por nombre) y `QPIRI` (valores nominales). Solo se pueden construir comandos de lectura: un ajuste cambia cómo se alimenta la casa. Tres dialectos, elegidos en el puerto o encontrados por él (*auto*): PI30, REVO (otro `QPIGS`, respuestas con suma de comprobación) y PI18 (`^P005GS`: InfiniSolar V, LV5048, SunGoldPower), solo lectura.
 * **Otros protocolos, un solo catálogo:** inversores y cargadores Modbus (EASun SMG II, SRNE), placas de batería DALY, JBD y JK, Victron VE.Direct y las variantes PI41 y PI34 de la familia Voltronic, cada uno con su tipo de puerto ([protocolos](docs/PROTOCOLS.md)). Escritos a partir de los documentos públicos y probados solo en un ordenador. Un inversor que nunca responde el modo o los avisos se lee igualmente, y la vista en crudo de un puerto muestra lo enviado y el último error.
+* **Límites de batería y carga del sistema:** los límites que marcan una celda, la diferencia entre celdas y la temperatura son ajustes del nodo (por defecto 2,80 / 3,00 / 3,55 / 3,65 V, 50 / 100 mV, 0 / 50 °C), y el estado de carga de todo el sistema se pondera por capacidad, sin cifra cuando una batería no dice la suya.
 * **Baterías Pylontech** (US2000, US3000, US5000): la tabla `pwr` de la consola (tensión, corriente, temperaturas y estado de carga de cada módulo), `bat <n>` (tensión y temperatura de cada celda) e `info <n>` (modelo, capacidad restante y total, ciclos), resumidas como una pila con su capacidad y energía totales, y la trama RS485 con sus dos comprobaciones. Los formatos están escritos de memoria de la consola pública y pueden variar entre firmwares. Las columnas se encuentran por los nombres de la cabecera (incluido el formato de la US5000 V2.3 con sus columnas Id, MosTempr y SysAlarm.St), la carga restante y el equilibrado salen de `bat`, y el modelo, la capacidad nominal y los ciclos de `info` y `stat`, que se piden una vez y se guardan media hora.
 * **Lo que dice de sí mismo un módulo Pylontech:** su modelo y las versiones de su placa y su software, sus celdas y la corriente que admite, los contadores de su vida (`stat`), la salud de cada celda (`soh`, marcando la anormal) y la entrada más reciente de su registro de eventos, con los nombres de las protecciones tal como los imprime la consola. La consola solo lee, y un administrador puede descargar como archivo de texto lo que oyó un puerto.
 * **Los mensajes del nodo** (`armor/solar/<nodo>/<dispositivo>/state`, uno por inversor o pila de baterías), definidos en ARMOR-COMMON con esquemas y vectores de conformidad; lo que producen los puertos se comprueba contra ellos.
@@ -201,7 +202,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-34 programas de prueba de host y 11 comprobaciones en Python se ejecutan con `ctest`, compilados con `-Werror`.
+35 programas de prueba de host y 12 comprobaciones en Python se ejecutan con `ctest`, compilados con `-Werror`.
 
 Comprobaciones Python: los textos del panel en ocho idiomas, las tareas, las rutas de guardado, la sesión Bluetooth bajo su bloqueo y las rutas que llama el panel (y, en algunos nodos, los códigos HTTP o los glifos de las fuentes)
 

@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The state of charge of the whole system is weighted by capacity:** a stack of one battery no longer weighs as much as a stack of six; with several stacks and one that does not say its full capacity, no total is sent.
+- **The limits that mark a battery as faulty are settings of the node:** cell low and high, the spread between cells and the temperature (the same defaults as before), edited on the Ports page in eight languages and checked for their order.
 - **An inverter that answers `QPIGS` is no longer left unread:** a unit that never answers `QMOD` or `QPIWS` (silence, `NAK` or a reply that cannot be read) was never published at all; from the third try the reading goes out with the mode `unknown` or `warnings_known` false. A warning list longer than the documented 36 flags is accepted. Tried on a computer only.
 - **The raw view of a port says why nothing is read:** it starts with the last question and its bytes, the bytes sent and heard, the answers, refusals and silences, and the last error. The hint of a silent inverter port and the wiring notes now give the level converter and the inverter's own pinout (not the one of the Pylontech sockets).
 - **More equipment can be read, listed in one catalogue of protocols:** new port types for Modbus inverters and chargers (EASun SMG II, SRNE), DALY, JBD and JK battery boards and Victron VE.Direct, and the PI41 and PI34 variants of the Voltronic type. Written from the public documents and tried on a computer; none has been tried on real equipment. A temperature or a cell range the equipment does not give is left out of the message instead of being sent as zero.

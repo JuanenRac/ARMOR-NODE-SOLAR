@@ -678,8 +678,15 @@ function captureCard() {
       el("button", { class: "b danger", disabled: !isAdmin(), onclick: clear }, t("captureClear"))), result);
 }
 
+// The limits that mark a battery as faulty on the Readings page.
+function limitsCard() {
+  if (!S.cfg.cell_limits) return null;
+  return card(t("limitsTitle"), el("p", { class: "muted" }, t("limitsHint")),
+    el("div", { class: "row" }, Object.keys(LIMIT_DEFAULTS).map(key => field("limit_" + key, "cell_limits." + key, { type: "number" }))));
+}
+
 function portsPage() {
-  return el("div", {}, note(t("portsWarn")), el("p", { class: "muted" }, t("portsIntro")), note(t("portsRestart"), "info"), captureCard(),
+  return el("div", {}, note(t("portsWarn")), el("p", { class: "muted" }, t("portsIntro")), note(t("portsRestart"), "info"), captureCard(), limitsCard(),
     el("div", { class: "grid wide" }, [boardCard()].concat(Array.from({ length: S.cfg.profile === "mux" ? Math.min(10, muxPortCount()) : 10 }, (_, i) => i).map(portCard))));
 }
 
@@ -691,10 +698,14 @@ const num = (value, digits) => (typeof value === "number" ? value.toFixed(digits
 const watts = w => (typeof w !== "number" ? "—" : Math.abs(w) >= 10000 ? (w / 1000).toFixed(1) + " kW" : Math.round(w) + " W");
 const isNum = v => typeof v === "number";
 
-// The limits that colour a cell: [low alarm, low warning, high warning, high alarm] in volts. Lithium iron phosphate (every Pylontech); a battery whose cells go above 3.8 V is another lithium chemistry.
-const CELL_LIMITS = { lfp: [2.8, 3.0, 3.55, 3.65], nmc: [3.0, 3.3, 4.18, 4.25] };
-const DELTA_WARN_MV = 50, DELTA_BAD_MV = 100, TEMP_LOW_C = 0, TEMP_HIGH_C = 50;
-const cellLimits = m => CELL_LIMITS[(m.stack || []).some(x => (x.cells_v || []).some(v => v > 3.8)) ? "nmc" : "lfp"];
+// What marks a battery as faulty: the node's own settings (these are their defaults). A cell is coloured by [low alarm, low warning, high warning, high alarm] in volts: the settings for
+// lithium iron phosphate (every Pylontech); a battery whose cells go above 3.8 V is another lithium chemistry and has fixed limits.
+const LIMIT_DEFAULTS = { low_alarm_mv: 2800, low_warn_mv: 3000, high_warn_mv: 3550, high_alarm_mv: 3650, delta_warn_mv: 50, delta_bad_mv: 100, temp_low_c: 0, temp_high_c: 50 };
+const lim = key => { const own = S.cfg && S.cfg.cell_limits; return own && isNum(own[key]) ? own[key] : LIMIT_DEFAULTS[key]; };
+const NMC_LIMITS = [3.0, 3.3, 4.18, 4.25];
+const cellLimits = m => ((m.stack || []).some(x => (x.cells_v || []).some(v => v > 3.8)) ? NMC_LIMITS : [lim("low_alarm_mv"), lim("low_warn_mv"), lim("high_warn_mv"), lim("high_alarm_mv")].map(mv => mv / 1000));
+const deltaLevel = delta => (delta >= lim("delta_bad_mv") ? 2 : delta >= lim("delta_warn_mv") ? 1 : 0);
+const tempOut = c => c <= lim("temp_low_c") || c >= lim("temp_high_c");
 const cellLevel = (v, limits) => (v < limits[0] || v > limits[3] ? 2 : v < limits[1] || v > limits[2] ? 1 : 0);
 
 // What is wrong with one battery of a stack: level 0 (nothing), 1 (look at it) or 2 (alarm), and the words for it.
@@ -706,10 +717,10 @@ function moduleHealth(x, limits) {
     const low = Math.min(...cells), high = Math.max(...cells), delta = Math.round((high - low) * 1000);
     if (low < limits[1]) add(cellLevel(low, limits), "rv_cellLow");
     if (high > limits[2]) add(cellLevel(high, limits), "rv_cellHigh");
-    if (delta >= DELTA_WARN_MV) add(delta >= DELTA_BAD_MV ? 2 : 1, "rv_deltaHigh");
+    if (deltaLevel(delta)) add(deltaLevel(delta), "rv_deltaHigh");
   }
   const temps = (x.temperatures_c || []).concat(isNum(x.temperature_c) ? [x.temperature_c] : []);
-  if (temps.some(c => c <= TEMP_LOW_C || c >= TEMP_HIGH_C)) add(2, "rv_tempOut");
+  if (temps.some(tempOut)) add(2, "rv_tempOut");
   if (x.soh_abnormal && x.soh_abnormal.length) add(1, "rv_soh");
   if (x.state && !/^(idle|charge|dischg|normal|full|balance)$/i.test(x.state)) add(2, "rv_stateBad");
   return { level: problems.reduce((a, p) => Math.max(a, p[0]), 0), problems };
@@ -764,8 +775,8 @@ function moduleCard(x, limits, key) {
   const box = el("div", { class: "rv-module " + levelClass(health.level) },
     el("header", {}, el("h3", {}, t("rd_module") + " " + x.n), el("span", { class: "pill " + levelClass(health.level) }, health.level ? t(health.level === 2 ? "rd_alarm" : "rv_check") : t(flow))),
     el("div", { class: "rv-soc" }, meter(x.soc_percent, socKind(x.soc_percent)), el("strong", {}, x.soc_percent === undefined ? "—" : x.soc_percent + " %")),
-    el("div", { class: "rv-chips" }, chip("V", num(x.voltage_v, 2)), chip("A", num(current, 2)), chip("°C", num(x.temperature_c, 1), isNum(x.temperature_c) && (x.temperature_c <= TEMP_LOW_C || x.temperature_c >= TEMP_HIGH_C) ? 2 : undefined),
-      delta === null ? null : chip("Δ mV", String(delta), delta >= DELTA_BAD_MV ? 2 : delta >= DELTA_WARN_MV ? 1 : 0)),
+    el("div", { class: "rv-chips" }, chip("V", num(x.voltage_v, 2)), chip("A", num(current, 2)), chip("°C", num(x.temperature_c, 1), isNum(x.temperature_c) && tempOut(x.temperature_c) ? 2 : undefined),
+      delta === null ? null : chip("Δ mV", String(delta), deltaLevel(delta))),
     cellBars(x, limits),
     health.problems.length ? el("ul", { class: "rv-problems" }, health.problems.map(p => el("li", { class: levelClass(p[0]) }, t(p[1])))) : null,
     details.length ? el("details", { open: !!S.open[key], ontoggle: e => { S.open[key] = e.target.open; } }, el("summary", {}, t("rv_details")), kv(details)) : null);
@@ -787,7 +798,7 @@ function batterySection(port, m) {
   const section = el("section", { class: "rv-section" + (stale(port) ? " old" : "") }, head,
     el("div", { class: "rv-summary" }, ring(m.soc_percent),
       el("div", { class: "rv-chips" }, chip(t("rd_voltage"), num(m.voltage_v, 2) + " V · " + num(m.current_a, 1) + " A"), chip(t("rv_power"), watts(isNum(m.power_w) ? m.power_w : m.voltage_v * m.current_a)),
-        chip(t("rv_cellRange"), num(m.cell_min_v, 3) + " – " + num(m.cell_max_v, 3) + " V"), chip("Δ mV", String(delta), delta >= DELTA_BAD_MV ? 2 : delta >= DELTA_WARN_MV ? 1 : 0),
+        chip(t("rv_cellRange"), num(m.cell_min_v, 3) + " – " + num(m.cell_max_v, 3) + " V"), chip("Δ mV", String(delta), deltaLevel(delta)),
         chip(t("rd_temp"), num(m.temperature_min_c, 1) + " – " + num(m.temperature_max_c, 1) + " °C"),
         m.capacity_ah === undefined || m.full_capacity_ah === undefined ? null : chip(t("rd_capacity"), num(m.capacity_ah, 1) + " / " + num(m.full_capacity_ah, 1) + " Ah" + (m.energy_kwh === undefined ? "" : " · " + num(m.energy_kwh, 2) + " kWh")),
         m.balancing ? chip(t("rv_balancing"), String(m.balancing)) : null)),
@@ -834,7 +845,7 @@ function bankSummary(list) {
     el("div", { class: "rv-summary" }, banks.length ? ring(soc) : null,
       el("div", { class: "rv-chips" },
         banks.length ? [chip(t("rv_batteriesLabel"), String(modules)), chip(t("rd_voltage"), num(sum(banks, m => m.voltage_v * m.modules) / modules, 2) + " V · " + num(sum(banks, m => m.current_a), 1) + " A"),
-          chip(t("rv_power"), watts(power)), chip(t("rv_cellRange"), num(low, 3) + " – " + num(high, 3) + " V"), chip(t("rv_worstDelta"), String(delta), delta >= DELTA_BAD_MV ? 2 : delta >= DELTA_WARN_MV ? 1 : 0),
+          chip(t("rv_power"), watts(power)), chip(t("rv_cellRange"), num(low, 3) + " – " + num(high, 3) + " V"), chip(t("rv_worstDelta"), String(delta), deltaLevel(delta)),
           chip(t("rd_temp"), num(Math.min(...banks.map(m => m.temperature_min_c)), 1) + " – " + num(Math.max(...banks.map(m => m.temperature_max_c)), 1) + " °C"),
           known ? chip(t("rd_capacity"), num(sum(banks, m => m.capacity_ah), 0) + " / " + num(sum(banks, m => m.full_capacity_ah), 0) + " Ah · " + num(sum(banks, m => m.energy_kwh), 2) + " kWh") : null] : null,
         inverters.length ? [chip(t("rd_pv"), watts(sum(inverters, m => m.pv_w))), chip(t("rd_load"), watts(sum(inverters, m => m.out_w)))] : null)));

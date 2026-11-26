@@ -21,14 +21,14 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-34%20host%20programs-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-35%20host%20programs-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.6.8-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
 ---
 
-**Honesty check - what runs today:** The firmware builds in the ESP-IDF 5.5.5 container, its core (the settings, the exchange with each kind of equipment, the arithmetic of the emulated UART, the Bluetooth channel, the release and signature checks: 19,884 checks in 34 test programs) is tested on a computer with stand-in equipment, the messages it makes are accepted by ARMOR-COMMON and the panel was exercised in a browser against a stand-in node. **It has never run on a board and no inverter or battery has been connected**: the Wi-Fi, the panel over TLS, the update, the hardware and emulated UARTs and the formats of the protocols (written from public documents and from memory) are untried. The ANT-BMS frames in its tests were captured by other people on their own units: this project has not read one itself.
+**Honesty check - what runs today:** The firmware builds in the ESP-IDF 5.5.5 container, its core (the settings, the exchange with each kind of equipment, the arithmetic of the emulated UART, the Bluetooth channel, the release and signature checks: 19,884 checks in 35 test programs) is tested on a computer with stand-in equipment, the messages it makes are accepted by ARMOR-COMMON and the panel was exercised in a browser against a stand-in node. **It has never run on a board and no inverter or battery has been connected**: the Wi-Fi, the panel over TLS, the update, the hardware and emulated UARTs and the formats of the protocols (written from public documents and from memory) are untried. The ANT-BMS frames in its tests were captured by other people on their own units: this project has not read one itself.
 
 ---
 
@@ -40,7 +40,7 @@
 | Maturity | Functional |
 | Role | Solar field node for ESP32-S3: inverters and batteries (family: Field Nodes, parent: ARMOR-COMMON) |
 | Stack | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 34 host programs and 11 Python checks (`ctest`) |
+| Tests | 35 host programs and 12 Python checks (`ctest`) |
 | Equipment | Voltronic / MPP Solar inverters, Pylontech batteries, ANT-BMS; 10 serial ports |
 | Runs on | ESP32-S3-WROOM-1 N16R8 or Waveshare ESP32-S3-ETH; host tests on any computer |
 | On real hardware | None yet: no board built and no inverter or battery connected (host tests, the build and the panel in a browser only) |
@@ -57,7 +57,7 @@ Each line is one part of this repository and the light says how far it is today.
 | Area | State | What it means here |
 |---|---|---|
 | Software | 🟢 | The firmware builds in the ESP-IDF 5.5.5 container for both boards (Wi-Fi and Ethernet). |
-| Tests | 🟢 | 19,884 checks in 34 host programs pass (`ctest`): the settings, the exchange with each kind of equipment, the emulated UART, the Bluetooth channel and the release checks. |
+| Tests | 🟢 | 19,884 checks in 35 host programs pass (`ctest`): the settings, the exchange with each kind of equipment, the emulated UART, the Bluetooth channel and the release checks. |
 | Protocols and data | 🟡 | The Voltronic, Pylontech and ANT-BMS frames, checksums and readings are checked against the documented frames and recorded samples; none has talked to a real inverter or battery yet. |
 | Interface | 🟡 | The web panel is exercised in a browser against a mock of the node, not on a board. |
 | Hardware | 🔴 | No board built and no inverter or battery connected: nothing has run on real equipment yet. |
@@ -75,6 +75,7 @@ Each line is one part of this repository and the light says how far it is today.
 * **Readings page of the panel:** the whole system added up, a section for each port and a card for each battery with its 15 or 16 cells as bars coloured by voltage, state of charge, current, temperatures, health and a soft blink on an alarm. The readings are asked for one port at a time, and the data of the ports is kept in the external memory, so that four stacks of batteries leave the internal memory free (checked on the host only).
 * **Voltronic / MPP Solar inverters** (Axpert, PIP, InfiniSolar and clones), RS232 at 2400 baud: the frames and their CRC, and the readings `QPIGS` (grid, output, battery, PV, status bits), `QMOD` (mode), `QPIWS` (warnings and faults by name) and `QPIRI` (ratings). Only reading commands can be built: a setting changes how the house is fed. Three dialects, chosen on the port or found by it (*auto*): PI30, REVO (another `QPIGS`, checksum replies) and PI18 (`^P005GS`: InfiniSolar V, LV5048, SunGoldPower), read only.
 * **Other protocols, one catalogue:** Modbus inverters and chargers (EASun SMG II, SRNE), DALY, JBD and JK battery boards, Victron VE.Direct and the PI41 and PI34 variants of the Voltronic family, each a port type of its own ([protocols](docs/PROTOCOLS.md)). Written from the public documents and tried on a computer only. An inverter that never answers its mode or warnings is still read, and the raw view of a port shows what was sent and the last error.
+* **Battery limits and system charge:** the limits that mark a cell, the spread between cells and the temperature are settings of the node (defaults 2.80 / 3.00 / 3.55 / 3.65 V, 50 / 100 mV, 0 / 50 °C), and the state of charge of the whole system is weighted by capacity, with no figure when a stack does not say its own.
 * **Pylontech batteries** (US2000, US3000, US5000): the console's `pwr` table (every module's voltage, current, temperatures and state of charge), `bat <n>` (the voltage and temperature of every cell) and `info <n>` (model, remaining and full capacity, cycles), summarised as one stack with its total capacity and energy, and the RS485 frame with its two checks. The formats are written from memory of the public console and may differ between firmwares. The columns are found by the header's names (the US5000 V2.3 layout with its Id columns, MosTempr and SysAlarm.St included), the remaining charge and the balancing come from `bat`, and the model, rated capacity and cycles from `info` and `stat`, asked once and kept for half an hour.
 * **What a Pylontech module tells about itself:** its model and the versions of its board and software, its cells and the current it allows, the counters of its life (`stat`), the health of each cell (`soh`, the abnormal one marked) and the newest entry of its event log, with the protection names exactly as the console prints them. The console only reads, and an administrator can download what a port heard as a text file.
 * **The messages of the node** (`armor/solar/<node>/<device>/state`, one per inverter or battery stack), defined in ARMOR-COMMON with schemas and conformance vectors; what the ports make is checked against them.
@@ -201,7 +202,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-34 host test programs and 11 Python checks run under `ctest`, built with `-Werror`.
+35 host test programs and 12 Python checks run under `ctest`, built with `-Werror`.
 
 Python checks: the panel texts in eight languages, the tasks, the save paths, the Bluetooth session under its lock and the routes the panel calls (and, in some nodes, the HTTP codes or the glyphs of the fonts)
 

@@ -181,6 +181,15 @@ struct BatteryWrite {
 // The summary of the whole system (core/solar_system.hpp) and the alerts the node raises on its own. Everything is OFF until the owner turns it on: the message needs the broker to
 // let the node write armor/solar/<node>/system (mqtt_identity.sh of ARMOR-DEVOPS gives that line to the nodes it makes from now on; an older node needs `upgrade-node`), and an alert is a
 // decision about the owner's battery, so it is never taken for them. The limits are the owner's, in the configuration file; the numbers here are only where a panel starts.
+// The limits that mark a battery as faulty in the panel: the cells of a lithium iron phosphate battery (every Pylontech), the spread between the cells of one battery and its
+// temperature. A battery whose cells go above 3.8 V is another lithium chemistry and keeps fixed cell limits of its own in the panel.
+struct CellLimits {
+  int low_alarm_mv = 2800, low_warn_mv = 3000;     // a cell below these
+  int high_warn_mv = 3550, high_alarm_mv = 3650;   // a cell above these
+  int delta_warn_mv = 50, delta_bad_mv = 100;      // highest less lowest cell of a battery, at or above these
+  int temp_low_c = 0, temp_high_c = 50;            // a temperature at or below, at or above
+};
+
 struct SummarySettings {
   bool publish = false;                 // send the summary message
   bool alerts = false;                  // raise alerts (in the message and on the LEDs of the ports)
@@ -239,6 +248,7 @@ struct Settings {
   int capture_frames = framecap::kDefaultFrames;
   BatteryWrite battery;
   SummarySettings summary;
+  CellLimits cell_limits;
 };
 
 struct Problem {
@@ -589,6 +599,17 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
     read_bool(*capture, "enabled", s.capture_enabled, "capture.enabled", problems);
     read_int(*capture, "frames", s.capture_frames, framecap::kMinFrames, framecap::kMaxFrames, "capture.frames", problems);
   }
+  if (const json::Value* limits = document.get("cell_limits"); limits != nullptr && limits->is_object()) {
+    CellLimits& l = s.cell_limits;
+    read_int(*limits, "low_alarm_mv", l.low_alarm_mv, 2000, 4500, "cell_limits.low_alarm_mv", problems);
+    read_int(*limits, "low_warn_mv", l.low_warn_mv, 2000, 4500, "cell_limits.low_warn_mv", problems);
+    read_int(*limits, "high_warn_mv", l.high_warn_mv, 2000, 4500, "cell_limits.high_warn_mv", problems);
+    read_int(*limits, "high_alarm_mv", l.high_alarm_mv, 2000, 4500, "cell_limits.high_alarm_mv", problems);
+    read_int(*limits, "delta_warn_mv", l.delta_warn_mv, 5, 1000, "cell_limits.delta_warn_mv", problems);
+    read_int(*limits, "delta_bad_mv", l.delta_bad_mv, 5, 1000, "cell_limits.delta_bad_mv", problems);
+    read_int(*limits, "temp_low_c", l.temp_low_c, -40, 60, "cell_limits.temp_low_c", problems);
+    read_int(*limits, "temp_high_c", l.temp_high_c, 0, 120, "cell_limits.temp_high_c", problems);
+  }
   if (const json::Value* summary = document.get("summary"); summary != nullptr && summary->is_object()) {
     read_bool(*summary, "publish", s.summary.publish, "summary.publish", problems);
     read_bool(*summary, "alerts", s.summary.alerts, "summary.alerts", problems);
@@ -770,6 +791,13 @@ inline Problems validate(const Settings& s) {
     if (s.leds.led10 >= 0) claim(s.leds.led10, "leds", "leds.led10");
   }
   if (s.summary.temperature_low_c >= s.summary.temperature_high_c) bad(problems, "summary.temperature_low_c", "range");
+  // the limits keep their order: an alarm is never inside the warning it follows
+  const CellLimits& l = s.cell_limits;
+  if (l.low_alarm_mv > l.low_warn_mv) bad(problems, "cell_limits.low_alarm_mv", "range");
+  if (l.low_warn_mv >= l.high_warn_mv) bad(problems, "cell_limits.low_warn_mv", "range");
+  if (l.high_warn_mv > l.high_alarm_mv) bad(problems, "cell_limits.high_warn_mv", "range");
+  if (l.delta_warn_mv > l.delta_bad_mv) bad(problems, "cell_limits.delta_warn_mv", "range");
+  if (l.temp_low_c >= l.temp_high_c) bad(problems, "cell_limits.temp_low_c", "range");
   const std::size_t mux_ports = mux_port_count(s.mux);
   for (std::size_t i = 0; i < kPortCount; ++i) {
     const PortConfig& port = s.ports[i];
@@ -860,6 +888,9 @@ inline std::string to_json(const Settings& s, bool secrets) {
   w.key("system").begin_object().field("auto_restart_hours", s.auto_restart_hours).field("login_limit_per_minute", s.login_limit_per_minute).end_object();
   w.key("security").begin_object().field("seal_secrets", s.seal_secrets).field("ota_check_board", s.ota_check_board).field("ota_require_board_mark", s.ota_require_board_mark).field("control_require_sig", s.control_require_sig).field("ota_invalidate_rejected", s.ota_invalidate_rejected).end_object();
   w.key("capture").begin_object().field("enabled", s.capture_enabled).field("frames", s.capture_frames).end_object();
+  w.key("cell_limits").begin_object().field("low_alarm_mv", s.cell_limits.low_alarm_mv).field("low_warn_mv", s.cell_limits.low_warn_mv).field("high_warn_mv", s.cell_limits.high_warn_mv)
+      .field("high_alarm_mv", s.cell_limits.high_alarm_mv).field("delta_warn_mv", s.cell_limits.delta_warn_mv).field("delta_bad_mv", s.cell_limits.delta_bad_mv)
+      .field("temp_low_c", s.cell_limits.temp_low_c).field("temp_high_c", s.cell_limits.temp_high_c).end_object();
   w.key("summary").begin_object().field("publish", s.summary.publish).field("alerts", s.summary.alerts).field("every_s", s.summary.every_s).field("soc_low_percent", s.summary.soc_low_percent)
       .field("cell_over_mv", s.summary.cell_over_mv).field("temperature_high_c", s.summary.temperature_high_c).field("temperature_low_c", s.summary.temperature_low_c).end_object();
   w.key("battery").begin_object().field("write_enabled", s.battery.enabled).field("expert_mode", s.battery.expert_mode);

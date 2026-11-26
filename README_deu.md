@@ -21,14 +21,14 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 oder neuer">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Sprache">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-34%20host%20programs-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-35%20host%20programs-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.6.8-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Reifegrad">
 </p>
 
 ---
 
-**Ehrlichkeitsprüfung - was heute läuft:** Die Firmware baut im ESP-IDF-5.5.5-Container, ihr Kern (die Einstellungen, der Austausch mit jeder Geräteart, die Arithmetik der emulierten UART, der Bluetooth-Kanal, die Versions- und Signaturprüfungen: 19.884 Prüfungen in 34 Testprogrammen) wird auf einem Computer mit Ersatzgeräten getestet, die von ihr erzeugten Nachrichten akzeptiert ARMOR-COMMON, und das Panel wurde in einem Browser gegen einen Ersatzknoten geprüft. **Sie lief nie auf einer Platine, und es wurde kein Wechselrichter und keine Batterie angeschlossen**: das WLAN, das Panel über TLS, das Update, die Hardware- und die emulierten UARTs und die Formate der Protokolle (nach öffentlichen Dokumenten und aus dem Gedächtnis geschrieben) sind unerprobt. Die ANT-BMS-Rahmen in den Tests wurden von anderen Personen an ihren eigenen Geräten aufgezeichnet: dieses Projekt hat selbst noch keinen gelesen.
+**Ehrlichkeitsprüfung - was heute läuft:** Die Firmware baut im ESP-IDF-5.5.5-Container, ihr Kern (die Einstellungen, der Austausch mit jeder Geräteart, die Arithmetik der emulierten UART, der Bluetooth-Kanal, die Versions- und Signaturprüfungen: 19.884 Prüfungen in 35 Testprogrammen) wird auf einem Computer mit Ersatzgeräten getestet, die von ihr erzeugten Nachrichten akzeptiert ARMOR-COMMON, und das Panel wurde in einem Browser gegen einen Ersatzknoten geprüft. **Sie lief nie auf einer Platine, und es wurde kein Wechselrichter und keine Batterie angeschlossen**: das WLAN, das Panel über TLS, das Update, die Hardware- und die emulierten UARTs und die Formate der Protokolle (nach öffentlichen Dokumenten und aus dem Gedächtnis geschrieben) sind unerprobt. Die ANT-BMS-Rahmen in den Tests wurden von anderen Personen an ihren eigenen Geräten aufgezeichnet: dieses Projekt hat selbst noch keinen gelesen.
 
 ---
 
@@ -40,7 +40,7 @@
 | Reifegrad | Funktionsfähig |
 | Rolle | Solar-Feldknoten für ESP32-S3: Wechselrichter und Batterien (Familie: Field Nodes, übergeordnet: ARMOR-COMMON) |
 | Technik | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 34 Host-Programmen und 11 Python-Prüfungen (`ctest`) |
+| Tests | 35 Host-Programmen und 12 Python-Prüfungen (`ctest`) |
 | Geräte | Voltronic- / MPP-Solar-Wechselrichter, Pylontech-Batterien, ANT-BMS; 10 serielle Ports |
 | Läuft auf | ESP32-S3-WROOM-1 N16R8 oder Waveshare ESP32-S3-ETH; Host-Tests auf jedem Computer |
 | Auf echter Hardware | Noch keiner: keine Platine aufgebaut und kein Wechselrichter oder keine Batterie angeschlossen (nur Computertests, der Build und das Panel im Browser) |
@@ -57,7 +57,7 @@ Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heut
 | Bereich | Stand | Was das hier bedeutet |
 |---|---|---|
 | Software | 🟢 | Die Firmware wird im ESP-IDF-5.5.5-Container für beide Platinen (WLAN und Ethernet) gebaut. |
-| Tests | 🟢 | 19.884 Prüfungen in 34 Host-Programmen bestehen (`ctest`): die Einstellungen, der Austausch mit jeder Geräteart, die emulierte UART, der Bluetooth-Kanal und die Versionsprüfungen. |
+| Tests | 🟢 | 19.884 Prüfungen in 35 Host-Programmen bestehen (`ctest`): die Einstellungen, der Austausch mit jeder Geräteart, die emulierte UART, der Bluetooth-Kanal und die Versionsprüfungen. |
 | Protokolle und Daten | 🟡 | Die Telegramme, Prüfsummen und Messwerte von Voltronic, Pylontech und ANT-BMS werden gegen die dokumentierten Telegramme und aufgezeichnete Beispiele geprüft; keines hat bisher mit einem echten Wechselrichter oder einer echten Batterie gesprochen. |
 | Oberfläche | 🟡 | Das Web-Panel wurde in einem Browser gegen eine Nachbildung des Knotens erprobt, nicht auf einer Platine. |
 | Hardware | 🔴 | Keine Platine gebaut und kein Wechselrichter oder keine Batterie angeschlossen: Bisher lief nichts auf echten Geräten. |
@@ -75,6 +75,7 @@ Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heut
 * **Messwertseite des Panels:** das gesamte System addiert, ein Abschnitt je Port und eine Karte je Batterie mit ihren 15 oder 16 Zellen als nach Spannung eingefärbte Balken, Ladezustand, Strom, Temperaturen, Zustand und ein sanftes Blinken bei einem Alarm. Die Messwerte werden Port für Port abgefragt, und die Daten der Ports liegen im externen Speicher, damit vier Batteriestapel den internen Speicher frei lassen (nur auf dem Host geprüft).
 * **Voltronic- / MPP-Solar-Wechselrichter** (Axpert, PIP, InfiniSolar und Klone), RS232 mit 2400 Baud: die Rahmen und ihre CRC sowie die Messwerte `QPIGS` (Netz, Ausgang, Batterie, PV, Statusbits), `QMOD` (Modus), `QPIWS` (Warnungen und Störungen mit Namen) und `QPIRI` (Nennwerte). Nur lesende Befehle lassen sich bauen: eine Einstellung ändert, wie das Haus versorgt wird. Drei Dialekte, am Port gewählt oder von ihm gefunden (*auto*): PI30, REVO (ein anderes `QPIGS`, Antworten mit Prüfsumme) und PI18 (`^P005GS`: InfiniSolar V, LV5048, SunGoldPower), nur lesend.
 * **Weitere Protokolle, ein Katalog:** Modbus-Wechselrichter und -Laderegler (EASun SMG II, SRNE), DALY-, JBD- und JK-Batterieplatinen, Victron VE.Direct und die Varianten PI41 und PI34 der Voltronic-Familie, jedes mit eigenem Porttyp ([Protokolle](docs/PROTOCOLS.md)). Nach den öffentlichen Dokumenten geschrieben und nur auf einem Rechner erprobt. Ein Wechselrichter, der Modus oder Warnungen nie beantwortet, wird trotzdem gelesen, und die Rohansicht eines Ports zeigt das Gesendete und den letzten Fehler.
+* **Batteriegrenzen und Systemladung:** die Grenzen für Zellspannung, Zellenspreizung und Temperatur sind Einstellungen des Knotens (Vorgaben 2,80 / 3,00 / 3,55 / 3,65 V, 50 / 100 mV, 0 / 50 °C), und der Ladezustand des Gesamtsystems wird nach Kapazität gewichtet, ohne Zahl, wenn ein Stapel seine nicht nennt.
 * **Pylontech-Batterien** (US2000, US3000, US5000): die `pwr`-Tabelle der Konsole (Spannung, Strom, Temperaturen und Ladezustand jedes Moduls), `bat <n>` (Spannung und Temperatur jeder Zelle) und `info <n>` (Modell, Rest- und Gesamtkapazität, Zyklen), zusammengefasst als ein Stapel mit Gesamtkapazität und -energie, und der RS485-Rahmen mit seinen zwei Prüfungen. Die Formate sind aus dem Gedächtnis der öffentlichen Konsole geschrieben und können sich je nach Firmware unterscheiden. Die Spalten werden über die Namen der Kopfzeile gefunden (auch das Format der US5000 V2.3 mit Id-Spalten, MosTempr und SysAlarm.St), die Restladung und das Balancing kommen aus `bat`, Modell, Nennkapazität und Zyklen aus `info` und `stat`, die einmal abgefragt und eine halbe Stunde behalten werden.
 * **Was ein Pylontech-Modul über sich sagt:** sein Modell und die Versionen von Platine und Software, seine Zellen und der zulässige Strom, die Zähler seines Lebens (`stat`), der Zustand jeder Zelle (`soh`, die auffällige markiert) und der neueste Eintrag seines Ereignisprotokolls, mit den Schutznamen genau so, wie die Konsole sie ausgibt. Die Konsole liest nur, und ein Administrator kann herunterladen, was ein Anschluss gehört hat, als Textdatei.
 * **Die Nachrichten des Knotens** (`armor/solar/<Knoten>/<Gerät>/state`, eine je Wechselrichter oder Batteriestapel), in ARMOR-COMMON mit Schemas und Konformitätsvektoren definiert; was die Ports erzeugen, wird dagegen geprüft.
@@ -201,7 +202,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-34 Host-Testprogramme und 11 Python-Prüfungen laufen unter `ctest`, mit `-Werror` gebaut.
+35 Host-Testprogramme und 12 Python-Prüfungen laufen unter `ctest`, mit `-Werror` gebaut.
 
 Python-Prüfungen: die Panel-Texte in acht Sprachen, die Tasks, die Speicherpfade, die Bluetooth-Sitzung unter ihrer Sperre und die vom Panel aufgerufenen Routen (und in manchen Knoten die HTTP-Codes oder die Glyphen der Schriften)
 

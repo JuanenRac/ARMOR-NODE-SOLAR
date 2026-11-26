@@ -37,8 +37,9 @@ static config::SummarySettings on(bool publish = true, bool alerts = true) {
   return s;
 }
 // a battery stack of one module with the numbers given
-static std::vector<pylontech::Module> stack(int soc, double cell_high_v = 3.34, double temp_max_c = 25.0, double temp_min_c = 20.0) {
+static std::vector<pylontech::Module> stack(int soc, double cell_high_v = 3.34, double temp_max_c = 25.0, double temp_min_c = 20.0, double full_ah = -1) {
   pylontech::Module m;
+  m.full_capacity_ah = full_ah;
   m.number = 1;
   m.present = true;
   m.voltage_v = 49.8;
@@ -83,8 +84,8 @@ static void test_totals_and_message() {
   CHECK(!s.due(5000));   // nothing to say yet
   s.note_inverter(0, "axpert-1", 856, 119, 1000);
   s.note_inverter(1, "axpert-2", 400, 300, 1000);
-  s.note_battery(2, "us3000-1", stack(88), 1000);
-  s.note_battery(3, "us3000-2", stack(87), 1000);
+  s.note_battery(2, "us3000-1", stack(88, 3.34, 25.0, 20.0, 74), 1000);
+  s.note_battery(3, "us3000-2", stack(87, 3.34, 25.0, 20.0, 74), 1000);
   s.note_battery(4, "us3000-empty", {}, 1000);   // answered but no module: not a battery that answered
   const SystemSummary::Totals t = s.totals(2000);
   CHECK(t.inverters == 2 && t.batteries == 2 && t.pv_w == 1256 && t.load_w == 419 && t.has_soc && t.soc_percent == 87.5);
@@ -107,6 +108,38 @@ static void test_totals_and_message() {
   // the port number is bounded
   big.note_inverter(99, "x", 1, 1, 0);
   CHECK(big.totals(0).inverters == 1);
+}
+
+// ---- the state of charge of the system is weighted by capacity ----------------------------------------------------------------------------
+
+static void test_weighted_soc() {
+  SystemSummary s;
+  s.configure(on());
+  // a stack of 300 Ah at 80 % and one of 100 Ah at 40 %: 70 %, not the 60 % of a plain mean
+  s.note_battery(0, "big", stack(80, 3.34, 25.0, 20.0, 300), 1000);
+  s.note_battery(1, "small", stack(40, 3.34, 25.0, 20.0, 100), 1000);
+  CHECK(s.totals(2000).has_soc && s.totals(2000).soc_percent == 70);
+  // one stack that does not say its capacity: no figure is made up
+  s.note_battery(1, "small", stack(40), 1500);
+  CHECK(!s.totals(2000).has_soc && s.totals(2000).batteries == 2 && !has_text(s.json("n", 0, 2000, {}), "soc_percent"));
+  // alone, a stack needs no weight
+  s.forget(0);
+  CHECK(s.totals(2000).has_soc && s.totals(2000).soc_percent == 40);
+  // the fault limits of the panel: their defaults, their order and their round trip
+  config::Settings base = config::default_settings("a1b2c3");
+  base.sta.enabled = true;
+  base.sta.ssid = "casa";
+  base.sta.password = "una-clave-larga";
+  const auto refused = [](const config::Problems& found, const char* path) { for (const auto& p : found) if (p.path == path) return true; return false; };
+  CHECK(base.cell_limits.low_alarm_mv == 2800 && base.cell_limits.low_warn_mv == 3000 && base.cell_limits.high_warn_mv == 3550 && base.cell_limits.high_alarm_mv == 3650);
+  CHECK(base.cell_limits.delta_warn_mv == 50 && base.cell_limits.delta_bad_mv == 100 && base.cell_limits.temp_low_c == 0 && base.cell_limits.temp_high_c == 50);
+  config::Settings edited;
+  config::Problems problems;
+  CHECK(config::load("{\"cell_limits\":{\"high_alarm_mv\":3600,\"delta_warn_mv\":40}}", base, edited, problems) && edited.cell_limits.high_alarm_mv == 3600 && edited.cell_limits.delta_warn_mv == 40);
+  CHECK(has_text(config::to_json(edited, true), "\"high_alarm_mv\":3600"));
+  CHECK(!config::load("{\"cell_limits\":{\"high_alarm_mv\":3500}}", base, edited, problems) && refused(problems, "cell_limits.high_warn_mv"));
+  problems.clear();
+  CHECK(!config::load("{\"cell_limits\":{\"temp_low_c\":60,\"temp_high_c\":50}}", base, edited, problems) && refused(problems, "cell_limits.temp_low_c"));
 }
 
 // ---- when the message goes out -----------------------------------------------------------------------------------------------------------
@@ -377,6 +410,7 @@ static void test_rs485_faults() {
 
 int main() {
   test_totals_and_message();
+  test_weighted_soc();
   test_due();
   test_alerts_off_by_default();
   test_soc_alert_and_hysteresis();

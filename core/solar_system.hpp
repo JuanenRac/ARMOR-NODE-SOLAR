@@ -67,6 +67,14 @@ class SystemSummary {
     s.kind = Kind::kBattery;
     s.device = device;
     s.stack = pylontech::summarise(modules);
+    // what the stack weighs in the state of charge of the system: its full capacity, only when every battery present says its own
+    double capacity = 0;
+    for (const pylontech::Module& m : modules) {
+      if (!m.present) continue;
+      if (m.full_capacity_ah <= 0) { capacity = 0; break; }
+      capacity += m.full_capacity_ah;
+    }
+    s.weight_ah = capacity;
     s.at_ms = now_ms;
     s.valid = true;
   }
@@ -80,17 +88,26 @@ class SystemSummary {
   };
   Totals totals(std::uint64_t now_ms) const {
     Totals t;
-    double soc_sum = 0;
+    // The state of charge of the system is weighted by capacity, so a stack of one battery does not weigh as much as a stack of six. With several stacks and one that does not
+    // say its capacity there is no honest figure, and none is given.
+    double weighted = 0, weight = 0, only = 0;
     int soc_count = 0;
+    bool unknown_capacity = false;
     for (const Slot& s : slots_) {
       if (!fresh(s, now_ms)) continue;
       if (s.kind == Kind::kInverter) { ++t.inverters; t.pv_w += s.pv_w; t.load_w += s.out_w; }
       else if (s.stack.modules > 0) {
         ++t.batteries;
-        if (s.stack.soc_percent >= 0) { soc_sum += s.stack.soc_percent; ++soc_count; }
+        if (s.stack.soc_percent >= 0) {
+          ++soc_count;
+          only = s.stack.soc_percent;
+          if (s.weight_ah > 0) { weighted += s.stack.soc_percent * s.weight_ah; weight += s.weight_ah; }
+          else unknown_capacity = true;
+        }
       }
     }
-    if (soc_count > 0) { t.soc_percent = soc_sum / soc_count; t.has_soc = true; }
+    if (soc_count == 1) { t.soc_percent = only; t.has_soc = true; }
+    else if (soc_count > 1 && !unknown_capacity) { t.soc_percent = weighted / weight; t.has_soc = true; }
     return t;
   }
 
@@ -155,6 +172,7 @@ class SystemSummary {
     std::string device;
     double pv_w = 0, out_w = 0;
     pylontech::Stack stack;
+    double weight_ah = 0;   // 0: the capacity is not known
     std::uint64_t at_ms = 0;
   };
   static double clamp(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }

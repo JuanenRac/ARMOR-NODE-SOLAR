@@ -56,6 +56,13 @@ at 2400 baud 8N1 and waits 2.5 s. For an answer to come back the line has to be 
 To see why a port does not read, open its raw view in the panel: it starts with the last question and its bytes, how many bytes were sent and heard, and the last error. `heard 0`
 means wiring or protocol; bytes heard with `crc` or `format` errors mean speed, level or another protocol.
 
+## Battery fault limits and the total state of charge
+
+The Readings page marks a battery with limits that are settings of the node (`cell_limits`, edited on the Ports page): `low_alarm_mv` 2800, `low_warn_mv` 3000, `high_warn_mv`
+3550, `high_alarm_mv` 3650, `delta_warn_mv` 50, `delta_bad_mv` 100, `temp_low_c` 0, `temp_high_c` 50. They must keep their order. They do not change the alerts the node publishes
+(`summary.*`). The state of charge of the whole system (`armor/solar/<node>/system`) is weighted by the full capacity of each stack; with several stacks and one that does not say
+its capacity, no figure is sent.
+
 ## Other equipment
 
 | Equipment | Port type | Line | Level |
