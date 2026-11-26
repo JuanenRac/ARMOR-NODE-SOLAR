@@ -102,6 +102,7 @@ struct Module {
   double power_w = 0;                 // that power: negative while discharging
   int charge_mos = -1, discharge_mos = -1;   // the status codes of the MOSFETs of a battery management system (ANT-BMS); -1 when the equipment does not say
   bool protecting = false;            // a protection has switched a MOSFET off
+  bool has_temperature = true;        // false: the equipment has no temperature sensor to read (its temperatures are then not published)
 };
 
 namespace detail {
@@ -509,6 +510,7 @@ struct Stack {
   int balancing = -1;                 // cells being balanced in all (-1 when no module says)
   bool protecting = false;            // any module is protecting
   int charge_mos = -1, discharge_mos = -1;   // the first module's that says
+  bool has_temperature = false;       // at least one module says its temperature
 };
 
 inline Stack summarise(const std::vector<Module>& modules) {
@@ -528,10 +530,13 @@ inline Stack summarise(const std::vector<Module>& modules) {
       cell_low = m.cells_v[0]; cell_high = m.cells_v[0];
       for (double v : m.cells_v) { if (v < cell_low) cell_low = v; if (v > cell_high) cell_high = v; }
     }
-    if (first) { s.temperature_min_c = m.temperature_low_c; s.temperature_max_c = m.temperature_high_c; s.cell_low_v = cell_low; s.cell_high_v = cell_high; first = false; }
+    if (m.has_temperature) {
+      if (!s.has_temperature || m.temperature_low_c < s.temperature_min_c) s.temperature_min_c = m.temperature_low_c;
+      if (!s.has_temperature || m.temperature_high_c > s.temperature_max_c) s.temperature_max_c = m.temperature_high_c;
+      s.has_temperature = true;
+    }
+    if (first) { s.cell_low_v = cell_low; s.cell_high_v = cell_high; first = false; }
     else {
-      if (m.temperature_low_c < s.temperature_min_c) s.temperature_min_c = m.temperature_low_c;
-      if (m.temperature_high_c > s.temperature_max_c) s.temperature_max_c = m.temperature_high_c;
       if (cell_low < s.cell_low_v) s.cell_low_v = cell_low;
       if (cell_high > s.cell_high_v) s.cell_high_v = cell_high;
     }

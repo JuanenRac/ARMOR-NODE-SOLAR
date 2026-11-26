@@ -21,6 +21,10 @@ reports, note which of the commands in the *Reads* column answered, and write th
 | Voltronic PI30 parallel system | RS232, 2400 baud 8N1 | QPGS0 to QPGS9 (optional, off by default) | Protocol | the sample replies of the mpp-solar project; no parallel system has been met | pending |
 | Revo VM III and the inverters esphome-pipsolar marks as REVO | RS232, 2400 baud 8N1 | QPIGS (REVO fields), QMOD | Protocol | the frames and sample replies of the esphome-pipsolar project | pending |
 | InfiniSolar V, LV5048, SunGoldPower and clones (PI18) | RS232, 2400 baud 8N1 | GS, MOD, FWS | Protocol | the sample replies of the mpp-solar and esphome-pipsolar projects | pending |
+| Voltronic PI41 (LV5048) and PI34 (MPPT charger) | RS232, 2400 baud 8N1 | QPIGS (and QMOD, QPIWS in PI41) | Protocol | status lines written from the documents | pending |
+| EASun / ISolar SMG II (Modbus) | RS232, 9600 baud 8N1 | registers 201-234, 100-101, 108-109 | Protocol | the request and reply printed in the document; register frames built from its table | pending |
+| SRNE hybrid inverters and MPPT chargers (Modbus) | RS232 or RS485, 9600 baud 8N1 | registers 0x0100 and 0x0210 blocks | Protocol | frames built from the register tables | pending |
+| Victron VE.Direct (chargers and battery monitors) | TTL, 19200 baud 8N1 | the text blocks | Protocol | blocks built from the document | pending |
 
 ## Batteries
 
@@ -38,3 +42,6 @@ reports, note which of the commands in the *Reads* column answered, and write th
 | ANT-BMS ANT-BLE16ZMUB and ANT-BLE24BHUB (new protocol) | 3.3 V TTL UART, 19200 baud 8N1 | the status frame | Capture | frames captured on real boards | pending |
 | ANT-BMS 16S / 24S 100 to 200 A of 2020 (old protocol) | 3.3 V TTL UART, 19200 baud 8N1 | the status frame | Protocol | the old protocol is the same frame as the captured boards; these models were not captured | pending |
 | ANT-BMS boards after the ANT-BLE24BHUB, the 32S included (new protocol) | 3.3 V TTL UART, 19200 baud 8N1 | the status frame | Protocol | the new protocol is the same frame as the captured boards; these models were not captured | pending |
+| DALY BMS | UART or RS485, 9600 baud 8N1 | 0x90, 0x93-0x96, 0x98 | Protocol | frames built from the document | pending |
+| JBD / Jiabaida BMS | UART, 9600 baud 8N1 | 0x03, 0x04 | Protocol | the example frames of the document | pending |
+| JK BMS | RS485 or UART, 115200 baud 8N1 | read all data | Protocol | frames built from the document | pending |

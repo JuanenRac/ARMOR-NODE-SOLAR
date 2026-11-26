@@ -226,6 +226,40 @@ inline bool parse_qpigs_revo(const std::string& text, Status& out) {
   return true;
 }
 
+// The PI41 family (LV5048 and its relatives) answers QPIGS with the same fields as PI30 but gives the status bits another meaning:
+// b6 charging from the mains, b5 charging from the panels, b1 load on, b0 configuration changed.
+inline bool parse_qpigs_pi41(const std::string& text, Status& out) {
+  Status s;
+  if (!parse_qpigs(text, s)) return false;
+  std::uint32_t bits = 0;
+  if (!detail::bits(split_fields(text)[16], 8, bits)) return false;
+  s.sbu_priority = false; s.scc_updated = false; s.battery_steady = false;
+  s.ac_charging = bits & 0x40; s.scc_charging = bits & 0x20; s.load_on = bits & 0x02; s.config_changed = bits & 0x01;
+  s.charging = s.ac_charging || s.scc_charging;
+  out = s;
+  return true;
+}
+
+// PI34 is a solar charge controller (MPPT), not an inverter: QPIGS says the panel voltage, the battery voltage, the charging current (and each of two outputs), the charging power,
+// the temperature, a remote battery voltage and temperature, a reserved field and eight status bits (b6: the charger is working). The AC side of the message stays at zero.
+inline bool parse_qpigs_pi34(const std::string& text, Status& out) {
+  const std::vector<std::string> f = split_fields(text);
+  if (f.size() < 11) return false;
+  Status s;
+  double charge = 0, temperature = 0;
+  if (!detail::number(f[0], s.pv_v) || !detail::number(f[1], s.battery_v) || !detail::number(f[2], charge) || !detail::number(f[5], s.pv_w) || !detail::number(f[6], temperature)) return false;
+  std::uint32_t bits = 0;
+  if (!detail::bits(f[10], 8, bits)) return false;
+  s.battery_charge_a = charge;
+  s.heatsink_c = temperature;
+  s.has_pv_w = true;
+  s.pv_a = s.pv_v > 1.0 ? s.pv_w / s.pv_v : 0.0;
+  s.scc_charging = bits & 0x40; s.charging = s.scc_charging; s.config_changed = bits & 0x80;
+  hold_limits(s);
+  out = s;
+  return true;
+}
+
 // ---- QMOD: the mode ----------------------------------------------------------------------------------------------------------------
 
 // The letter of the reply: P power on, S standby, L line, B battery, F fault, H power saving, D shutdown. False for anything else.
@@ -305,7 +339,7 @@ inline const char* warning_name(std::size_t bit) {
 // False when the text is not flags.
 inline bool parse_qpiws(const std::string& text, std::vector<std::string>& active) {
   active.clear();
-  if (text.empty() || text.size() > 36) return false;
+  if (text.empty() || text.size() > 64) return false;   // some firmwares add flags after the thirty-six the documents name: they are not read
   for (char c : text) if (c != '0' && c != '1') return false;
   for (std::size_t bit = 0; bit < text.size() && bit < 36; ++bit) {
     if (text[bit] != '1' || warning_name(bit)[0] == '\0') continue;
