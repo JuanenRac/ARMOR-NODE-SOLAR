@@ -164,7 +164,7 @@ No frame has been read from a real inverter or battery; the formats are written 
 |---|---|
 | MQTT | `armor/solar/<node>/<device>/state` (one message per inverter or battery stack, kind `inverter` or `battery` of the ARMOR-COMMON contract), `armor/solar/<node>/maintenance/{command,result}`, `armor/health/<node>` (last will), `armor/control/<id>/{command,result,maintenance}` and `armor/control/all/command` |
 | Ports | 10 serial ports (3 hardware UARTs and 7 emulated, up to 19200 baud when emulated); per port a type: `voltronic` (2400 baud, every 5 s), `pylontech` (115200, every 10 s), `ant` (19200, every 5 s) or `raw` (9600, listen only, publishes nothing); inverter dialects `auto`, `pi30`, `revo`, `pi18`; the mux profile has 3 groups of ports |
-| Queries | Voltronic: `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (and `QPIGS2`, `QPGS` on a standard inverter with the mux); Pylontech console: `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, event log, up to 8 modules asked cell by cell |
+| Queries | Voltronic: `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (and `QPIGS2`, `QPGS` on a standard inverter with the mux); Pylontech console: `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, event log, up to 16 modules asked cell by cell |
 | Panel | The family routes (`tests/check_routes.py` checks that every route the panel calls exists) plus the ports and readings pages; 51 error codes with a text in eight languages (839 rows in `panel/text.js`); see [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) for the menus of Studio |
 
 ## ⚙️ Configuration

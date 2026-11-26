@@ -164,7 +164,7 @@ Aucune trame n'a été lue d'un vrai onduleur ou d'une vraie batterie ; les form
 |---|---|
 | MQTT | `armor/solar/<nœud>/<appareil>/state` (un message par onduleur ou pile de batteries, type `inverter` ou `battery` du contrat d'ARMOR-COMMON), `armor/solar/<nœud>/maintenance/{command,result}`, `armor/health/<nœud>` (testament), `armor/control/<id>/{command,result,maintenance}` et `armor/control/all/command` |
 | Ports | 10 ports série (3 UART matérielles et 7 émulées, jusqu'à 19200 bauds en émulation) ; par port un type : `voltronic` (2400 bauds, toutes les 5 s), `pylontech` (115200, toutes les 10 s), `ant` (19200, toutes les 5 s) ou `raw` (9600, écoute seule, ne publie rien) ; dialectes d'onduleur `auto`, `pi30`, `revo`, `pi18` ; le profil mux a 3 groupes de ports |
-| Requêtes | Voltronic : `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (et `QPIGS2`, `QPGS` sur un onduleur standard avec le mux) ; console Pylontech : `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, journal d'événements, jusqu'à 8 modules interrogés cellule par cellule |
+| Requêtes | Voltronic : `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (et `QPIGS2`, `QPGS` sur un onduleur standard avec le mux) ; console Pylontech : `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, journal d'événements, jusqu'à 16 modules interrogés cellule par cellule |
 | Panneau | Les routes de la famille (`tests/check_routes.py` vérifie que toute route appelée par le panneau existe) plus les pages des ports et des mesures ; 51 codes d'erreur avec texte en huit langues (839 lignes dans `panel/text.js`) ; les menus de Studio sont dans [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) |
 
 ## ⚙️ Configuration
