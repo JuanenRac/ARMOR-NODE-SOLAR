@@ -205,7 +205,7 @@ class Poller {
     else {   // a Pylontech stack or an ANT-BMS (one module)
       const int present = last_present(modules_);
       if (present > highest_seen_) highest_seen_ = present;
-      payload = battery_json(node_id_, device_, wall_ms, modules_, highest_seen_);
+      payload = battery_json(node_id_, device_, wall_ms, modules_, present > 0 ? highest_seen_ : 0);   // with none there: the empty stack
     }
     ++stats_.readings;
     last_reading_ms_ = last_rx_ms_;
