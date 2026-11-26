@@ -1,6 +1,6 @@
 # The board profile (Kconfig, sdkconfig.board.<board>): the W5500 driver file is built only for the s3-eth board. The REQUIRES cannot depend on it: ESP-IDF reads them
 # before sdkconfig is loaded, so esp_eth and esp_driver_spi are always required (an unused component costs nothing in the image).
-set(ARMOR_SOURCES "api_shared.cpp" "chip_temp.cpp" "app_main.cpp" "battery_maintenance.cpp" "ble_provision.cpp" "clock_sync.cpp" "entropy.cpp" "github_update.cpp" "log_buffer.cpp" "node_guard.cpp" "psram_mem.cpp" "task_health.cpp" "node_health.cpp" "node_control.cpp" "node_diag.cpp" "improv_serial.cpp" "mqtt_link.cpp" "mux_board.cpp" "network.cpp" "node_store.cpp" "secret_vault.cpp" "port_leds_hw.cpp" "solar_manager.cpp"
+set(ARMOR_SOURCES "api_shared.cpp" "chip_temp.cpp" "app_main.cpp" "battery_maintenance.cpp" "ble_provision.cpp" "clock_sync.cpp" "entropy.cpp" "github_update.cpp" "log_buffer.cpp" "node_guard.cpp" "psram_mem.cpp" "task_health.cpp" "node_health.cpp" "node_control.cpp" "node_diag.cpp" "improv_serial.cpp" "mqtt_link.cpp" "mux_board.cpp" "network.cpp" "node_store.cpp" "secret_vault.cpp" "port_leds_hw.cpp" "psram_new.cpp" "solar_manager.cpp"
                   "tls_cert.cpp" "uart_ports.cpp" "web_server.cpp")
 set(ARMOR_REQUIRES driver esp_driver_gpio esp_driver_uart esp_driver_gptimer esp_event esp_netif esp_timer esp_wifi esp_http_server esp_https_server esp_http_client esp-tls app_update
                    esp_partition esp_app_format mbedtls bootloader_support mqtt nvs_flash lwip esp_hw_support esp_system heap log bt esp_eth esp_driver_spi spi_flash espcoredump esp_driver_tsens)
@@ -27,6 +27,14 @@ foreach(asset index.html app.js style.css)
   set_property(DIRECTORY "${COMPONENT_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ARMOR_PANEL_DIR}/${asset}")
   target_add_binary_data(${COMPONENT_LIB} "${ARMOR_PANEL_OUT}/${asset}.gz" BINARY)
 endforeach()
+
+# The look of the readings page, packed on its own (tools/pack_panel.py is shared by the nodes and packs the three common files).
+execute_process(COMMAND ${Python3_EXECUTABLE} "${PROJECT_DIR}/tools/pack_readings.py" "${ARMOR_PANEL_DIR}/readings.css" "${ARMOR_PANEL_OUT}/readings.css.gz" RESULT_VARIABLE ARMOR_PACK_READINGS)
+if(NOT ARMOR_PACK_READINGS EQUAL 0)
+  message(FATAL_ERROR "tools/pack_readings.py failed")
+endif()
+set_property(DIRECTORY "${COMPONENT_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ARMOR_PANEL_DIR}/readings.css")
+target_add_binary_data(${COMPONENT_LIB} "${ARMOR_PANEL_OUT}/readings.css.gz" BINARY)
 
 # A CA certificate for mqtts:// is embedded when the operator puts one at certs/ca.pem (never committed: it is git-ignored).
 if(EXISTS "${PROJECT_DIR}/certs/ca.pem")

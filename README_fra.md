@@ -21,14 +21,14 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 ou ultérieure">
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Langage">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
-  <img src="https://img.shields.io/badge/Tests-33%20host%20programs-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-34%20host%20programs-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.6.8-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturité">
 </p>
 
 ---
 
-**Vérification d'honnêteté - ce qui fonctionne aujourd'hui :** Le firmware se compile dans le conteneur ESP-IDF 5.5.5, son cœur (les réglages, l'échange avec chaque type d'équipement, l'arithmétique de l'UART émulée, le canal Bluetooth, les contrôles de version et de signature : 19 884 vérifications dans 33 programmes de test) est testé sur un ordinateur avec des équipements factices, les messages qu'il produit sont acceptés par ARMOR-COMMON et le panneau a été exercé dans un navigateur contre un nœud factice. **Il n'a jamais tourné sur une carte et aucun onduleur ni batterie n'a été connecté** : le Wi-Fi, le panneau sur TLS, la mise à jour, les UART matérielles et émulées et les formats des protocoles (écrits d'après des documents publics et de mémoire) ne sont pas essayés. Les trames ANT-BMS de ses tests ont été capturées par d'autres personnes sur leurs propres unités : ce projet n'en a lu aucune lui-même.
+**Vérification d'honnêteté - ce qui fonctionne aujourd'hui :** Le firmware se compile dans le conteneur ESP-IDF 5.5.5, son cœur (les réglages, l'échange avec chaque type d'équipement, l'arithmétique de l'UART émulée, le canal Bluetooth, les contrôles de version et de signature : 19 884 vérifications dans 34 programmes de test) est testé sur un ordinateur avec des équipements factices, les messages qu'il produit sont acceptés par ARMOR-COMMON et le panneau a été exercé dans un navigateur contre un nœud factice. **Il n'a jamais tourné sur une carte et aucun onduleur ni batterie n'a été connecté** : le Wi-Fi, le panneau sur TLS, la mise à jour, les UART matérielles et émulées et les formats des protocoles (écrits d'après des documents publics et de mémoire) ne sont pas essayés. Les trames ANT-BMS de ses tests ont été capturées par d'autres personnes sur leurs propres unités : ce projet n'en a lu aucune lui-même.
 
 ---
 
@@ -40,7 +40,7 @@
 | Maturité | Fonctionnel |
 | Rôle | Nœud de terrain solaire pour ESP32-S3 : onduleurs et batteries (famille : Field Nodes, parent : ARMOR-COMMON) |
 | Technologie | C++17, ESP-IDF 5.5.5, ESP32-S3 |
-| Tests | 33 programmes hôte et 10 contrôles Python (`ctest`) |
+| Tests | 34 programmes hôte et 11 contrôles Python (`ctest`) |
 | Équipements | Onduleurs Voltronic / MPP Solar, batteries Pylontech, ANT-BMS ; 10 ports série |
 | Fonctionne sur | ESP32-S3-WROOM-1 N16R8 ou Waveshare ESP32-S3-ETH ; tests sur hôte sur n'importe quel ordinateur |
 | Sur matériel réel | Aucun pour l'instant : aucune carte montée ni onduleur ou batterie connecté (seulement des tests sur ordinateur, la compilation et le panneau dans un navigateur) |
@@ -57,7 +57,7 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 | Domaine | État | Ce que cela veut dire ici |
 |---|---|---|
 | Logiciel | 🟢 | Le firmware compile dans le conteneur ESP-IDF 5.5.5 pour les deux cartes (Wi-Fi et Ethernet). |
-| Tests | 🟢 | 19 884 vérifications dans 33 programmes d'hôte réussissent (`ctest`) : les réglages, l'échange avec chaque type d'équipement, l'UART émulée, le canal Bluetooth et les contrôles de version. |
+| Tests | 🟢 | 19 884 vérifications dans 34 programmes d'hôte réussissent (`ctest`) : les réglages, l'échange avec chaque type d'équipement, l'UART émulée, le canal Bluetooth et les contrôles de version. |
 | Protocoles et données | 🟡 | Les trames, sommes de contrôle et lectures de Voltronic, Pylontech et ANT-BMS sont vérifiées par rapport aux trames documentées et à des échantillons enregistrés ; aucun n'a encore parlé à un vrai onduleur ou à une vraie batterie. |
 | Interface | 🟡 | Le panneau web a été essayé dans un navigateur contre une simulation du nœud, pas sur une carte. |
 | Matériel | 🔴 | Aucune carte construite ni onduleur ou batterie connectés : rien n'a encore tourné sur de vrais équipements. |
@@ -72,6 +72,7 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 * **Deux cartes, un firmware :** une ESP32-S3-WROOM-1 N16R8 en Wi-Fi (par défaut) et la Waveshare ESP32-S3-ETH sur son câble Ethernet (DHCP ou adresse fixe ; son propre réseau Wi-Fi est conservé pour la joindre depuis un téléphone). L'image se choisit à la compilation (`tools/build_node.sh generic s3-wifi` ou `generic s3-eth`) ; la table des broches, les broches par défaut des ports et l'accès suivent la carte, et une image ne vaut que pour sa carte. Les deux compilent et sont testées sur ordinateur ; aucune n'a tourné sur une carte.
 * **Le firmware du nœud** (ESP32-S3-WROOM-1 N16R8 en Wi-Fi, ou Waveshare ESP32-S3-ETH sur câble) : dix ports série, trois UART matériels et sept émulés (jusqu'à 19200 bauds), chacun indépendant et lisant un onduleur, une batterie ou un moniteur brut, si bien qu'un nœud peut lire seulement des onduleurs, seulement des batteries ou un mélange.
 * **Le panneau web du nœud,** celui des nœuds radar aussi : configuration avec un code affiché sur la console USB, connexion et utilisateurs, Wi-Fi (station et point d'accès), broker, mise à jour par radio avec retour arrière, journal, HTTPS, et les pages des ports (avec ce que chacun entend, pour les protocoles pas encore décodés) et des relevés, en huit langues.
+* **Page des mesures du panneau :** l'ensemble du système additionné, une section par port et une carte par batterie avec ses 15 ou 16 cellules en barres colorées selon la tension, état de charge, courant, températures, santé et un clignotement doux en cas d'alarme. Les relevés sont demandés port par port et les données des ports sont gardées dans la mémoire externe, pour que quatre piles de batteries laissent la mémoire interne libre (vérifié sur l'hôte seulement).
 * **Onduleurs Voltronic / MPP Solar** (Axpert, PIP, InfiniSolar et clones), RS232 à 2400 bauds : les trames et leur CRC, et les relevés `QPIGS` (réseau, sortie, batterie, PV, bits d'état), `QMOD` (mode), `QPIWS` (avertissements et pannes par nom) et `QPIRI` (valeurs nominales). Seules les commandes de lecture peuvent être construites : un réglage change la façon dont la maison est alimentée. Trois dialectes, choisis sur le port ou trouvés par lui (*auto*) : PI30, REVO (un autre `QPIGS`, réponses avec somme de contrôle) et PI18 (`^P005GS` : InfiniSolar V, LV5048, SunGoldPower), en lecture seule.
 * **Batteries Pylontech** (US2000, US3000, US5000) : le tableau `pwr` de la console (tension, courant, températures et état de charge de chaque module), `bat <n>` (tension et température de chaque cellule) et `info <n>` (modèle, capacité restante et totale, cycles), résumés en une pile avec sa capacité et son énergie totales, et la trame RS485 avec ses deux contrôles. Les formats sont écrits de mémoire de la console publique et peuvent varier selon les firmwares. Les colonnes sont trouvées par les noms de l'en-tête (y compris le format de l'US5000 V2.3 avec ses colonnes Id, MosTempr et SysAlarm.St), la charge restante et l'équilibrage viennent de `bat`, et le modèle, la capacité nominale et les cycles de `info` et `stat`, demandés une fois et gardés une demi-heure.
 * **Ce qu'un module Pylontech dit de lui-même :** son modèle et les versions de sa carte et de son logiciel, ses cellules et le courant qu'il admet, les compteurs de sa vie (`stat`), la santé de chaque cellule (`soh`, l'anormale marquée) et l'entrée la plus récente de son journal d'événements, avec les noms des protections tels que la console les imprime. La console ne fait que lire, et un administrateur peut télécharger sous forme de fichier texte ce qu'un port a entendu.
@@ -129,7 +130,7 @@ Capturées sur un banc d'essai avec des données d'exemple fictives et sans inst
   <img src="images/screenshots/readings.png" alt="Mesures" width="100%">
 </p>
 
-<p align="center"><em>Mesures : ce que le nœud lit en ce moment, avec l'âge de chaque valeur.</em></p>
+<p align="center"><em>Mesures : l'ensemble du système, l'onduleur et chaque batterie avec ses cellules.</em></p>
 
 <p align="center">
   <img src="images/screenshots/network.png" alt="Réseau" width="100%">
@@ -164,7 +165,7 @@ Aucune trame n'a été lue d'un vrai onduleur ou d'une vraie batterie ; les form
 | MQTT | `armor/solar/<nœud>/<appareil>/state` (un message par onduleur ou pile de batteries, type `inverter` ou `battery` du contrat d'ARMOR-COMMON), `armor/solar/<nœud>/maintenance/{command,result}`, `armor/health/<nœud>` (testament), `armor/control/<id>/{command,result,maintenance}` et `armor/control/all/command` |
 | Ports | 10 ports série (3 UART matérielles et 7 émulées, jusqu'à 19200 bauds en émulation) ; par port un type : `voltronic` (2400 bauds, toutes les 5 s), `pylontech` (115200, toutes les 10 s), `ant` (19200, toutes les 5 s) ou `raw` (9600, écoute seule, ne publie rien) ; dialectes d'onduleur `auto`, `pi30`, `revo`, `pi18` ; le profil mux a 3 groupes de ports |
 | Requêtes | Voltronic : `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (et `QPIGS2`, `QPGS` sur un onduleur standard avec le mux) ; console Pylontech : `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, journal d'événements, jusqu'à 8 modules interrogés cellule par cellule |
-| Panneau | Les routes de la famille (`tests/check_routes.py` vérifie que toute route appelée par le panneau existe) plus les pages des ports et des mesures ; 51 codes d'erreur avec texte en huit langues (772 lignes dans `panel/text.js`) ; les menus de Studio sont dans [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) |
+| Panneau | Les routes de la famille (`tests/check_routes.py` vérifie que toute route appelée par le panneau existe) plus les pages des ports et des mesures ; 51 codes d'erreur avec texte en huit langues (839 lignes dans `panel/text.js`) ; les menus de Studio sont dans [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) |
 
 ## ⚙️ Configuration
 
@@ -199,7 +200,7 @@ cmake -S tests -B build/host && cmake --build build/host && ctest --test-dir bui
 python -I tools/armor_ci_validate.py
 ```
 
-33 programmes de test sur hôte et 10 contrôles Python tournent sous `ctest`, compilés avec `-Werror`.
+34 programmes de test sur hôte et 11 contrôles Python tournent sous `ctest`, compilés avec `-Werror`.
 
 Contrôles Python : les textes du panneau en huit langues, les tâches, les chemins de sauvegarde, la session Bluetooth sous son verrou et les routes appelées par le panneau (et, dans certains nœuds, les codes HTTP ou les glyphes des polices)
 

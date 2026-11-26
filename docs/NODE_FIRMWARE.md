@@ -247,3 +247,14 @@ Every node of the family is built with one ESP-IDF version, **5.5.5**: the conta
 2. Build one image at a time: `tools/build_node.sh generic` (board `s3-eth`) and `tools/build_node.sh generic s3-wifi`; on Windows use WSL with Docker, or PowerShell with the ESP-IDF 5.5.5 environment loaded (not Git Bash) and `idf.py -B build/<profile> -D SDKCONFIG=build/<profile>/sdkconfig -D "SDKCONFIG_DEFAULTS=<the defaults of the script>" set-target esp32s3 build`.
 3. Check what was built: `python tools/check_sdkconfig.py` fails when a line of `sdkconfig.defaults` was not taken, when the build says another ESP-IDF than 5.5.5 and, where the node has a `dependencies.lock`, when the lock names another one.
 4. Check the image: the version of the firmware is inside the `.bin` (`grep -a` for it), `dist/<name>.bin` is the merged image, and a public image holds no fleet secret (the script refuses one that does).
+
+## Memory with several battery stacks
+
+The internal memory of the ESP32-S3 is small and is the only one drivers, interrupts and task stacks may use; the module also has 8 MB of external memory (PSRAM). The configuration sends requests of up to 4096 bytes to the internal memory first, and the readings of a battery stack are hundreds of small objects.
+
+* `main/psram_new.cpp` replaces `operator new`: a task that asked (`keep_data_in_psram()`, or an `ExternalScope`) gets its C++ data from the external memory, and from the internal one only when there is none. Every other allocation is as before.
+* The port tasks ask after their serial port is open, so what the interrupts of an emulated port read stays internal.
+* The last message of a port is kept once and shared; the web server sends the readings in pieces, port by port.
+* The panel's overview and `GET /api/v1/status` (`heap_internal_free`, `heap_internal_min`, `heap_internal_largest`, `tasks`) show what is left. The log warns under 40 kB and the panel refuses new connections under 16 kB.
+
+`tests/test_memory.cpp` reads four stacks of eight batteries on a computer and fails when what a port keeps grows past its limit. The figures of a real board are still to be taken.

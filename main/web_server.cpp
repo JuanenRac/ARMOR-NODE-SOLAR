@@ -55,7 +55,9 @@ extern const std::uint8_t index_html_gz_end[] asm("_binary_index_html_gz_end");
 extern const std::uint8_t app_js_gz_start[] asm("_binary_app_js_gz_start");
 extern const std::uint8_t app_js_gz_end[] asm("_binary_app_js_gz_end");
 extern const std::uint8_t style_css_gz_start[] asm("_binary_style_css_gz_start");
+extern const std::uint8_t readings_css_gz_start[] asm("_binary_readings_css_gz_start");
 extern const std::uint8_t style_css_gz_end[] asm("_binary_style_css_gz_end");
+extern const std::uint8_t readings_css_gz_end[] asm("_binary_readings_css_gz_end");
 
 namespace armor::web {
 namespace {
@@ -445,12 +447,6 @@ esp_err_t get_ports(httpd_req_t* r) {
   return send_json(r, 200, api::ports_json());
 }
 
-esp_err_t get_readings(httpd_req_t* r) {
-  Who who;
-  if (!require(r, who, false, false)) return ESP_OK;
-  return send_json(r, 200, api::readings_json());
-}
-
 // The port number of a request's query (?port=3), 0 when there is none.
 long query_port(httpd_req_t* r) {
   long number = 0;
@@ -460,6 +456,33 @@ long query_port(httpd_req_t* r) {
     if (httpd_query_key_value(query, "port", value, sizeof value) == ESP_OK) number = std::strtol(value, nullptr, 10);
   }
   return number;
+}
+
+// The readings go out as they are kept, one port at a time and never joined in one text: ?port=N gives that port's alone ({} while it has none), no query the array of all of them.
+esp_err_t get_readings(httpd_req_t* r) {
+  Who who;
+  if (!require(r, who, false, false)) return ESP_OK;
+  const long number = query_port(r);
+  if (number != 0) {
+    if (number < 1 || number > static_cast<long>(config::kPortCount)) return send_error(r, 422, "invalid_port");
+    const std::shared_ptr<const std::string> one = manager::reading(static_cast<std::size_t>(number - 1));
+    return send_json(r, 200, one ? *one : std::string("{}"));
+  }
+  security_headers(r);
+  httpd_resp_set_status(r, status_line(200));
+  httpd_resp_set_type(r, "application/json");
+  esp_err_t sent = httpd_resp_send_chunk(r, "[", 1);
+  bool first = true;
+  for (std::size_t i = 0; i < config::kPortCount && sent == ESP_OK; ++i) {
+    const std::shared_ptr<const std::string> one = manager::reading(i);
+    if (!one) continue;
+    if (!first) sent = httpd_resp_send_chunk(r, ",", 1);
+    first = false;
+    if (sent == ESP_OK) sent = httpd_resp_send_chunk(r, one->data(), static_cast<ssize_t>(one->size()));
+  }
+  if (sent == ESP_OK) sent = httpd_resp_send_chunk(r, "]", 1);
+  if (sent == ESP_OK) sent = httpd_resp_send_chunk(r, nullptr, 0);
+  return sent;
 }
 
 // Reading the settings of an ANT-BMS: POST starts it (READ ONLY: the node sends read requests and nothing else), GET says how it goes and, when it is over, gives what the BMS answered.
@@ -985,6 +1008,7 @@ esp_err_t page_handler(httpd_req_t* r) {
   const std::string uri = r->uri;
   if (uri == "/app.js") return send_asset(r, app_js_gz_start, app_js_gz_end, "text/javascript");
   if (uri == "/style.css") return send_asset(r, style_css_gz_start, style_css_gz_end, "text/css");
+  if (uri == "/readings.css") return send_asset(r, readings_css_gz_start, readings_css_gz_end, "text/css");
   return send_asset(r, index_html_gz_start, index_html_gz_end, "text/html");
 }
 
