@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The shared project tool is the current one:** the copy follows the shared repository, which now knows the new solar panel node.
+
 - **The Bluetooth PIN derived from the setup code is made with HMAC-SHA256:** the first four bytes of HMAC-SHA256 (setup code as key, `armor-ble-passkey` as message), modulo one million. **The PIN of this node changes** with this firmware (the setup code does not): read it again on the USB console or in the panel. A fixed or random PIN is as before. See `docs/SETUP_CODE.md`.
 - **The capacity of a Pylontech stack is told by batteries that print no ampere-hours:** when neither the `bat` table nor `info` gives the charge left, it is the module's state of charge applied to its capacity, so the stack's remaining and total capacity and its energy appear. When the cells of a `bat` table give different charges, the module's is the lowest (the one a real US2000 reports itself) instead of the first cell's. An `info` that does not answer no longer erases the capacity it told before, and a capacity still unknown is asked again after five minutes.
 - **All the batteries of a stack are read, up to sixteen:** with the port's setting at 0 the node asked only the first eight cell by cell, so from the ninth on there were no cells and no capacity (and the stack no totals). A port with a lower limit now says so on the Readings page. A stack of eight or fewer takes the same time as before.
