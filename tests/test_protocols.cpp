@@ -320,6 +320,120 @@ static void test_noise() {
   }
 }
 
+// The refusals and odd answers of every driver.
+static void test_odd_answers() {
+  Bytes next;
+  drivers::JbdDriver jbd;
+  jbd.begin();
+  CHECK(give(jbd, hex("DD 03 80 00 FF 80 77"), next) == drivers::Rx::kBad && std::string(jbd.error()) == "nak");
+  jbd.begin();
+  CHECK(give(jbd, hex("DD 03 00 00 00 00 66"), next) == drivers::Rx::kBad && std::string(jbd.error()) == "format");   // no end byte
+  jbd.begin();
+  CHECK(give(jbd, hex("DD 03 00 02 00 01 FF FD 77"), next) == drivers::Rx::kBad && std::string(jbd.error()) == "format");   // too short to be the basic information
+  jbd.begin();
+  CHECK(give(jbd, hex("55 DD 05 DD 04"), next) == drivers::Rx::kMore && jbd.timeout(next) == drivers::Rx::kBad);          // noise and an answer to something else
+
+  drivers::DalyDriver daly_driver;
+  daly_driver.begin();
+  Bytes broken = daly(0x90, "02 10 02 10 75 30 03 69");
+  broken.back() ^= 1;
+  CHECK(give(daly_driver, broken, next) == drivers::Rx::kBad && std::string(daly_driver.error()) == "crc");
+  daly_driver.begin();
+  CHECK(give(daly_driver, daly(0x92, "00"), next) == drivers::Rx::kMore);                                                 // an answer to a question that was not asked
+  CHECK(give(daly_driver, daly(0x90, "02 10 02 10 79 18 03 E8"), next) == drivers::Rx::kNext);
+  CHECK(give(daly_driver, daly(0x93, "01 01 01 05 00 00 00 00"), next) == drivers::Rx::kNext);
+  CHECK(daly_driver.timeout(next) == drivers::Rx::kNext && next[2] == 0x98);                                              // no counts: no cells and no sensors are asked
+  CHECK(give(daly_driver, daly(0x98, "01"), next) == drivers::Rx::kDone && daly_driver.out().modules.front().system_alarm_state == "Alarm");
+  CHECK(daly_driver.out().modules.front().base_state == "Charge" && daly_driver.out().modules.front().soc_percent == 100);
+
+  drivers::JkDriver jk_driver;
+  jk_driver.begin();
+  CHECK(give(jk_driver, drivers::JkDriver::request(), next) == drivers::Rx::kMore);                                       // our own request heard back
+  CHECK(give(jk_driver, hex("4E 00 4E 57 FF FF"), next) == drivers::Rx::kMore);                                           // noise and an impossible length
+  jk_driver.begin();
+  CHECK(give(jk_driver, jk_frame("85 40"), next) == drivers::Rx::kBad && std::string(jk_driver.error()) == "format");   // no voltage
+  jk_driver.begin();
+  CHECK(give(jk_driver, jk_frame("79 40 01"), next) == drivers::Rx::kBad);                                                // a list of cells longer than the frame
+  jk_driver.begin();
+  Bytes no_end = jk_frame("83 14 A0");
+  no_end[no_end.size() - 5] = 0x00;
+  CHECK(give(jk_driver, no_end, next) == drivers::Rx::kBad && std::string(jk_driver.error()) == "format");
+  // version 1 of the current, the other identifiers walked over, a protection and an unknown identifier that ends the list
+  jk_driver.begin();
+  CHECK(give(jk_driver, jk_frame("83 14 A0 84 87 D0 86 02 87 00 05 89 00 00 00 01 8B 00 01 8C 00 03 8E 10 00 9D 01 9E 00 64 A9 10 AA 00 00 00 64 AB 01 AD 00 00 AE 01 B0 00 01 B1 14 "
+                                 "B3 00 B8 00 BB 00 BE 0C 00 C0 01 FE 00"), next) == drivers::Rx::kDone);
+  CHECK(near(jk_driver.out().modules.front().current_a, 20) && jk_driver.out().modules.front().protecting && jk_driver.out().modules.front().cycles == 5);
+  CHECK(near(jk_driver.out().modules.front().full_capacity_ah, 100) && !jk_driver.out().modules.front().has_temperature);
+  CHECK(drivers::jk::size_of(0x89) == 4 && drivers::jk::size_of(0xB2) == 10 && drivers::jk::size_of(0xB4) == 8 && drivers::jk::size_of(0xB5) == 4 && drivers::jk::size_of(0xB7) == 15 &&
+        drivers::jk::size_of(0xB9) == 4 && drivers::jk::size_of(0xBA) == 24 && drivers::jk::size_of(0x10) == 0);
+
+  drivers::ModbusDriver modbus(drivers::ModbusMap::kSmg2);
+  modbus.begin();
+  CHECK(give(modbus, hex("55 01 05 00 01 03 02"), next) == drivers::Rx::kMore);                                         // noise, another function, another length
+  Bytes damaged = modbus_reply(std::vector<int>(34, 0));
+  damaged.back() ^= 1;
+  modbus.begin();
+  CHECK(give(modbus, damaged, next) == drivers::Rx::kBad && std::string(modbus.error()) == "crc");
+  modbus.begin();
+  CHECK(modbus.timeout(next) == drivers::Rx::kBad && std::string(modbus.error()) == "timeout");
+  modbus.begin();
+  std::vector<int> odd_mode(34, 0);
+  odd_mode[0] = 99;
+  odd_mode[31] = 50;
+  CHECK(give(modbus, modbus_reply(odd_mode), next) == drivers::Rx::kNext);
+  CHECK(give(modbus, modbus_reply({0x8000, 0x0001}), next) == drivers::Rx::kNext && give(modbus, modbus_reply({0xFFFF, 0xFFFF}), next) == drivers::Rx::kDone);
+  CHECK(modbus.out().mode == 0 && modbus.out().status.charging && !modbus.out().warnings.empty());
+  drivers::ModbusDriver mppt(drivers::ModbusMap::kSrneMppt);
+  mppt.begin();
+  CHECK(give(mppt, modbus_reply({50, 270, 0, 0x8500, 0, 0, 0, 0, 0, 0}), next) == drivers::Rx::kNext);
+  CHECK(give(mppt, modbus_reply({0, 0x0000, 0x0005}), next) == drivers::Rx::kDone && near(mppt.out().status.heatsink_c, -5) && mppt.out().warnings.size() == 2);
+
+  drivers::VedirectDriver monitor(false);
+  monitor.begin();
+  CHECK(give(monitor, vedirect("\r\nV\t12000\r\nT\t-4\r\nAlarm\tON\r\nSOC\t---\r\nI\t\r\nA_VERY_LONG_LABEL_HERE\t123456789012345678901234567890"), next) == drivers::Rx::kDone);
+  CHECK(monitor.out().modules.front().has_temperature && near(monitor.out().modules.front().temperature_c, -4) && monitor.out().modules.front().system_alarm_state == "Alarm" && monitor.out().modules.front().soc_percent < 0);
+  CHECK(monitor.timeout(next) == drivers::Rx::kBad);
+  drivers::VedirectDriver charger(true);
+  charger.begin();
+  CHECK(give(charger, vedirect("\r\nV\t26000"), next) == drivers::Rx::kMore);                                            // a monitor's block, not a charger's
+  CHECK(give(charger, vedirect("\r\nV\t26000\r\nI\t-500\r\nCS\t2\r\nERR\t33\r\nVPV\t500"), next) == drivers::Rx::kDone);
+  CHECK(charger.out().mode == 'F' && charger.out().warnings.size() == 1 && charger.out().warnings.front() == "charger_error_33" && near(charger.out().status.battery_a(), -0.5));
+  charger.begin();
+  CHECK(give(charger, vedirect("\r\nV\t26000\r\nCS\t0\r\nPPV\t999999999999"), next) == drivers::Rx::kDone && charger.out().mode == 'S');
+
+  voltronic::Status status;
+  CHECK(!voltronic::parse_qpigs_pi34("1 2 3", status) && !voltronic::parse_qpigs_pi34("x 53.2 1 1 1 1 1 1 1 1 01000000", status) && !voltronic::parse_qpigs_pi34("1 53.2 1 1 1 1 1 1 1 1 2", status));
+  CHECK(!voltronic::parse_qpigs_pi41("1 2 3", status));
+}
+
+// The timeouts through the poller, and what the diagnosis says for the other kinds.
+static void test_driver_timeouts_through_the_poller() {
+  std::string topic, payload;
+  Poller silent(config::Kind::kDaly, "solar-1", "daly-1", 10, 0);
+  CHECK(!silent.next_tx(0).empty());
+  CHECK(silent.next_tx(4000).empty() && silent.stats().last_error == "timeout" && !silent.take_message(1, topic, payload));
+  CHECK(has(silent.diagnosis(), "asked: 0x90 voltage and current | A5 40 90"));
+  Poller modbus(config::Kind::kModbus, "solar-1", "smg-1", 5, 0, "smg2");
+  modbus.next_tx(0);
+  const Bytes main_block = modbus_reply(std::vector<int>(34, 0));
+  modbus.on_rx(main_block.data(), main_block.size(), 100);
+  CHECK(!modbus.next_tx(110).empty());
+  CHECK(!modbus.next_tx(4000).empty());                     // the faults are not answered: the warnings are asked
+  CHECK(modbus.next_tx(8000).empty() && modbus.take_message(1, topic, payload) && has(payload, "\"warnings_known\":false") && modbus.is_inverter());
+  Poller refused(config::Kind::kModbus, "solar-1", "smg-1", 5, 0, "smg2");
+  refused.next_tx(0);
+  Bytes damaged = main_block;
+  damaged.back() ^= 1;
+  refused.on_rx(damaged.data(), damaged.size(), 100);
+  CHECK(refused.stats().last_error == "crc" && refused.stats().replies_bad == 1);
+  Poller raw(config::Kind::kRaw, "solar-1", "raw-1", 0, 0);
+  CHECK(raw.diagnosis().empty() && !raw.is_inverter() && raw.next_tx(0).empty());
+  Poller battery(config::Kind::kPylontech, "solar-1", "us-1", 5, 0);
+  CHECK(has(battery.diagnosis(), "nothing sent yet") && has(battery.diagnosis(), "last error: none"));
+  battery.next_tx(0);
+  CHECK(has(battery.diagnosis(), "asked:"));
+}
+
 static void test_catalogue() {
   for (const protocols::Protocol& p : protocols::kProtocols) {
     config::Kind kind = config::Kind::kRaw;
@@ -341,6 +455,8 @@ int main() {
   test_inverter_that_does_not_answer_everything();
   test_pi41_and_pi34();
   test_driver_through_the_poller();
+  test_odd_answers();
+  test_driver_timeouts_through_the_poller();
   test_catalogue();
   test_noise();
   std::printf("%d checks, %d failures\n", checks, failures);
