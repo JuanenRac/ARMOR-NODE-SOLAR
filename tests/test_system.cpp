@@ -401,10 +401,16 @@ static void test_rs485_faults() {
   {
     sim::PylontechRs485 bus;
     bus.modules = {sim::Module(), sim::Module()};
-    bus.modules[1].present = false;
     Poller poller(config::Kind::kPylontech, "solar-1", "us3000-1", 2, 4);
-    const std::vector<std::string> m = drive(poller, bus, 0, 20000);
-    CHECK(!m.empty() && has_text(m[0], "\"present\":false") && has_text(m[0], "\"modules\":1"));
+    const std::vector<std::string> both = drive(poller, bus, 0, 20000);
+    CHECK(!both.empty() && has_text(both[0], "\"modules\":2") && !has_text(both[0], "\"present\":false"));
+    bus.modules[1].present = false;
+    const std::vector<std::string> m = drive(poller, bus, 20000, 60000);
+    CHECK(!m.empty() && has_text(m.back(), "\"present\":false") && has_text(m.back(), "\"modules\":1"));
+    // a place that was empty from the start is not sent at all
+    Poller fresh(config::Kind::kPylontech, "solar-1", "us3000-2", 2, 4);
+    const std::vector<std::string> alone = drive(fresh, bus, 60000, 80000);
+    CHECK(!alone.empty() && !has_text(alone[0], "\"present\":false") && has_text(alone[0], "\"modules\":1"));
   }
 }
 

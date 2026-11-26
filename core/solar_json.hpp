@@ -99,8 +99,16 @@ inline std::string inverter_json(const std::string& node_id, const std::string& 
   return w.str();
 }
 
-// A battery stack's message from the console's table.
-inline std::string battery_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, const std::vector<pylontech::Module>& modules) {
+// The number of the last battery that is there (0: none).
+inline int last_present(const std::vector<pylontech::Module>& modules) {
+  int last = 0;
+  for (const pylontech::Module& m : modules) if (m.present && m.number > last) last = m.number;
+  return last;
+}
+
+// A battery stack's message from the console's table. The console lists sixteen places whatever is connected: the empty ones after the last battery are not sent. An empty place
+// between two batteries is, and so is one up to `keep_up_to` (a battery seen before that is not there now).
+inline std::string battery_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, const std::vector<pylontech::Module>& modules, int keep_up_to = 0) {
   const pylontech::Stack s = pylontech::summarise(modules);
   json::Writer w;
   w.begin_object().field("kind", "battery").field("node_id", node_id).field("device", device).key("timestamp_ms").integer(static_cast<long long>(timestamp_ms));
@@ -124,7 +132,9 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
     if (s.discharge_mos >= 0) w.field("discharge_mos", s.discharge_mos);
   }
   w.key("stack").begin_array();
+  const int last = last_present(modules) > keep_up_to ? last_present(modules) : keep_up_to;
   for (const pylontech::Module& m : modules) {
+    if (!m.present && m.number > last) continue;
     w.begin_object().field("n", m.number).field("present", m.present);
     if (m.present) {
       if (!m.model.empty()) w.field("model", m.model);

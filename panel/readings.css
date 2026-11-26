@@ -1,5 +1,8 @@
 /* ARMOR-NODE-SOLAR node panel - the readings page. Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
    The common look is style.css (shared by the nodes); its colours are used here. */
+/* the fields of a port card stay in their own column: a long word in a hint (the broker topic of the device name) is broken instead of running over the next one */
+.field { min-width: 0; align-content: start; }
+.field .hint { overflow-wrap: anywhere; }
 .rv { display: grid; gap: 1rem; }
 .rv-section { display: grid; gap: .8rem; padding: 1rem; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(155deg, rgba(16, 40, 51, .94), rgba(7, 23, 32, .94)); }
 .rv-section.old .rv-summary, .rv-section.old .rv-modules, .rv-section.old .rv-tiles { opacity: .55; }

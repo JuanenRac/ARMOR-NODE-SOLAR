@@ -251,8 +251,8 @@ static void test_pylontech_cells_and_capacity() {
   armor::json::Value doc;
   CHECK(armor::json::parse(json_text, doc) && doc.get("model")->text == "US3000C" && doc.get("cycles")->number == 340 && doc.get("full_capacity_ah")->number == 148.0);
   const armor::json::Value* stack = doc.get("stack");
-  CHECK(stack != nullptr && stack->items.size() == 3 && stack->items[0].get("cells_v")->items.size() == 15 && stack->items[0].get("cycles")->number == 312);
-  CHECK(stack->items[1].get("cells_v") == nullptr && stack->items[2].get("cells_v") == nullptr);
+  CHECK(stack != nullptr && stack->items.size() == 2 && stack->items[0].get("cells_v")->items.size() == 15 && stack->items[0].get("cycles")->number == 312);   // the empty place after the last battery is not sent
+  CHECK(stack->items[1].get("cells_v") == nullptr);
 }
 
 static void test_pylontech_real_formats() {
@@ -560,7 +560,20 @@ static void test_messages() {
   pylontech::parse_pwr(kPwr, modules);
   const std::string battery = battery_json("solar-1", "us3000-1", 99, modules);
   CHECK(armor::json::parse(battery, document) && document.get("kind")->text == "battery" && document.get("modules")->number == 2 && document.get("soc_percent")->number == 88);
-  CHECK(document.get("state")->text == "discharging" && document.get("stack")->items.size() == 3 && document.get("alarm")->boolean == false);
+  CHECK(document.get("state")->text == "discharging" && document.get("stack")->items.size() == 2 && document.get("alarm")->boolean == false);
+  // the console's sixteen places: only up to the last battery is sent; an empty place between two is kept, and so is one a battery was seen in before
+  {
+    std::vector<pylontech::Module> places(16);
+    for (int i = 0; i < 16; ++i) places[static_cast<std::size_t>(i)].number = i + 1;
+    places[0].present = places[2].present = true;
+    CHECK(armor::json::parse(battery_json("solar-1", "us2000-1", 1, places), document) && document.get("modules")->number == 2);
+    CHECK(document.get("stack")->items.size() == 3 && !document.get("stack")->items[1].get("present")->boolean && document.get("stack")->items[2].get("n")->number == 3);
+    places[2].present = false;
+    CHECK(armor::json::parse(battery_json("solar-1", "us2000-1", 2, places, 3), document) && document.get("stack")->items.size() == 3 && !document.get("stack")->items[2].get("present")->boolean);
+    CHECK(armor::json::parse(battery_json("solar-1", "us2000-1", 3, places), document) && document.get("stack")->items.size() == 1);
+    places[0].present = false;
+    CHECK(armor::json::parse(battery_json("solar-1", "us2000-1", 4, places), document) && document.get("modules")->number == 0 && document.get("stack")->items.empty());
+  }
   CHECK(armor::json::parse(battery_json("solar-1", "us3000-1", 99, {}), document) && document.get("modules")->number == 0 && document.get("state") == nullptr);
 }
 
