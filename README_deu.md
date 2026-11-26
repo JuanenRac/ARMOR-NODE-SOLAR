@@ -166,7 +166,7 @@ Es wurde noch kein Frame von einem echten Wechselrichter oder einer echten Batte
 |---|---|
 | MQTT | `armor/solar/<Knoten>/<Gerät>/state` (eine Nachricht je Wechselrichter oder Batteriestapel, Art `inverter` oder `battery` des ARMOR-COMMON-Vertrags), `armor/solar/<Knoten>/maintenance/{command,result}`, `armor/health/<Knoten>` (Last Will), `armor/control/<id>/{command,result,maintenance}` und `armor/control/all/command` |
 | Ports | 10 serielle Ports (3 Hardware-UARTs und 7 emulierte, emuliert bis 19200 Baud); je Port ein Typ: `voltronic` (2400 Baud, alle 5 s), `pylontech` (115200, alle 10 s), `ant` (19200, alle 5 s) oder `raw` (9600, nur hören, veröffentlicht nichts); Wechselrichter-Dialekte `auto`, `pi30`, `revo`, `pi18`; das Mux-Profil hat 3 Portgruppen |
-| Abfragen | Voltronic: `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (und `QPIGS2`, `QPGS` bei einem Standard-Wechselrichter mit dem Mux); Pylontech-Konsole: `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, Ereignisprotokoll, bis zu 8 Module zellenweise abgefragt |
+| Abfragen | Voltronic: `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (und `QPIGS2`, `QPGS` bei einem Standard-Wechselrichter mit dem Mux); Pylontech-Konsole: `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, Ereignisprotokoll, bis zu 16 Module zellenweise abgefragt |
 | Panel | Die Familien-Routen (`tests/check_routes.py` prüft, dass jede vom Panel aufgerufene Route existiert) plus die Seiten für Ports und Messwerte; 51 Fehlercodes mit Text in acht Sprachen (839 Zeilen in `panel/text.js`); die Menüs von Studio stehen in [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) |
 
 ## ⚙️ Konfiguration

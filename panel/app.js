@@ -794,8 +794,11 @@ function batterySection(port, m) {
     el("div", { class: "rv-pills" }, staleNote(port), psPill(port.state), m.protecting ? el("span", { class: "pill bad" }, t("rv_protect")) : null,
       m.modules ? el("span", { class: "pill " + (alarm ? "bad" : "ok") }, alarm ? t("rd_alarm") : t("rv_allOk")) : null));
   if (!m.modules) return el("section", { class: "rv-section" }, head, note(t("rd_no_modules")));
+  // the batteries the port's limit leaves out are said, not left looking broken
+  const setting = S.cfg.ports[port.port - 1], limit = (setting && setting.modules) || 16;
+  const beyond = (m.stack || []).some(x => x.present && x.n > limit) ? note(t("rv_beyondLimit", limit)) : null;
   const delta = Math.round((m.cell_max_v - m.cell_min_v) * 1000);
-  const section = el("section", { class: "rv-section" + (stale(port) ? " old" : "") }, head,
+  const section = el("section", { class: "rv-section" + (stale(port) ? " old" : "") }, head, beyond,
     el("div", { class: "rv-summary" }, ring(m.soc_percent),
       el("div", { class: "rv-chips" }, chip(t("rd_voltage"), num(m.voltage_v, 2) + " V · " + num(m.current_a, 1) + " A"), chip(t("rv_power"), watts(isNum(m.power_w) ? m.power_w : m.voltage_v * m.current_a)),
         chip(t("rv_cellRange"), num(m.cell_min_v, 3) + " – " + num(m.cell_max_v, 3) + " V"), chip("Δ mV", String(delta), deltaLevel(delta)),

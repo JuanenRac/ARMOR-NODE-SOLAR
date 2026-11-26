@@ -166,7 +166,7 @@ ARMOR-NODE-SOLAR は家のソーラー機器とファミリーをつなぐゲー
 |---|---|
 | MQTT | `armor/solar/<ノード>/<機器>/state`（インバーターまたはバッテリースタックごとに 1 メッセージ、ARMOR-COMMON のコントラクトの種別 `inverter` または `battery`）、`armor/solar/<ノード>/maintenance/{command,result}`、`armor/health/<ノード>`（遺言）、`armor/control/<id>/{command,result,maintenance}`、`armor/control/all/command` |
 | ポート | シリアルポート 10 本（ハードウェア UART 3 本とエミュレート 7 本、エミュレート時は最大 19200 ボー）。ポートごとの種別：`voltronic`（2400 ボー、5 秒ごと）、`pylontech`（115200、10 秒ごと）、`ant`（19200、5 秒ごと）、`raw`（9600、受信のみで何も発行しない）。インバーターの方言は `auto`、`pi30`、`revo`、`pi18`。mux プロファイルにはポートのグループが 3 つあります |
-| 問い合わせ | Voltronic：`QPIGS`、`QMOD`、`QPIWS`、`QPIRI`（mux 付きの標準インバーターでは `QPIGS2`、`QPGS` も）。Pylontech コンソール：`pwr`、`bat <n>`、`info <n>`、`stat`、`soh`、イベントログ。最大 8 モジュールをセル単位で問い合わせます |
+| 問い合わせ | Voltronic：`QPIGS`、`QMOD`、`QPIWS`、`QPIRI`（mux 付きの標準インバーターでは `QPIGS2`、`QPGS` も）。Pylontech コンソール：`pwr`、`bat <n>`、`info <n>`、`stat`、`soh`、イベントログ。最大 16 モジュールをセル単位で問い合わせます |
 | パネル | ファミリー共通のルート（`tests/check_routes.py` がパネルの呼ぶルートの存在を検査）に加え、ポートと測定値のページ。8 言語の文言つきエラーコード 51 個（`panel/text.js` に 839 行）。Studio のメニューは [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) |
 
 ## ⚙️ 設定

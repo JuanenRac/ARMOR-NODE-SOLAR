@@ -166,7 +166,7 @@ Ninguna trama se ha leído de un inversor o una batería reales; los formatos es
 |---|---|
 | MQTT | `armor/solar/<nodo>/<dispositivo>/state` (un mensaje por inversor o pila de baterías, tipo `inverter` o `battery` del contrato de ARMOR-COMMON), `armor/solar/<nodo>/maintenance/{command,result}`, `armor/health/<nodo>` (última voluntad), `armor/control/<id>/{command,result,maintenance}` y `armor/control/all/command` |
 | Puertos | 10 puertos serie (3 UART de hardware y 7 emuladas, hasta 19200 baudios si son emuladas); por puerto un tipo: `voltronic` (2400 baudios, cada 5 s), `pylontech` (115200, cada 10 s), `ant` (19200, cada 5 s) o `raw` (9600, solo escucha, no publica); dialectos de inversor `auto`, `pi30`, `revo`, `pi18`; el perfil mux tiene 3 grupos de puertos |
-| Consultas | Voltronic: `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (y `QPIGS2`, `QPGS` en un inversor estándar con el mux); consola Pylontech: `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, registro de eventos, hasta 8 módulos pedidos celda a celda |
+| Consultas | Voltronic: `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (y `QPIGS2`, `QPGS` en un inversor estándar con el mux); consola Pylontech: `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, registro de eventos, hasta 16 módulos pedidos celda a celda |
 | Panel | Las rutas de la familia (`tests/check_routes.py` comprueba que toda ruta que llama el panel existe) más las páginas de puertos y lecturas; 51 códigos de error con texto en ocho idiomas (839 filas en `panel/text.js`); los menús de Studio, en [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) |
 
 ## ⚙️ Configuración
