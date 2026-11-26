@@ -12,7 +12,7 @@
 //                                    keeps to the one that answered; a reply that ends with the checksum instead of the CRC makes it revo.
 //   Pylontech battery (console):     `pwr` (the table of the modules), then for every module that is there `bat <n>` (its cells and remaining charge), and every half hour
 //                                    `info <n>` (model, rated capacity) and `stat <n>` (cycles), whose answers are kept in between. The extras are optional: if they do not
-//                                    answer, the reading goes out without them.
+//                                    answer, the reading goes out without them, and a module still without its sheet is asked again (one per cycle).
 //   ANT-BMS battery (serial):        one request, one whole frame back (core/ant_bms.hpp). Its firmware speaks one of two protocols: the port asks in the old one
 //                                    and, when nothing answers, in the new one, and keeps to the one that answered (it looks again after three misses).
 //   Raw:                             nothing is asked; what arrives is kept so it can be looked at (a protocol that is not decoded yet).
@@ -91,7 +91,10 @@ struct PortStats {
 class Poller {
  public:
   static constexpr int kMaxModules = 16;   // a console answers for up to sixteen, and so does the message; with no limit in the settings all of them are asked
-  static constexpr std::uint64_t kExtrasRetryMs = 5ULL * 60ULL * 1000ULL;   // a module whose capacity is still unknown is asked again after this, not after half an hour
+  static constexpr std::uint64_t kExtrasRetryMs = 5ULL * 60ULL * 1000ULL;   // after kExtrasQuickTries unanswered tries, a module still without its sheet is asked again this often
+  static constexpr int kExtrasQuickTries = 3;                               // and before that, in the next cycles that come to it
+  static constexpr std::uint64_t kQuietMs = 300;                            // after a question that timed out, the next one waits for this much silence (a late answer is not its answer)
+  static constexpr std::uint64_t kSettleMaxMs = 3000;                       // but never longer than this
   static constexpr std::uint64_t kVoltronicTimeoutMs = 2500;
   static constexpr std::uint64_t kConsoleTableTimeoutMs = 5000;
   static constexpr std::uint64_t kConsoleExtraTimeoutMs = 3000;
@@ -122,10 +125,10 @@ class Poller {
   std::vector<std::uint8_t> next_tx(std::uint64_t now_ms) {
     if (kind_ == config::Kind::kRaw) return {};
     if (step_ != Step::kIdle && now_ms >= deadline_ms_) on_timeout(now_ms);
-    if (!pending_.empty()) return take_pending();
+    if (!pending_.empty()) return still_settling(now_ms) ? std::vector<std::uint8_t>() : take_pending();
     // a reading that has not been taken yet is not overwritten by the next cycle
     if (step_ == Step::kIdle && !ready_ && now_ms >= next_cycle_ms_) begin_cycle(now_ms);
-    if (pending_.empty()) return {};
+    if (pending_.empty() || still_settling(now_ms)) return {};
     return take_pending();
   }
 
@@ -241,6 +244,37 @@ class Poller {
  private:
   enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt, kDriver };
   enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34 };
+  // What `info`, `stat`, `data event` and `soh` said of one module. at_ms: the last full round; tried_ms and misses: the tries while something is still missing.
+  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0, tried_ms = 0; int misses = 0; bool valid = false; };
+
+  // Whether the sheet of a module is still missing: its rated capacity (`info`) or its history (`stat`).
+  static bool incomplete(const Extras& e) { return e.full_capacity_ah < 0 || (e.cycles < 0 && e.counters.empty()); }
+  // What was kept from earlier answers goes into whatever this module has not said now.
+  static void fill_from_kept(pylontech::Module& m, const Extras& e) {
+    if (m.model.empty()) m.model = e.model;
+    if (m.full_capacity_ah < 0) m.full_capacity_ah = e.full_capacity_ah;
+    if (m.cycles < 0) m.cycles = e.cycles;
+    if (m.health_percent < 0) m.health_percent = e.health_percent;
+    if (m.counters.empty()) m.counters = e.counters;
+    if (!m.last_event.valid) m.last_event = e.last_event;
+    if (m.cell_count < 0) m.cell_count = e.cell_count;
+    if (m.board_version.empty()) m.board_version = e.board_version;
+    if (m.main_soft_version.empty()) m.main_soft_version = e.main_soft_version;
+    if (m.soft_version.empty()) m.soft_version = e.soft_version;
+    if (m.max_charge_a < 0) m.max_charge_a = e.max_charge_a;
+    if (m.max_discharge_a < 0) m.max_discharge_a = e.max_discharge_a;
+    if (m.console_baud < 0) m.console_baud = e.console_baud;
+    if (m.soh_counts.empty()) { m.soh_counts = e.soh_counts; m.soh_abnormal = e.soh_abnormal; }
+  }
+
+  // A console that was still answering when its question timed out is let finish: the next question waits for silence, and its time to be answered starts when it goes out.
+  bool still_settling(std::uint64_t now_ms) {
+    if (!settling_) return false;
+    if (now_ms - settle_started_ms_ < kSettleMaxMs && now_ms - last_rx_ms_ < kQuietMs) { deadline_ms_ = now_ms + kConsoleExtraTimeoutMs; return true; }
+    settling_ = false;
+    return false;
+  }
+
 
   std::vector<std::uint8_t> take_pending() {
     std::vector<std::uint8_t> out;
@@ -288,6 +322,8 @@ class Poller {
       step_ = Step::kPwr;
       modules_.clear();
       module_at_ = 0;
+      caught_up_ = false;
+      catching_up_ = false;
       // A console that has been quiet for a while may swallow its first command: at the start and after a silence a bare Enter goes first, to wake it up.
       send(wake_ ? "\rpwr\r" : "pwr\r", now_ms, kConsoleTableTimeoutMs);
     }
@@ -588,7 +624,7 @@ class Poller {
   }
 
   void rx_pylontech(const std::uint8_t* data, std::size_t length, std::uint64_t now_ms) {
-    if (step_ == Step::kIdle) return;
+    if (step_ == Step::kIdle || !pending_.empty()) return;   // the next question has not gone out yet: what arrives is not its answer
     for (std::size_t i = 0; i < length; ++i) if (buffer_.size() < 8192) buffer_ += static_cast<char>(data[i]);
     if (!console_done(buffer_)) return;
     if (step_ == Step::kPwr) {
@@ -633,28 +669,22 @@ class Poller {
     }
   }
 
-  // The cells are in. The identity (`info`) and the history (`stat`) of a module hardly change: they are asked when they are not known or half an hour old, and kept.
+  // The cells are in. The identity (`info`) and the history (`stat`) of a module hardly change: they are asked when they are not known or half an hour old, and kept. A module
+  // whose sheet is still missing (a question not answered, or refused) does not wait half an hour: one such module per cycle is asked again, a few times in a row and then every
+  // five minutes, so a whole stack gets its sheets in a few minutes and no cycle grows by more than one module's questions.
   void after_bat(std::uint64_t now_ms) {
     pylontech::Module& m = modules_[module_at_];
     const Extras& e = extras_[static_cast<std::size_t>(m.number)];
+    catching_up_ = false;
     if (e.valid && now_ms - e.at_ms < kExtrasRefreshMs) {
-      if (!e.model.empty()) m.model = e.model;
-      if (e.full_capacity_ah >= 0) m.full_capacity_ah = e.full_capacity_ah;
-      if (e.cycles >= 0) m.cycles = e.cycles;
-      if (e.health_percent >= 0) m.health_percent = e.health_percent;
-      if (!e.counters.empty()) m.counters = e.counters;
-      if (e.last_event.valid) m.last_event = e.last_event;
-      if (e.cell_count >= 0) m.cell_count = e.cell_count;
-      if (!e.board_version.empty()) m.board_version = e.board_version;
-      if (!e.main_soft_version.empty()) m.main_soft_version = e.main_soft_version;
-      if (!e.soft_version.empty()) m.soft_version = e.soft_version;
-      if (e.max_charge_a >= 0) m.max_charge_a = e.max_charge_a;
-      if (e.max_discharge_a >= 0) m.max_discharge_a = e.max_discharge_a;
-      if (e.console_baud >= 0) m.console_baud = e.console_baud;
-      if (!e.soh_counts.empty()) { m.soh_counts = e.soh_counts; m.soh_abnormal = e.soh_abnormal; }
-      ++module_at_;
-      ask_next_module(now_ms);
-      return;
+      fill_from_kept(m, e);
+      if (caught_up_ || !incomplete(e) || (e.misses >= kExtrasQuickTries && now_ms - e.tried_ms < kExtrasRetryMs)) {
+        ++module_at_;
+        ask_next_module(now_ms);
+        return;
+      }
+      caught_up_ = true;
+      catching_up_ = true;
     }
     had_capacity_ = m.capacity_ah >= 0;
     step_ = Step::kInfo;
@@ -670,6 +700,10 @@ class Poller {
   // `Data Items`; a battery that answers something else just leaves the event out).
   void ask_event_or_end(std::uint64_t now_ms) {
     const pylontech::Module& m = modules_[module_at_];
+    if (catching_up_) {   // only what is missing: the event log waits for the half-hourly round
+      if (m.soh_counts.empty()) ask_soh(now_ms); else end_extras(now_ms);
+      return;
+    }
     long long items = 0;
     for (const auto& counter : m.counters) if (counter.first == "data_items") items = counter.second;
     const Extras& e = extras_[static_cast<std::size_t>(m.number)];
@@ -684,15 +718,17 @@ class Poller {
     buffer_.clear();
     send("soh " + std::to_string(modules_[module_at_].number) + "\r", now_ms, kConsoleExtraTimeoutMs);
   }
-  // Both extras have been asked (answered or not): keep what came, unless the module also reports its remaining charge there (that one has to be fresh every time).
+  // The extras have been asked (answered or not): keep what came, unless the module also reports its remaining charge there (that one has to be fresh every time).
   void end_extras(std::uint64_t now_ms) {
     pylontech::Module& m = modules_[module_at_];
     Extras& e = extras_[static_cast<std::size_t>(m.number)];
-    // an `info` that did not answer this time does not take away the capacity it told before: without it the stack would have no total until the next refresh
-    if (m.full_capacity_ah < 0 && e.full_capacity_ah >= 0) m.full_capacity_ah = e.full_capacity_ah;
-    const bool capacity_told = m.full_capacity_ah >= 0;
-    e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.counters = m.counters; if (m.last_event.valid) e.last_event = m.last_event; e.cell_count = m.cell_count; e.board_version = m.board_version; e.main_soft_version = m.main_soft_version; e.soft_version = m.soft_version; e.max_charge_a = m.max_charge_a; e.max_discharge_a = m.max_discharge_a; e.console_baud = m.console_baud; e.soh_counts = m.soh_counts; e.soh_abnormal = m.soh_abnormal; e.at_ms = capacity_told ? now_ms : now_ms - (kExtrasRefreshMs - kExtrasRetryMs);   // unsigned: the difference stays right near the start
+    fill_from_kept(m, e);   // a question that got no answer this time does not take away what the module told before
+    e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.counters = m.counters; if (m.last_event.valid) e.last_event = m.last_event; e.cell_count = m.cell_count; e.board_version = m.board_version; e.main_soft_version = m.main_soft_version; e.soft_version = m.soft_version; e.max_charge_a = m.max_charge_a; e.max_discharge_a = m.max_discharge_a; e.console_baud = m.console_baud; e.soh_counts = m.soh_counts; e.soh_abnormal = m.soh_abnormal;
+    if (!catching_up_) e.at_ms = now_ms;
+    e.tried_ms = now_ms;
+    e.misses = !incomplete(e) ? 0 : e.misses < kExtrasQuickTries ? e.misses + 1 : e.misses;
     e.valid = had_capacity_ || m.capacity_ah < 0;
+    catching_up_ = false;
     ++module_at_;
     ask_next_module(now_ms);
   }
@@ -726,6 +762,7 @@ class Poller {
   // else gives the cycle up, and the next one starts at the next poll.
   void on_timeout(std::uint64_t now_ms) {
     ++stats_.timeouts;
+    if (kind_ == config::Kind::kPylontech) { settling_ = true; settle_started_ms_ = now_ms; }
     if (step_ == Step::kBat) {
       // a module that did not answer for its cells keeps the ones of its last turn
       const int number = modules_[module_at_].number;
@@ -812,9 +849,11 @@ class Poller {
   std::unique_ptr<drivers::Driver> driver_;             // only for the protocols that have one
   std::vector<std::uint8_t> last_tx_;
   std::vector<pylontech::Module> modules_;
-  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0; bool valid = false; };
   std::array<Extras, 17> extras_;   // by module number (1 to 16): what `info` and `stat` said, kept between cycles
   bool had_capacity_ = false;
+  bool caught_up_ = false, catching_up_ = false;   // this cycle has asked a missing sheet again; the exchange under way is that one
+  bool settling_ = false;                          // a question timed out: the next one waits for silence
+  std::uint64_t settle_started_ms_ = 0;
   std::size_t module_at_ = 0;
   ant::Framer ant_framer_;
   ant::Protocol ant_protocol_ = ant::Protocol::kOld;

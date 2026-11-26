@@ -793,6 +793,9 @@ const stale = port => port.state !== "reporting";
 const staleNote = port => (stale(port) ? el("span", { class: "pill warn" }, t("rv_stale")) : null);
 const stackAlarm = m => !!m.alarm || !!m.protecting || (m.stack || []).some(x => x.present && moduleHealth(x, cellLimits(m)).level === 2);
 
+// The full capacity of a stack is an estimate when a battery that is there has not told its own: it is counted as the others.
+const aboutFull = m => ((m.stack || []).some(x => x.present && x.full_capacity_ah === undefined) ? "≈ " : "");
+
 function batterySection(port, m) {
   const limits = cellLimits(m), alarm = stackAlarm(m);
   const head = el("header", { class: "rv-head" },
@@ -809,7 +812,7 @@ function batterySection(port, m) {
       el("div", { class: "rv-chips" }, chip(t("rd_voltage"), num(m.voltage_v, 2) + " V · " + num(m.current_a, 1) + " A"), chip(t("rv_power"), watts(isNum(m.power_w) ? m.power_w : m.voltage_v * m.current_a)),
         chip(t("rv_cellRange"), num(m.cell_min_v, 3) + " – " + num(m.cell_max_v, 3) + " V"), chip("Δ mV", String(delta), deltaLevel(delta)),
         chip(t("rd_temp"), num(m.temperature_min_c, 1) + " – " + num(m.temperature_max_c, 1) + " °C"),
-        m.capacity_ah === undefined || m.full_capacity_ah === undefined ? null : chip(t("rd_capacity"), num(m.capacity_ah, 1) + " / " + num(m.full_capacity_ah, 1) + " Ah" + (m.energy_kwh === undefined ? "" : " · " + num(m.energy_kwh, 2) + " kWh")),
+        m.capacity_ah === undefined || m.full_capacity_ah === undefined ? null : chip(t("rd_capacity"), aboutFull(m) + num(m.capacity_ah, 1) + " / " + num(m.full_capacity_ah, 1) + " Ah" + (m.energy_kwh === undefined ? "" : " · " + num(m.energy_kwh, 2) + " kWh")),
         m.balancing ? chip(t("rv_balancing"), String(m.balancing)) : null)),
     el("div", { class: "rv-modules" }, (m.stack || []).map(x => moduleCard(x, limits, port.port + ":" + x.n))));
   return section;
@@ -857,7 +860,7 @@ function bankSummary(list) {
         banks.length ? [chip(t("rv_batteriesLabel"), String(modules)), chip(t("rd_voltage"), num(sum(banks, m => m.voltage_v * m.modules) / modules, 2) + " V · " + num(sum(banks, m => m.current_a), 1) + " A"),
           chip(t("rv_power"), watts(power)), chip(t("rv_cellRange"), num(low, 3) + " – " + num(high, 3) + " V"), chip(t("rv_worstDelta"), String(delta), deltaLevel(delta)),
           chip(t("rd_temp"), num(Math.min(...banks.map(m => m.temperature_min_c)), 1) + " – " + num(Math.max(...banks.map(m => m.temperature_max_c)), 1) + " °C"),
-          known ? chip(t("rd_capacity"), num(sum(banks, m => m.capacity_ah), 0) + " / " + num(sum(banks, m => m.full_capacity_ah), 0) + " Ah · " + num(sum(banks, m => m.energy_kwh), 2) + " kWh") : null] : null,
+          known ? chip(t("rd_capacity"), (banks.some(aboutFull) ? "≈ " : "") + num(sum(banks, m => m.capacity_ah), 0) + " / " + num(sum(banks, m => m.full_capacity_ah), 0) + " Ah · " + num(sum(banks, m => m.energy_kwh), 2) + " kWh") : null] : null,
         inverters.length ? [chip(t("rd_pv"), watts(sum(inverters, m => m.pv_w))), chip(t("rd_load"), watts(sum(inverters, m => m.out_w)))] : null)));
   return alarms ? blink(section) : section;
 }

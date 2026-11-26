@@ -143,8 +143,13 @@ static void test_totals_are_whole_or_absent() {
   modules[1].capacity_ah = -1;   // its charge was not read: half a sum is not the stack's charge
   stack = solar::pylontech::summarise(modules);
   CHECK(stack.capacity_ah < 0 && stack.energy_kwh < 0 && stack.full_capacity_ah == 148.0);
-  modules[1].full_capacity_ah = -1;
-  CHECK(solar::pylontech::summarise(modules).full_capacity_ah < 0);
+  modules[1].full_capacity_ah = -1;   // the other module's sheet is the only one: it is counted the same, and said to be an estimate
+  stack = solar::pylontech::summarise(modules);
+  CHECK(stack.full_capacity_ah == 148.0 && stack.full_estimated);
+  modules.push_back(modules[0]);
+  modules[2].full_capacity_ah = 50.0;   // two sheets that differ: nothing is assumed for the third
+  stack = solar::pylontech::summarise(modules);
+  CHECK(stack.full_capacity_ah < 0 && !stack.full_estimated);
 }
 
 static void test_the_tasks_that_use_the_external_memory() {

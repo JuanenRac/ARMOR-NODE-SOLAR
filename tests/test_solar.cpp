@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -422,11 +424,124 @@ static void test_pylontech_remaining_capacity() {
   asked.clear();
   CHECK(armor::json::parse(us_cycle(tall, now, 16, percent_only, true, &asked), document) && std::find(asked.begin(), asked.end(), "bat 16") != asked.end());
   CHECK(document.get("full_capacity_ah") != nullptr && document.get("full_capacity_ah")->number == 800.0 && document.get("stack")->items[15].get("cells_v") != nullptr);
-  // a port limited to eight says nothing it does not know about the others: no totals
+  // a port limited to eight does not ask the ninth: no charge total, and the full capacity counts it as the others, which are all alike
   Poller limited(armor::config::Kind::kPylontech, "solar-1", "us2000-1", 5, 8);
   now = 1000;
-  CHECK(armor::json::parse(us_cycle(limited, now, 9, percent_only, true), document) && document.get("full_capacity_ah") == nullptr && document.get("capacity_ah") == nullptr);
-  CHECK(document.get("stack")->items[8].get("cells_v") == nullptr);
+  CHECK(armor::json::parse(us_cycle(limited, now, 9, percent_only, true), document) && document.get("full_capacity_ah")->number == 450.0 && document.get("capacity_ah") == nullptr);
+  CHECK(document.get("stack")->items[8].get("cells_v") == nullptr && document.get("stack")->items[8].get("full_capacity_ah") == nullptr);
+}
+
+// A stack of eight 50 Ah batteries in which some modules' `info` is not answered (or is refused) when the whole stack is first read.
+static std::string sheet_answer(const std::string& command, std::uint32_t without_info, bool refuse) {
+  std::string out = "@\r\n";
+  if (command == "pwr") {
+    out += "Power Volt Curr Tempr Tlow Thigh Vlow Vhigh Base.St Volt.St Curr.St Temp.St Coulomb Time B.V.St B.T.St\r\n";
+    for (int i = 1; i <= 8; ++i) out += std::to_string(i) + " 49872 -1280 22000 20000 25000 3330 3348 Dischg Normal Normal Normal 88% 2018-11-14 15:12:04 Normal Normal\r\n";
+  } else if (command.rfind("bat", 0) == 0) {
+    for (int i = 0; i < 15; ++i) out += std::to_string(i) + " 3340 -1000 22000 Dischg Normal Normal Normal 88% 44000 mAH N\r\n";
+  } else if (command.rfind("info ", 0) == 0) {
+    const int n = std::atoi(command.c_str() + 5);
+    if (without_info & (1u << n)) return refuse ? "@\r\nInvalid command or fail to excute.\r\n$$\r\npylon>" : "";
+    out += "Device name : US2000C\r\nSpecification : 48V/50AH\r\nCell Number : 15\r\n";
+  } else if (command.rfind("stat ", 0) == 0) {
+    out += "CYCLE Times : 120\r\n";
+  }
+  return out + "Command completed successfully\r\n$$\r\npylon>";
+}
+static std::string sheet_cycle(Poller& poller, std::uint64_t& now, std::uint32_t without_info, bool refuse, std::vector<std::string>* asked = nullptr) {
+  for (int turn = 0; turn < 8000; ++turn) {
+    const std::vector<std::uint8_t> tx = poller.next_tx(now);
+    now += 40;
+    if (!tx.empty()) {
+      std::string command(tx.begin(), tx.end());
+      while (!command.empty() && command.front() == '\r') command.erase(0, 1);
+      while (!command.empty() && command.back() == '\r') command.pop_back();
+      if (asked != nullptr) asked->push_back(command);
+      const std::string reply = sheet_answer(command, without_info, refuse);
+      if (!reply.empty()) poller.on_rx(reinterpret_cast<const std::uint8_t*>(reply.data()), reply.size(), now);
+    }
+    std::string topic, payload;
+    if (poller.take_message(now, topic, payload)) return payload;
+  }
+  return "";
+}
+static int modules_with_sheet(const armor::json::Value& document) {
+  int n = 0;
+  for (const armor::json::Value& m : document.get("stack")->items) if (m.get("full_capacity_ah") != nullptr) ++n;
+  return n;
+}
+static int count_of(const std::vector<std::string>& asked, const std::string& prefix) {
+  int n = 0;
+  for (const std::string& a : asked) if (a.rfind(prefix, 0) == 0) ++n;
+  return n;
+}
+static void test_pylontech_missing_sheets() {
+  armor::json::Value document;
+  for (const bool refuse : {true, false}) {
+    // only modules 1 and 2 answer `info` at first: the total counts the six others as those two
+    const std::uint32_t six = 0x1F8u;   // bits 3 to 8
+    Poller poller(armor::config::Kind::kPylontech, "solar-1", "bank-1", 5, 0);
+    std::uint64_t now = 1000;
+    CHECK(armor::json::parse(sheet_cycle(poller, now, six, refuse), document) && modules_with_sheet(document) == 2);
+    CHECK(document.get("full_capacity_ah") != nullptr && document.get("full_capacity_ah")->number == 400.0 && document.get("capacity_ah")->number == 352.0);
+    // once the battery answers, one missing module is asked in each of the next cycles: all eight within a minute, not after half an hour
+    const std::uint64_t from = now;
+    for (int cycle = 0; cycle < 6; ++cycle) {
+      now += 5000;
+      std::vector<std::string> asked;
+      CHECK(armor::json::parse(sheet_cycle(poller, now, 0, refuse, &asked), document) && count_of(asked, "info ") == 1 && count_of(asked, "data ") == 0);
+      CHECK(modules_with_sheet(document) == 3 + cycle);
+    }
+    CHECK(now - from < 60000 && modules_with_sheet(document) == 8 && document.get("full_capacity_ah")->number == 400.0);
+    now += 5000;
+    std::vector<std::string> asked;
+    CHECK(!sheet_cycle(poller, now, 0, refuse, &asked).empty() && count_of(asked, "info ") == 0);
+  }
+  // one module that never answers: the other seven give the total, the module itself says nothing it did not say, and it is not asked at every cycle for ever
+  Poller poller(armor::config::Kind::kPylontech, "solar-1", "bank-2", 5, 0);
+  std::uint64_t now = 1000;
+  std::vector<std::string> asked;
+  std::string last;
+  for (int cycle = 0; cycle < 10; ++cycle) { last = sheet_cycle(poller, now, 1u << 7, true, &asked); now += 5000; }
+  CHECK(armor::json::parse(last, document) && modules_with_sheet(document) == 7 && document.get("stack")->items[6].get("full_capacity_ah") == nullptr);
+  CHECK(document.get("full_capacity_ah") != nullptr && document.get("full_capacity_ah")->number == 400.0);
+  CHECK(count_of(asked, "info 7") == Poller::kExtrasQuickTries);
+  now += Poller::kExtrasRetryMs;
+  asked.clear();
+  CHECK(!sheet_cycle(poller, now, 1u << 7, true, &asked).empty() && count_of(asked, "info 7") == 1);
+  // different capacities or models: nothing is assumed
+  std::vector<pylontech::Module> mixed(3);
+  for (auto& m : mixed) { m.present = true; m.voltage_v = 50; m.model = "US2000C"; m.full_capacity_ah = 50; }
+  mixed[2].full_capacity_ah = -1;
+  mixed[2].model.clear();
+  CHECK(pylontech::summarise(mixed).full_capacity_ah == 150.0 && pylontech::summarise(mixed).full_estimated);
+  mixed[2].model = "US3000C";
+  CHECK(pylontech::summarise(mixed).full_capacity_ah < 0);
+  mixed[2].model = "US2000C";
+  mixed[1].full_capacity_ah = 74;
+  CHECK(pylontech::summarise(mixed).full_capacity_ah < 0);
+}
+
+// An answer that comes after its question timed out is not taken as the answer to the next one: the next question waits for the line to be quiet.
+static void test_pylontech_late_answer() {
+  Poller poller(armor::config::Kind::kPylontech, "solar-1", "bank-1", 5, 1);
+  std::uint64_t now = 1000;
+  const auto feed = [&](const std::string& text) { poller.on_rx(reinterpret_cast<const std::uint8_t*>(text.data()), text.size(), now); };
+  const auto next = [&]() { const std::vector<std::uint8_t> tx = poller.next_tx(now); return std::string(tx.begin(), tx.end()); };
+  CHECK(next().find("pwr") != std::string::npos);
+  feed(sheet_answer("pwr", 0, false));
+  CHECK(next() == "bat 1\r");
+  feed(sheet_answer("bat 1", 0, false));
+  CHECK(next() == "info 1\r");
+  now += Poller::kConsoleExtraTimeoutMs - 50;
+  feed("@\r\nDevice name : US2000C\r\n");   // the answer has begun, and is slow
+  now += 60;
+  CHECK(next().empty());                    // timed out, and the console is still talking: `stat` waits
+  now += 100;
+  feed("Specification : 48V/50AH\r\nCommand completed successfully\r\n$$\r\npylon>");
+  CHECK(next().empty());
+  now += Poller::kQuietMs;
+  CHECK(next() == "stat 1\r");
 }
 
 static void test_messages() {
@@ -682,6 +797,8 @@ int main() {
   test_pylontech_wake_frame();
   test_pylontech_real_us2000();
   test_pylontech_remaining_capacity();
+  test_pylontech_missing_sheets();
+  test_pylontech_late_answer();
   test_pylontech_real_logs();
   test_pylontech_port_speeds();
   test_messages();
