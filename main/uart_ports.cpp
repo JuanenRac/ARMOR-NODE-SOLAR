@@ -23,6 +23,7 @@ extern "C" {
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 }
 #include "core/board_s3.hpp"
@@ -51,7 +52,8 @@ class HardwarePort final : public Port {
     config.stop_bits = UART_STOP_BITS_1;
     config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
     config.source_clk = UART_SCLK_DEFAULT;
-    if (uart_driver_install(uart_, 2048, 0, 0, nullptr, 0) != ESP_OK) { error = "driver"; return false; }
+    // the events are only read to count the framing and parity errors: 16 of them take about 300 bytes
+    if (uart_driver_install(uart_, 2048, 0, 16, &events_, 0) != ESP_OK) { error = "driver"; return false; }
     if (uart_param_config(uart_, &config) != ESP_OK) { error = "baud"; uart_driver_delete(uart_); return false; }
     if (uart_set_pin(uart_, o.tx >= 0 ? o.tx : UART_PIN_NO_CHANGE, o.rx, o.de >= 0 ? o.de : UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) != ESP_OK) { error = "pins"; uart_driver_delete(uart_); return false; }
     if (o.de >= 0 && uart_set_mode(uart_, UART_MODE_RS485_HALF_DUPLEX) != ESP_OK) { error = "driver"; uart_driver_delete(uart_); return false; }
@@ -61,6 +63,7 @@ class HardwarePort final : public Port {
 
   std::size_t read(std::uint8_t* out, std::size_t capacity, unsigned wait_ms) override {
     const int n = uart_read_bytes(uart_, out, capacity, pdMS_TO_TICKS(wait_ms));
+    count_errors();
     return n > 0 ? static_cast<std::size_t>(n) : 0;
   }
 
@@ -72,7 +75,11 @@ class HardwarePort final : public Port {
 
   bool soft() const override { return false; }
   std::uint32_t overruns() const override { return 0; }
-  std::uint32_t framing_errors() const override { return 0; }
+  std::uint32_t framing_errors() const override { return errors_; }
+  bool set_format(bool even_parity, bool two_stop_bits) override {
+    if (uart_set_parity(uart_, even_parity ? UART_PARITY_EVEN : UART_PARITY_DISABLE) != ESP_OK) return false;
+    return uart_set_stop_bits(uart_, two_stop_bits ? UART_STOP_BITS_2 : UART_STOP_BITS_1) == ESP_OK;
+  }
   bool set_line(int baud, bool invert) override {
     if (uart_set_baudrate(uart_, static_cast<std::uint32_t>(baud)) != ESP_OK) return false;
     return uart_set_line_inverse(uart_, invert ? (UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV) : UART_SIGNAL_INV_DISABLE) == ESP_OK;
@@ -80,7 +87,15 @@ class HardwarePort final : public Port {
   void discard() override { uart_flush_input(uart_); }
 
  private:
+  void count_errors() {
+    uart_event_t event{};
+    while (events_ != nullptr && xQueueReceive(events_, &event, 0) == pdTRUE)
+      if (event.type == UART_FRAME_ERR || event.type == UART_PARITY_ERR) ++errors_;
+  }
+
   uart_port_t uart_;
+  QueueHandle_t events_ = nullptr;
+  std::uint32_t errors_ = 0;
 };
 
 // ---- emulated ---------------------------------------------------------------------------------------------------------------------------
@@ -248,6 +263,7 @@ class SoftPort final : public Port {
     heap_caps_free(copy);
     // what came before, and what the transceiver heard of us, is not the answer
     shared_.tail.store(shared_.head.load(std::memory_order_acquire), std::memory_order_release);
+    past_framing_errors_ += receiver_.framing_errors();
     receiver_ = softuart::Receiver(baud_);
     bytes_.clear();
     return done;
@@ -255,7 +271,19 @@ class SoftPort final : public Port {
 
   bool soft() const override { return true; }
   std::uint32_t overruns() const override { return shared_.overruns.load(std::memory_order_relaxed); }
-  std::uint32_t framing_errors() const override { return receiver_.framing_errors(); }
+  std::uint32_t framing_errors() const override { return past_framing_errors_ + receiver_.framing_errors(); }
+  bool set_line(int baud, bool invert) override {
+    if (invert || baud < 1200 || baud > static_cast<int>(softuart::kMaxBaud)) return false;
+    baud_ = static_cast<unsigned>(baud);
+    discard();
+    return true;
+  }
+  void discard() override {
+    shared_.tail.store(shared_.head.load(std::memory_order_acquire), std::memory_order_release);
+    past_framing_errors_ += receiver_.framing_errors();
+    receiver_ = softuart::Receiver(baud_);
+    bytes_.clear();
+  }
 
  private:
   void drain() {
@@ -273,6 +301,7 @@ class SoftPort final : public Port {
   SoftShared shared_;
   softuart::Receiver receiver_;
   unsigned baud_;
+  std::uint32_t past_framing_errors_ = 0;   // of the receivers before the one at work
   std::vector<std::uint8_t> bytes_;
 };
 }  // namespace

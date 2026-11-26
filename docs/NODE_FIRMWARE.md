@@ -100,6 +100,26 @@ Only an administrator can ask the node for it (the dump can hold a serial number
 
 **The capture of the exchanges.** Besides the dump of what one port heard, the *Ports* page can keep the exchanges themselves: with *Keep the last requests and answers in memory* on (setting `capture.enabled`, off by default; `capture.frames`, 8 to 128 entries, 48 by default) the node keeps, in a ring in memory, the last requests it sent to the inverters and batteries and the answers it heard (the pieces of one answer joined, up to 256 bytes an entry; the oldest goes first, and nothing is written to flash). Only the regular polling is kept: the console of a battery, the maintenance jobs and the writes to a battery run on other paths that never reach it, and as a second guard the capture refuses and counts any bytes with the word `login` or `passw` in them. An administrator downloads the entries as a text file (`GET /api/v1/capture/frames`; one `FRAME p<port> tx|rx <hexadecimal>` line each; `GET /api/v1/capture` says what is kept and `POST /api/v1/capture/clear` forgets it) and `python tools/frames_to_fixture.py solar_frames.log tests/fixtures/solar_real.hex` turns it into a fixture of real traffic. It applies at once and is forgotten at a restart.
 
+## Probing a port that says nothing (*Probe this port*)
+
+A diagnosis for equipment from which not one byte comes. An administrator starts it from the *Ports* page, on a port that is on. It sweeps every speed, format and polarity the port can do and, in each, sends every **reading** question the node knows; it also only listens, before sending anything.
+
+**It cannot change anything on the equipment.** The questions are a fixed table (`core/port_probe.hpp`): Voltronic `QPI` and `QPIGS` with and without CRC, the PI18 and PI17 reading words, Modbus functions 03 and 04 for slaves 1 to 10, DALY, JBD, JK and ANT-BMS reading requests, a VE.Direct HEX *get* and the Pylontech console's `pwr`. Every frame is checked a second time before it is written, and the web request carries nothing but the port, start or stop.
+
+| Port | Speeds | Formats | Polarity |
+|---|---|---|---|
+| Emulated (4 to 10 in the direct profile) | 1200 to 19200 | 8N1 | normal |
+| UART (1 to 3), and every port of the multiplexer profile | 1200 to 115200 | 8N1, 8E1, 8N2 | normal and inverted |
+
+On a port set for an inverter (Voltronic, Modbus or VE.Direct) the sweep stops at 19200 baud unless the faster speeds are ticked. The record says which speeds were skipped and why. 8E1 and 8N2 are tried with the port's own polarity and a shorter list of questions. A port with no TX pin only listens.
+
+- **Only that port stops reading.** In the multiplexer profile the other ports of the group take their turns between two steps (the probe is then slower). Afterwards, and after a restart, the port is as its settings say: the probe stores no setting.
+- **Time:** a few minutes; it ends by itself after 8 minutes on the line (20 minutes in all), and can be stopped.
+- **The record** has every step: time, speed, format, polarity, question, bytes sent and received (hexadecimal and ASCII) or *nothing*, framing or parity errors, and a summary. It says when what came back is only what was sent (an echo: a bridge between TX and RX). It is kept in the external memory until the next probe (so the page can be closed), shown while it runs, copied or downloaded as text; the summary also goes to the node's log and survives a restart (not a power cut). One step keeps at most 1 kB of what it received and the whole record 384 kB; what does not fit is counted and said.
+- **From a script** (an administrator's session): `GET /api/v1/ports/probe` for the state, `GET /api/v1/ports/probe/log?from=0` for the record, `POST /api/v1/ports/probe?port=N` with `{"action":"start"}` (add `"speeds":"all"` for the faster ones) or `{"action":"stop"}`.
+
+Tested on a computer with a stand-in line; it has not run on a board or against equipment.
+
 ## Writing to a battery (off by default)
 
 The one-question console above only reads. Changing what a Pylontech battery keeps (its clock, counters, limits, outputs, serial number, firmware) is a separate capability, **off unless the owner

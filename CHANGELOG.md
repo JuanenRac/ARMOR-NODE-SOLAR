@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Probe a port that says nothing:** the *Ports* page has *Probe this port* (administrators): it sweeps the speeds, formats and polarities the port can do (inverter ports up to 19200 baud unless the faster ones are asked for) with every question the node knows that **only reads**, and never sends an order that writes. The record keeps every step with what was sent and received, tells an echo from an answer and from silence, can be watched, stopped, copied, downloaded and read over the API, and its summary survives a restart. Only that port stops reading and goes back to its settings. See `docs/NODE_FIRMWARE.md`. Tested on a computer; not tried on a board.
+- **Framing and parity errors of the hardware UARTs are counted** (they were always shown as 0).
 - **PI17 inverters are read** (InfiniSolar 5 kW, LV 6K, WP and TWIN): a new inverter protocol, `pi17`, asks `^P003GS`, `^P003PS`, `^P004MOD` and `^P003WS` (no CRC) and reads status, powers, mode and warnings; *Automatic* tries it after PI18.
 - **PI16 hybrids are read by the `pi00` protocol:** the dashes of the values a model does not have, its status field and its warning flags.
 - **PIP-GK, PIP-MK and MAX answers are no longer refused:** the modes `C`, `Y` and `E`, and the two fault code digits among the warning flags.

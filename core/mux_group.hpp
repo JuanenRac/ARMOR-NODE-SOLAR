@@ -29,6 +29,9 @@ class MuxLine {
   virtual void discard() = 0;                              // drop what the UART holds
   virtual std::size_t read(std::uint8_t* out, std::size_t capacity, unsigned wait_ms) = 0;   // waits up to `wait_ms` for bytes; 0 when none came
   virtual bool write(const std::uint8_t* data, std::size_t length) = 0;                       // false when they could not be sent
+  // For the probe of a port (core/port_probe.hpp): even parity or two stop bits (a line that cannot says no), and the errors heard so far.
+  virtual bool set_format(bool even_parity, bool two_stop_bits) { return !even_parity && !two_stop_bits; }
+  virtual std::uint32_t framing_errors() { return 0; }
 };
 
 struct MuxClock {
@@ -65,7 +68,11 @@ class MuxGroup {
   static constexpr std::uint64_t kListenEveryMs = 6'000;   // and how often it gets one
   static constexpr std::size_t kNone = static_cast<std::size_t>(-1);
 
-  explicit MuxGroup(std::vector<MuxMember> members) : members_(std::move(members)), next_listen_(members_.size(), 0) {}
+  explicit MuxGroup(std::vector<MuxMember> members) : members_(std::move(members)), next_listen_(members_.size(), 0), paused_(members_.size(), false) {}
+
+  // A paused member gets no more turns (its port is being probed); the others go on. A turn already under way is finished.
+  void set_paused(std::size_t member, bool paused) { if (member < paused_.size()) paused_[member] = paused; }
+  Poller& poller(std::size_t member) { return *members_[member].poller; }
 
   // One step: gives the line to a port if none has it, lets the port with the line run one round of its exchange, and says what came of it. `wait_ms` is how long to wait for bytes.
   MuxTurn step(MuxLine& line, const MuxClock& clock, unsigned wait_ms = 20) {
@@ -125,6 +132,7 @@ class MuxGroup {
     const std::size_t count = members_.size();
     for (std::size_t k = 1; k <= count; ++k) {
       const std::size_t i = (last_ + k) % count;
+      if (paused_[i]) continue;
       const Poller& poller = *members_[i].poller;
       if (poller.kind() == config::Kind::kRaw) { if (now >= next_listen_[i]) return i; continue; }
       if (poller.busy() || poller.due(now)) return i;
@@ -155,6 +163,7 @@ class MuxGroup {
 
   std::vector<MuxMember> members_;
   std::vector<std::uint64_t> next_listen_;
+  std::vector<bool> paused_;
   std::size_t current_ = kNone, last_ = 0;
   std::uint64_t turn_started_ms_ = 0;
   bool got_reading_ = false;

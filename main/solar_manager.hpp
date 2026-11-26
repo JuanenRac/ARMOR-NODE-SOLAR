@@ -11,6 +11,7 @@
 
 #include "core/battery_ops.hpp"
 #include "core/battery_runner.hpp"
+#include "core/port_probe.hpp"
 #include "core/solar_config.hpp"
 
 namespace armor::manager {
@@ -54,7 +55,7 @@ struct PortStatus {
   int group = -1;             // the mux profile: the group of ports this one belongs to (0 to 2: A, B, C), or -1 when the port has pins of its own
   int channel = 0;            // ... and its channel on the group's multiplexer
   bool invert = false;        // the port's line is flipped
-  std::string state;          // disabled, starting, error, waiting, reporting, silent, garbled, listening
+  std::string state;          // disabled, starting, error, waiting, reporting, silent, garbled, listening, probing
   std::string error;          // why the port did not open, or the last error of an exchange
   std::string detail;   // what the equipment said besides the readings (an ANT-BMS: the protocol and its MOSFET codes)
   std::uint32_t bytes_rx = 0, bytes_tx = 0, replies_ok = 0, replies_bad = 0, timeouts = 0, readings = 0, overruns = 0, framing_errors = 0;
@@ -84,6 +85,26 @@ struct ConsoleStatus {
 };
 std::string start_console(std::size_t index, const std::string& command);
 ConsoleStatus console_status(std::size_t index);
+
+// The probe of a port (core/port_probe.hpp), a diagnosis launched by hand: every speed, format and polarity the port can do with every READING question the node knows, and a record of
+// all of it. One at a time on the node, run by the port's own task: that port's readings wait, the others go on, and the port is set back as it was when it ends (a restart sets it back too,
+// nothing of it is stored in the settings). The record stays in the external memory until the next probe; its summary also survives a restart (not a power cut).
+struct ProbeStatus {
+  int port = 0;                      // 1 to 10; 0: no probe since the node started
+  bool fast = false;                 // the faster speeds were asked for
+  solar::probe::Progress progress;
+  std::uint64_t elapsed_ms = 0;
+  std::size_t log_size = 0;
+  bool truncated = false;
+  std::string previous;              // the summary left by the last probe before the node restarted ("" when none)
+};
+// Returns "" when it started, or why not: no_port, port_off, busy, no_memory.
+std::string start_probe(std::size_t index, bool fast);
+// False when none is running.
+bool stop_probe();
+ProbeStatus probe_status();
+// Copies up to `capacity` bytes of the record from `from`; returns how many (0 at the end).
+std::size_t probe_log_read(std::size_t from, char* out, std::size_t capacity);
 
 // The last bytes a port received, as hexadecimal lines with the printable characters beside them.
 std::string raw_dump(std::size_t index);

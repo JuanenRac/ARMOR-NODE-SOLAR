@@ -287,7 +287,7 @@ function formatUptime(seconds) {
 const reasonText = code => (L["reason" + code.charAt(0).toUpperCase() + code.slice(1)] ? t("reason" + code.charAt(0).toUpperCase() + code.slice(1)) : t("reasonOther"));
 
 function psPill(state) {
-  const ok = state === "reporting" || state === "listening", plain = state === "disabled" || state === "starting" || state === "waiting", warn = state === "silent" || state === "garbled";
+  const ok = state === "reporting" || state === "listening", plain = state === "disabled" || state === "starting" || state === "waiting", warn = state === "silent" || state === "garbled" || state === "probing";
   return el("span", { class: "pill " + (ok ? "ok" : plain ? "" : warn ? "warn" : "bad") }, t("ps_" + state));
 }
 const portErrorText = s => (s.state === "error" && L["pe_" + s.error] ? t("pe_" + s.error) : s.error && L["le_" + s.error] ? t("le_" + s.error) : s.error || "");
@@ -578,6 +578,103 @@ function boardCard() {
       el("p", { class: "hint" }, t("ledsHint"))] : null);
 }
 
+// ---- the probe of a port: a diagnosis that only sends reading questions (core/port_probe.hpp) ----
+// The node runs it and keeps its record, so it goes on when this page is closed; the page asks how it goes and adds the new lines of the record.
+const probeState = () => (S.probe = S.probe || { status: null, log: "", asked: false, timer: null, all: false, error: "", port: -1 });
+
+async function refreshProbe() {
+  const p = probeState();
+  clearTimeout(p.timer);
+  const r = await api("GET", "ports/probe");
+  if (!r.ok) { p.error = r.data.error || "error"; render(); return; }
+  const before = p.status ? p.status.port + p.status.state : "";
+  p.status = r.data;
+  if (r.data.port) {
+    if ((r.data.log_size || 0) < p.log.length) p.log = "";
+    try {
+      const piece = await fetch("api/v1/ports/probe/log?from=" + p.log.length, { credentials: "same-origin" });
+      if (piece.ok) p.log += await piece.text();
+    } catch (error) { /* the next round asks again */ }
+  }
+  if (before !== r.data.port + r.data.state) render();
+  else patchProbe();
+  if (r.data.state === "running" && S.page === "ports") p.timer = setTimeout(refreshProbe, 1500);
+}
+
+async function startProbe(index) {
+  const p = probeState();
+  p.log = ""; p.error = ""; p.port = index + 1; p.status = null;
+  const r = await api("POST", "ports/probe?port=" + (index + 1), { action: "start", speeds: p.all ? "all" : "" });
+  if (!r.ok) p.error = r.data.error || "error";
+  await refreshProbe();
+  render();
+}
+
+async function stopProbe() {
+  await api("POST", "ports/probe", { action: "stop" });
+  setTimeout(refreshProbe, 500);
+}
+
+const probeWhere = f => f.baud + " " + f.format + (f.inverted ? " " + t("probeInverted") : "");
+
+// What the probe says, in the panel's language.
+function probeVerdict(s) {
+  if (!s || !s.port) return [];
+  const lines = [];
+  if (s.state === "running") lines.push(t("probeRunning", s.step, s.total, probeWhere(s), s.query));
+  if (s.state === "stopped") lines.push(t("probeStopped", s.step, s.total));
+  if (s.state === "time_limit") lines.push(t("probeTimeLimit", s.step, s.total));
+  (s.found || []).forEach(f => lines.push(t("probeAnswered", f.query, probeWhere(f), f.protocol)));
+  if (s.state !== "running" && !(s.found || []).length) lines.push(t(s.verdict === "bytes" ? "probeBytes" : s.verdict === "echo" ? "probeEcho" : "probeSilent", s.combinations));
+  lines.push(t("probeCounts", s.sent, s.rx_bytes, s.framing_errors, s.elapsed_s));
+  if (s.truncated) lines.push(t("probeTruncated"));
+  return lines;
+}
+
+const probeReport = () => probeVerdict(probeState().status).join("\n") + "\n\n" + probeState().log;
+const probeShown = () => probeState().log.slice(-30000);
+
+function patchProbe() {
+  const p = probeState();
+  const lines = document.getElementById("probe-verdict");
+  if (lines) lines.textContent = probeVerdict(p.status).join("\n");
+  const box = document.getElementById("probe-log");
+  if (box) {
+    const bottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    box.textContent = probeShown();
+    if (bottom) box.scrollTop = box.scrollHeight;
+  }
+}
+
+function downloadProbe(port) {
+  const blob = new Blob([probeReport()], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "port-" + port + "-probe.txt";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function probeView(index) {
+  const p = probeState(), s = p.status, number = index + 1, cfg = S.cfg.ports[index];
+  const mine = s && s.port === number, running = s && s.state === "running";
+  const faster = (S.cfg.profile === "mux" || index < 3) && ["voltronic", "modbus", "vedirect"].includes(cfg.kind);
+  return el("div", { class: "probe" }, el("h3", {}, t("probeTitle")), el("p", { class: "hint" }, t("probeHint")),
+    faster ? el("label", { class: "check" }, el("input", { type: "checkbox", checked: p.all, disabled: running, onchange: e => { p.all = e.target.checked; } }), " " + t("probeAllSpeeds")) : null,
+    el("div", { class: "actions" },
+      el("button", { class: "b probe-start", disabled: !isAdmin() || running, onclick: () => startProbe(index) }, t("probeStart")),
+      mine && running ? el("button", { class: "b danger probe-stop", onclick: stopProbe }, t("probeStop")) : null,
+      mine && p.log ? el("button", { class: "b", onclick: e => copyText(probeReport(), e.currentTarget) }, t("probeCopy")) : null,
+      mine && p.log ? el("button", { class: "b", onclick: () => downloadProbe(number) }, t("downloadRaw")) : null),
+    running && !mine ? el("p", { class: "muted" }, t("probeElsewhere", s.port)) : null,
+    p.error && p.port === number ? el("p", { class: "err" }, errorText(p.error === "busy" ? "probe_busy" : p.error)) : null,
+    mine ? el("pre", { class: "log probe-verdict", id: "probe-verdict" }, probeVerdict(s).join("\n")) : null,
+    mine ? el("pre", { class: "log", id: "probe-log" }, probeShown()) : null,
+    s && !s.port && s.previous && s.previous.startsWith("\nSUMMARY (port " + number + ",") ? [el("p", { class: "muted" }, t("probePrevious")), el("pre", { class: "log" }, s.previous.trim())] : null);
+}
+
 // ---- asking a battery's console one question that only reads ----
 const CONSOLE_COMMANDS = [["pwrsys", false], ["pwr", false], ["help", false], ["bat", true], ["info", true], ["stat", true], ["soh", true], ["data", true]];
 async function askConsole(index) {
@@ -655,6 +752,7 @@ function portCard(index) {
         cfg.kind === "ant" ? el("button", { class: "b", disabled: !isAdmin() || (S.bms && S.bms.port === index && S.bms.state === "running"), onclick: () => readBmsSettings(index) }, t("antRead")) : null) : null,
       cfg.kind === "ant" ? bmsSettingsView(index) : null,
       cfg.kind === "pylontech" && st.enabled ? consoleView(index) : null,
+      st.enabled && isAdmin() ? probeView(index) : null,
       S.rawOpen === index ? el("pre", { class: "log", id: "port-raw" }, S.raw || t("rawEmpty")) : null] : null);
 }
 
@@ -1150,7 +1248,13 @@ async function poll() {
   S.polling = true;
   try { await refreshLive(); } finally { S.polling = false; }
   if (S.page === "overview" || (S.page === "readings" && S.readingsDrawn !== readingsSignature())) render(false);
-  else if (S.page === "ports") { patchLive(); await refreshRaw(); }
+  else if (S.page === "ports") {
+    patchLive();
+    await refreshRaw();
+    // a probe started before this page was opened (or by somebody else) is picked up here
+    const p = probeState();
+    if (isAdmin() && (!p.asked || (p.status && p.status.state === "running"))) { p.asked = true; await refreshProbe(); }
+  }
   else if (S.page === "update") await refreshLog();
   updatePills();
 }

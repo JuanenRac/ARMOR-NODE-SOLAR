@@ -100,6 +100,7 @@ const ports = () => config.ports.map((p, i) => {
 });
 let antRead = null;
 let consoleAsked = null;
+let probing = null;
 const antSettings = { model: "16ZM", version: "16ZMUB00-211026A", asked: 57, answered: 57, missing: 0, settings: [["CellOvervoltageProtection", 3.65, "V"], ["CellOvervoltageRecovery", 3.6, "V"], ["PackOvervoltageProtection", 58.4, "V"], ["CellUndervoltageProtection", 2.5, "V"], ["CellUndervoltageRecovery", 2.8, "V"], ["CellVoltageDifferenceProtection", 0.5, "V"], ["ChargeOvercurrentProtection", 150, "A"], ["DischargeOvercurrentProtection", 200, "A"], ["ShortCircuitProtection", 800, "A"], ["SOCLowLevel1Warning", 20, "%"], ["CellBalancingStartVoltage", 3.4, "V"], ["CellNumber", 16, "S"], ["NominalCapacity", 280, "Ah"], ["RemainingCapacity", 252.6, "Ah"], ["TotalCycleCapacity", 4862.65, "Ah"]].map(([name, value, unit], i) => ({ address: i * 2, name, value, unit })) };
 const rawText = "48 65 6C 6C 6F 2C 20 69 6E 76 65 72 74 65 72 0D  |Hello, inverter.|\n0A                                               |.|\n";
 
@@ -214,6 +215,30 @@ const server = createServer(async (request, response) => {
     if (!antRead || antRead.port !== number) return json(response, 200, { port: number, state: "idle", error: "", step: 0, total: 0 });
     if (steps < 57) return json(response, 200, { port: number, state: "running", error: "", step: steps, total: 57 });
     return json(response, 200, { port: number, state: "done", error: "", step: 57, total: 57, result: antSettings });
+  }
+  if (route === "ports/probe" || route === "ports/probe/log") {
+    if (!needAdmin()) return;
+    // a probe that takes a few seconds and finds an answer at 2400 baud, so that the page has something to show
+    const total = 190, running = probing && !probing.stopped && Date.now() - probing.at < 6000;
+    const step = !probing ? 0 : probing.stopped ?? Math.min(total, Math.floor((Date.now() - probing.at) / 6000 * total));
+    if (method === "POST") {
+      if (body.action === "stop") {
+        if (!running) return json(response, 409, { error: "not_running" });
+        probing.stopped = step;
+        return json(response, 202, { ok: true });
+      }
+      const number = Number(url.searchParams.get("port"));
+      if (body.action !== "start") return json(response, 422, { error: "invalid" });
+      if (!config.ports[number - 1]?.enabled) return json(response, 422, { error: "port_off" });
+      if (running) return json(response, 409, { error: "busy" });
+      probing = { port: number, at: Date.now() };
+      return json(response, 202, { ok: true });
+    }
+    const text = !probing ? "" : `A.R.M.O.R. solar node - serial port probe\nport ${probing.port} (sample data)\n\n` + Array.from({ length: Math.min(step, 12) }, (_, i) => `#${i + 1} +${i}.000s  2400 8N1 normal  Voltronic QPI with CRC (PI30)\n    sent 6 bytes:\n      51 50 49 BE AC 0D  |QPI...|\n    received: nothing\n`).join("");
+    if (route === "ports/probe/log") { response.writeHead(200, { "Content-Type": "text/plain" }); return response.end(text.slice(Number(url.searchParams.get("from") || 0))); }
+    if (!probing) return json(response, 200, { port: 0, state: "idle", previous: "" });
+    const state = probing.stopped !== undefined ? "stopped" : running ? "running" : "done", answered = step > 100;
+    return json(response, 200, { port: probing.port, state, previous: "", step, total, combinations: Math.min(5, 1 + Math.floor(step / 37)), sent: Math.max(0, step - 5), rx_bytes: answered ? 7 : 0, framing_errors: 0, answers: answered ? 1 : 0, unknown: 0, echoes: 0, verdict: answered ? "answered" : "silent", baud: 2400, format: "8N1", inverted: false, query: "Voltronic QPIGS with CRC (PI30)", fast: false, elapsed_s: Math.floor((Date.now() - probing.at) / 1000), log_size: text.length, truncated: false, found: answered ? [{ query: "Voltronic QPI with CRC (PI30)", protocol: "Voltronic", baud: 2400, format: "8N1", inverted: false }] : [] });
   }
   if (method === "GET" && route === "ports/raw") return json(response, 200, { port: Number(url.searchParams.get("port")), text: rawText });
   if (method === "GET" && route === "capture") { if (!needAdmin()) return; return json(response, 200, { enabled: config.capture.enabled, capacity: config.capture.enabled ? config.capture.frames : 0, stored: 0, dropped: 0, refused: 0 }); }

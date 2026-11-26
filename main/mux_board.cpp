@@ -30,6 +30,8 @@ class Board final : public solar::MuxLine {
   void discard() override { port_->discard(); }
   std::size_t read(std::uint8_t* out, std::size_t capacity, unsigned wait_ms) override { return port_->read(out, capacity, wait_ms); }
   bool write(const std::uint8_t* data, std::size_t length) override { return port_->write(data, length); }
+  bool set_format(bool even_parity, bool two_stop_bits) override { return port_->set_format(even_parity, two_stop_bits); }
+  std::uint32_t framing_errors() override { return port_->framing_errors(); }
 
  private:
   std::unique_ptr<ports::Port> port_;
