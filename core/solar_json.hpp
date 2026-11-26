@@ -108,8 +108,9 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
   if (s.modules > 0 && !s.model.empty()) w.field("model", s.model);
   if (s.modules > 0) {
     w.field("state", s.state).key("voltage_v").number(s.voltage_v, 2).key("current_a").number(s.current_a, 2);
-    w.key("temperature_min_c").number(s.temperature_min_c, 1).key("temperature_max_c").number(s.temperature_max_c, 1);
-    w.key("cell_min_v").number(s.cell_low_v, 3).key("cell_max_v").number(s.cell_high_v, 3);
+    // a value the equipment does not give is left out: a zero would read as a measurement
+    if (s.has_temperature) w.key("temperature_min_c").number(s.temperature_min_c, 1).key("temperature_max_c").number(s.temperature_max_c, 1);
+    if (s.cell_high_v > 0) w.key("cell_min_v").number(s.cell_low_v, 3).key("cell_max_v").number(s.cell_high_v, 3);
     if (s.soc_percent >= 0) w.field("soc_percent", s.soc_percent);   // left out when unknown: the contract has no nulls
     w.field("alarm", s.alarm);
     if (s.capacity_ah >= 0) w.key("capacity_ah").number(s.capacity_ah, 2);
@@ -127,7 +128,8 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
     w.begin_object().field("n", m.number).field("present", m.present);
     if (m.present) {
       if (!m.model.empty()) w.field("model", m.model);
-      w.key("voltage_v").number(m.voltage_v, 3).key("current_a").number(m.current_a, 3).key("temperature_c").number(m.temperature_c, 1);
+      w.key("voltage_v").number(m.voltage_v, 3).key("current_a").number(m.current_a, 3);
+      if (m.has_temperature) w.key("temperature_c").number(m.temperature_c, 1);
       if (m.soc_percent >= 0) w.field("soc_percent", m.soc_percent);
       w.field("state", m.base_state);
       if (m.capacity_ah >= 0) w.key("capacity_ah").number(m.capacity_ah, 2);

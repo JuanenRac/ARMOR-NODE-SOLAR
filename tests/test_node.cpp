@@ -90,7 +90,7 @@ static void test_ports() {
   CHECK(has(config::validate(s), "ports.5.tx", "required"));            // a port that asks needs a way to ask
   s.ports[5].tx = 14; s.ports[5].rx = -1;
   CHECK(has(config::validate(s), "ports.5.rx", "required"));
-  s.ports[5].rx = 13; s.ports[4].kind = "modbus";
+  s.ports[5].rx = 13; s.ports[4].kind = "canbus";
   CHECK(has(config::validate(s), "ports.4.kind", "invalid"));
   s.ports[4].kind = "raw"; s.ports[4].poll_s = 1;
   CHECK(has(config::validate(s), "ports.4.poll_s", "range"));
@@ -364,8 +364,11 @@ static void test_voltronic_faults() {
   Bench partial(config::Kind::kVoltronic, 5);
   partial.answers["QPIGS"] = reply(kQpigs);
   partial.answers["QMOD"] = reply("B");
-  partial.run(20000);
-  CHECK(partial.messages.empty() && partial.poller.stats().timeouts >= 2);
+  partial.run(9000);
+  CHECK(partial.messages.empty() && partial.poller.stats().timeouts >= 1);
+  // ... but an inverter that never answers it is not left unread for ever: from the third try the reading goes out, saying the warnings are unknown
+  partial.run(40000);
+  CHECK(!partial.messages.empty() && partial.messages.front().find("\"warnings_known\":false") != std::string::npos);
   // an answer that is not the reading of that command
   Bench odd(config::Kind::kVoltronic, 5);
   odd.answers["QPIGS"] = reply("hello");

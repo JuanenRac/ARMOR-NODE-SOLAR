@@ -114,6 +114,7 @@ class SystemSummary {
       };
       if (k.soc_percent >= 0) decide("soc_low", k.soc_percent <= settings_.soc_low_percent, k.soc_percent >= settings_.soc_low_percent + kSocMarginPercent);
       if (k.cell_high_v > 0) decide("cell_over_voltage", cell_mv >= settings_.cell_over_mv, cell_mv <= settings_.cell_over_mv - kCellMarginMv);
+      if (!k.has_temperature) continue;
       decide("temperature_high", k.temperature_max_c >= settings_.temperature_high_c, k.temperature_max_c <= settings_.temperature_high_c - kTemperatureMarginC);
       decide("temperature_low", k.temperature_min_c <= settings_.temperature_low_c, k.temperature_min_c >= settings_.temperature_low_c + kTemperatureMarginC);
     }

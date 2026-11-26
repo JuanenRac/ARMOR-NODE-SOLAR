@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **An inverter that answers `QPIGS` is no longer left unread:** a unit that never answers `QMOD` or `QPIWS` (silence, `NAK` or a reply that cannot be read) was never published at all; from the third try the reading goes out with the mode `unknown` or `warnings_known` false. A warning list longer than the documented 36 flags is accepted. Tried on a computer only.
+- **The raw view of a port says why nothing is read:** it starts with the last question and its bytes, the bytes sent and heard, the answers, refusals and silences, and the last error. The hint of a silent inverter port and the wiring notes now give the level converter and the inverter's own pinout (not the one of the Pylontech sockets).
+- **More equipment can be read, listed in one catalogue of protocols:** new port types for Modbus inverters and chargers (EASun SMG II, SRNE), DALY, JBD and JK battery boards and Victron VE.Direct, and the PI41 and PI34 variants of the Voltronic type. Written from the public documents and tried on a computer; none has been tried on real equipment. A temperature or a cell range the equipment does not give is left out of the message instead of being sent as zero.
 - **The contracts it says it was checked against are 0.8.1.6:** the version that the node reports as the one of the contracts follows the pin of the shared repository after its latest green run of the reverse dependencies.
 
 - **The screenshots of the README can be taken on a GitHub runner:** the manual workflow `screenshots.yml` (started by hand only, read-only token, no secrets) starts the stand-in of the node, takes the pages of the web panel with the Chromium of Playwright and keeps the pictures as an artifact; `ARMOR_SHOTS_CHANNEL=chromium` makes the script take that Chromium; `docs/SCREENSHOTS.md` says how to start it and use them.

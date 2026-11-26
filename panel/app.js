@@ -462,7 +462,7 @@ function brokerPage() {
 
 // ---- the serial ports and the readings ------------------------------------------------------------------------------------------------
 
-const KINDS = [["voltronic", "kind_voltronic", 2400], ["pylontech", "kind_pylontech", 115200], ["ant", "kind_ant", 19200], ["raw", "kind_raw", 9600]];
+const KINDS = [["voltronic", "kind_voltronic", 2400], ["pylontech", "kind_pylontech", 115200], ["ant", "kind_ant", 19200], ["modbus", "kind_modbus", 9600], ["daly", "kind_daly", 9600], ["jbd", "kind_jbd", 9600], ["jk", "kind_jk", 115200], ["vedirect", "kind_vedirect", 19200], ["raw", "kind_raw", 9600]];
 const kindOf = id => KINDS.find(k => k[0] === id) || KINDS[0];
 const HARDWARE_BAUDS = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800], SOFT_BAUDS = [1200, 2400, 4800, 9600, 19200];
 const portStatus = index => S.ports.find(p => p.port === index + 1) || { state: "disabled" };
@@ -614,7 +614,7 @@ function pairMismatch(index) {
   if (S.cfg.profile !== "mux" || index > 7) return 0;
   const other = index ^ 1, a = S.cfg.ports[index], b = S.cfg.ports[other];
   if (!a || !b || !a.enabled || !b.enabled) return 0;
-  const ttl = p => p.kind === "ant", rs232 = p => p.kind === "pylontech" || p.kind === "voltronic";
+  const ttl = p => p.kind === "ant" || p.kind === "daly" || p.kind === "jbd", rs232 = p => p.kind === "pylontech" || p.kind === "voltronic" || p.kind === "modbus";
   return (ttl(a) && rs232(b)) || (rs232(a) && ttl(b)) ? other + 1 : 0;
 }
 
@@ -622,7 +622,7 @@ function portCard(index) {
   const mux = S.cfg.profile === "mux", slot = mux ? muxSlotOf(index) : null;
   const cfg = S.cfg.ports[index], base = "ports." + index + ".", soft = !mux && index >= 3, st = portStatus(index), kind = kindOf(cfg.kind);
   const bauds = soft ? SOFT_BAUDS : HARDWARE_BAUDS;
-  const kindChanged = value => { if (!cfg.name || /^port\d$/.test(cfg.name)) setValue(base + "name", (value === "voltronic" ? "inverter" : value === "pylontech" || value === "ant" ? "battery" : "monitor") + "-" + (index + 1)); };
+  const kindChanged = value => { if (!cfg.name || /^port\d$/.test(cfg.name)) setValue(base + "name", (value === "voltronic" || value === "modbus" ? "inverter" : value === "raw" ? "monitor" : value === "vedirect" ? "victron" : "battery") + "-" + (index + 1)); };
   return el("section", { class: "card" }, el("h2", {}, t("portN", index + 1), " · " + (mux ? t("portGroup", "ABC"[slot.group], slot.channel + 1) : t(soft ? "portEmulated" : "portHardware")), cfg.enabled ? " · " + t(kind[1]).split(" (")[0] : ""),
     field("portEnabled", base + "enabled", { type: "checkbox", rerender: true }),
     cfg.enabled && pairMismatch(index) ? note(t("pairMismatch", index + 1, pairMismatch(index)), "") : null,
@@ -635,7 +635,9 @@ function portCard(index) {
         cfg.kind === "raw" ? null : field("pollSeconds", base + "poll_s", { type: "number", min: 0, max: 3600, hint: t("pollHint") }),
         cfg.kind === "pylontech" ? field("modulesLabel", base + "modules", { type: "number", min: 0, max: 16, hint: t("modulesHint") }) : null,
         cfg.kind === "pylontech" ? field("cellsLabel", base + "cells_per_cycle", { type: "number", min: 0, max: 8, hint: t("cellsHint") }) : null,
-        cfg.kind === "voltronic" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["pi30", t("dialectPi30")], ["revo", t("dialectRevo")], ["pi18", t("dialectPi18")]], hint: t("dialectHint") }) : null,
+        cfg.kind === "voltronic" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["pi30", t("dialectPi30")], ["revo", t("dialectRevo")], ["pi18", t("dialectPi18")], ["pi41", "PI41 (LV5048)"], ["pi34", "PI34 (MPPT)"]], hint: t("dialectHint") }) : null,
+        cfg.kind === "modbus" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["smg2", "Easun / ISolar SMG II"], ["srne-hybrid", "SRNE hybrid"], ["srne-mppt", "SRNE MPPT"]], hint: t("modbusHint") }) : null,
+        cfg.kind === "vedirect" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["monitor", "BMV / SmartShunt"], ["mppt", "SmartSolar MPPT"]], hint: t("vedirectHint") }) : null,
         cfg.kind === "voltronic" && (cfg.dialect === "auto" || cfg.dialect === "pi30") ? field("parallelLabel", base + "parallel", { type: "number", min: 0, max: 10, hint: t("parallelHint") }) : null),
       cfg.kind === "voltronic" && (cfg.dialect === "auto" || cfg.dialect === "pi30") ? [field("pv2Label", base + "pv2", { type: "checkbox" }), el("p", { class: "hint" }, t("pv2Hint"))] : null,
       mux ? [field("invertLabel", base + "invert", { type: "checkbox" }), el("p", { class: "hint" }, t("invertHint"))]
@@ -646,7 +648,7 @@ function portCard(index) {
       st.enabled ? el("div", { class: "actions" }, psPill(st.state), el("span", { class: "muted", id: "port-live-" + index }, portLiveText(st))) : null,
       st.enabled && st.detail ? el("p", { class: "muted" }, t("portDetail") + ": " + st.detail) : null,
       st.enabled && (st.error || st.state === "error") ? el("p", { class: "err" }, portErrorText(st)) : null,
-      st.state === "silent" || st.state === "garbled" || st.state === "waiting" ? el("p", { class: "hint" }, t(st.state === "silent" && cfg.kind === "pylontech" ? "hint_silent_pylontech" : "hint_" + st.state)) : null,
+      st.state === "silent" || st.state === "garbled" || st.state === "waiting" ? el("p", { class: "hint" }, t(st.state === "silent" && cfg.kind === "pylontech" ? "hint_silent_pylontech" : st.state === "silent" && cfg.kind === "voltronic" ? "hint_silent_inverter" : "hint_" + st.state)) : null,
       st.enabled ? el("div", { class: "actions" }, el("button", { class: "b", onclick: () => showRaw(index) }, t(S.rawOpen === index ? "hideRaw" : "showRaw")),
         S.rawOpen === index && isAdmin() ? el("button", { class: "b", onclick: () => downloadRaw(index) }, t("downloadRaw")) : null,
         cfg.kind === "ant" ? el("button", { class: "b", disabled: !isAdmin() || (S.bms && S.bms.port === index && S.bms.state === "running"), onclick: () => readBmsSettings(index) }, t("antRead")) : null) : null,

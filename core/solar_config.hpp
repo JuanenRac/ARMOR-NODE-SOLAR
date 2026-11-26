@@ -97,7 +97,7 @@ struct Mqtt {
 };
 
 // What a port reads.
-enum class Kind { kVoltronic, kPylontech, kAnt, kRaw };
+enum class Kind { kVoltronic, kPylontech, kAnt, kRaw, kModbus, kDaly, kJbd, kJk, kVedirect };   // the protocols of each: core/solar_protocols.hpp
 struct KindInfo {
   Kind kind;
   const char* id;
@@ -111,6 +111,11 @@ constexpr KindInfo kKinds[] = {
     {Kind::kPylontech, "pylontech", 115200, 10, true, true},
     {Kind::kAnt, "ant", 19200, 5, true, true},
     {Kind::kRaw, "raw", 9600, 0, false, false},
+    {Kind::kModbus, "modbus", 9600, 5, true, true},
+    {Kind::kDaly, "daly", 9600, 10, true, true},
+    {Kind::kJbd, "jbd", 9600, 10, true, true},
+    {Kind::kJk, "jk", 115200, 10, true, true},
+    {Kind::kVedirect, "vedirect", 19200, 3, false, true},
 };
 inline bool kind_from_text(std::string_view text, Kind& out) {
   for (const KindInfo& info : kKinds) if (text == info.id) { out = info.kind; return true; }
@@ -131,7 +136,7 @@ struct PortConfig {
   int de = -1;        // an RS485 transceiver's driver-enable (and receiver-enable) pin, high while sending; -1: RS232 or none
   int poll_s = 0;     // seconds between two readings; 0: the kind's own
   int modules = 0;    // Pylontech: how many modules to ask cell by cell (0: all that answer, up to 8)
-  std::string dialect = "auto";   // inverter: "auto" (looks for it), "pi30", "revo" or "pi18"; the other kinds ignore it
+  std::string dialect = "auto";   // inverter: "auto" (looks for it), "pi30", "revo", "pi18", "pi41" or "pi34"; modbus: "smg2", "srne-hybrid", "srne-mppt"; vedirect: "monitor", "mppt"
   bool invert = false;            // the signals of the line arrive upside down (a device with TTL levels wired through a MAX3232 does): the UART flips them
   int cells_per_cycle = 0;        // Pylontech: the cells of this many modules per cycle, in rotation (0: every module every cycle); the others keep their last cells
   bool pv2 = false;               // inverter (standard dialect): also ask the second PV input (QPIGS2)
@@ -279,6 +284,18 @@ inline std::size_t mux_port_count(const std::array<MuxGroup, kMuxGroups>& groups
   std::size_t n = 0;
   for (const MuxGroup& g : groups) n += g.channels >= 1 && g.channels <= 4 ? static_cast<std::size_t>(g.channels) : 0;
   return n;
+}
+
+// The variants of the protocol a kind of equipment can be set to; "auto" is the kind's usual one. The kinds with a single protocol ignore the setting.
+inline bool valid_dialect(Kind kind, const std::string& dialect) {
+  const auto among = [&dialect](std::initializer_list<const char*> names) {
+    for (const char* name : names) if (dialect == name) return true;
+    return false;
+  };
+  if (kind == Kind::kVoltronic) return among({"auto", "pi30", "revo", "pi18", "pi41", "pi34"});
+  if (kind == Kind::kModbus) return among({"auto", "smg2", "srne-hybrid", "srne-mppt"});
+  if (kind == Kind::kVedirect) return among({"auto", "monitor", "mppt"});
+  return true;
 }
 
 inline int effective_baud(const PortConfig& port) {
@@ -499,7 +516,7 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
       read_int(item, "de", port.de, -1, board::kLastGpio, base + "de", problems);
       read_int(item, "poll_s", port.poll_s, 0, 3600, base + "poll_s", problems);
       read_int(item, "modules", port.modules, 0, 16, base + "modules", problems);
-      read_text(item, "dialect", port.dialect, 8, base + "dialect", problems);
+      read_text(item, "dialect", port.dialect, 12, base + "dialect", problems);
       read_bool(item, "invert", port.invert, base + "invert", problems);
       read_int(item, "cells_per_cycle", port.cells_per_cycle, 0, 8, base + "cells_per_cycle", problems);
       read_bool(item, "pv2", port.pv2, base + "pv2", problems);
@@ -761,11 +778,11 @@ inline Problems validate(const Settings& s) {
     if (mux && i >= mux_ports) { bad(problems, base + "enabled", "not_in_profile"); continue; }
     if (port.invert && !mux && is_soft_port(i)) bad(problems, base + "invert", "invalid");
     if (port.cells_per_cycle < 0 || port.cells_per_cycle > 8) bad(problems, base + "cells_per_cycle", "range");
-    if ((port.pv2 || port.parallel != 0) && (port.kind != "voltronic" || port.dialect == "revo" || port.dialect == "pi18")) bad(problems, port.pv2 ? base + "pv2" : base + "parallel", "invalid");   // only the standard dialect has QPIGS2 and QPGS
+    if ((port.pv2 || port.parallel != 0) && (port.kind != "voltronic" || (port.dialect != "auto" && port.dialect != "pi30"))) bad(problems, port.pv2 ? base + "pv2" : base + "parallel", "invalid");   // only the standard dialect has QPIGS2 and QPGS
     Kind kind = Kind::kVoltronic;
     const bool kind_ok = kind_from_text(port.kind, kind);
     if (!kind_ok) bad(problems, base + "kind", "invalid");
-    if (kind_ok && kind == Kind::kVoltronic && port.dialect != "auto" && port.dialect != "pi30" && port.dialect != "revo" && port.dialect != "pi18") bad(problems, base + "dialect", "invalid");
+    if (kind_ok && !valid_dialect(kind, port.dialect)) bad(problems, base + "dialect", "invalid");
     if (!valid_device_name(port.name)) bad(problems, base + "name", port.name.empty() ? "required" : "invalid");
     else if (std::find(names.begin(), names.end(), port.name) != names.end()) bad(problems, base + "name", "conflict");
     else names.push_back(port.name);

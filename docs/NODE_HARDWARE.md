@@ -35,6 +35,36 @@ the nodes that see the router well and the PoE one for the rest. A stack of batt
   not something this project checked: a port that is not isolated (the ANT-BMS one is the pack's negative, see above) does not go on that board without an isolator.
 - **Cable length:** RS232 is meant for a few metres; for more, use RS485, which reaches hundreds of metres, and put the node near the equipment.
 
+
+## Wiring an inverter on RS232 (EASun, Axpert, PIP, MPP Solar)
+
+The node **asks** and the inverter answers: nothing arrives from a PI30 inverter on its own, and no wake-up command exists. The node sends `QPIGS` (`51 50 49 47 53 B7 A9 0D`)
+at 2400 baud 8N1 and waits 2.5 s. For an answer to come back the line has to be right:
+
+1. **A MAX3232 module (3.3 V) between the inverter and the pins.** The inverter's port is RS232 (about plus and minus 10 V). The node's pins are 3.3 V TTL: they do not understand
+   RS232 and are damaged by it. The base board with multiplexers carries its MAX3232 chips; a node wired by hand needs a module.
+2. **The pinout of the inverter, not the one of a Pylontech.** On many Voltronic-type inverters with an RJ45 port (the document of the PI30 MS/MSX family, repeated by other
+   open projects): **pin 1 is the inverter's transmit, pin 2 its receive, pin 8 ground**; pin 4 or 7 may carry 12 V (do not connect it to anything). Other models use pins 3, 6
+   and 5. The RJ45 sockets of the base board follow the Pylontech console (pin 3 receives, pin 6 sends, pin 8 ground), so **a straight network cable from a socket to an inverter
+   does not work**: make a crossed cable for the inverter's pinout. Check with a meter before connecting: against ground, the inverter's idle transmit pin sits at a negative
+   voltage (about -5 to -12 V).
+3. **On a node wired by hand:** inverter transmit to the MAX3232 receiver input and its logic output to the port's RX pin; the port's TX pin to the MAX3232 logic input and its
+   RS232 output to the inverter's receive; grounds joined; the MAX3232 powered at 3.3 V. Leave the port's driver-enable (DE) pin unset (it is for RS485) and `invert` off.
+4. **Which protocol.** The EASun SMV models speak PI30. The EASun **SMG II** does not: set the port to *Modbus*, 9600 baud. If a PI30 port stays silent with the wiring checked, try
+   the Modbus type before anything else.
+
+To see why a port does not read, open its raw view in the panel: it starts with the last question and its bytes, how many bytes were sent and heard, and the last error. `heard 0`
+means wiring or protocol; bytes heard with `crc` or `format` errors mean speed, level or another protocol.
+
+## Other equipment
+
+| Equipment | Port type | Line | Level |
+| --- | --- | --- | --- |
+| Modbus inverters and chargers (SMG II, SRNE) | Modbus | 9600 8N1 | RS232 (MAX3232) or RS485 (transceiver) as the model's port says |
+| DALY, JBD battery boards | DALY, JBD | 9600 8N1 | 3.3 V TTL UART, or RS485 through a transceiver |
+| JK battery boards | JK | 115200 8N1 (hardware ports only) | RS485 or TTL UART of the board |
+| Victron VE.Direct | VE.Direct | 19200 8N1 | 5 V or 3.3 V TTL on a JST-PH connector: a 5 V transmit needs a divider or level shifter before the pin |
+
 ## The base board, version 1.0: ten RJ45 sockets and eight TTL connectors
 
 One ESP32-S3 (the Wi-Fi N16R8 module, or the Waveshare ESP32-S3-ETH) drives up to **eight batteries and two inverters** through three **74HC4052** multiplexers and five **MAX3232** level converters. The mux profile of the firmware (*Ports of the node -> Base board*) is written for exactly this wiring.

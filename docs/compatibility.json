@@ -324,6 +324,132 @@
         "firmware": "",
         "answers": ""
       }
+    },
+    {
+      "id": "voltronic-pi41-pi34",
+      "kind": "inverter",
+      "name": "Voltronic PI41 (LV5048) and PI34 (MPPT charger)",
+      "port": "RS232, 2400 baud 8N1",
+      "reads": "QPIGS (and QMOD, QPIWS in PI41)",
+      "level": "protocol",
+      "evidence": "status lines written from the documents",
+      "tests": [
+        "tests/test_protocols.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "modbus-smg2",
+      "kind": "inverter",
+      "name": "EASun / ISolar SMG II (Modbus)",
+      "port": "RS232, 9600 baud 8N1",
+      "reads": "registers 201-234, 100-101, 108-109",
+      "level": "protocol",
+      "evidence": "the request and reply printed in the document; register frames built from its table",
+      "tests": [
+        "tests/test_protocols.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "modbus-srne",
+      "kind": "inverter",
+      "name": "SRNE hybrid inverters and MPPT chargers (Modbus)",
+      "port": "RS232 or RS485, 9600 baud 8N1",
+      "reads": "registers 0x0100 and 0x0210 blocks",
+      "level": "protocol",
+      "evidence": "frames built from the register tables",
+      "tests": [
+        "tests/test_protocols.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "vedirect",
+      "kind": "inverter",
+      "name": "Victron VE.Direct (chargers and battery monitors)",
+      "port": "TTL, 19200 baud 8N1",
+      "reads": "the text blocks",
+      "level": "protocol",
+      "evidence": "blocks built from the document",
+      "tests": [
+        "tests/test_protocols.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "daly-uart",
+      "kind": "battery",
+      "name": "DALY BMS",
+      "port": "UART or RS485, 9600 baud 8N1",
+      "reads": "0x90, 0x93-0x96, 0x98",
+      "level": "protocol",
+      "evidence": "frames built from the document",
+      "tests": [
+        "tests/test_protocols.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "jbd",
+      "kind": "battery",
+      "name": "JBD / Jiabaida BMS",
+      "port": "UART, 9600 baud 8N1",
+      "reads": "0x03, 0x04",
+      "level": "protocol",
+      "evidence": "the example frames of the document",
+      "tests": [
+        "tests/test_protocols.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
+    },
+    {
+      "id": "jk-rs485",
+      "kind": "battery",
+      "name": "JK BMS",
+      "port": "RS485 or UART, 115200 baud 8N1",
+      "reads": "read all data",
+      "level": "protocol",
+      "evidence": "frames built from the document",
+      "tests": [
+        "tests/test_protocols.cpp"
+      ],
+      "bench": {
+        "status": "pending",
+        "model": "",
+        "firmware": "",
+        "answers": ""
+      }
     }
   ]
 }

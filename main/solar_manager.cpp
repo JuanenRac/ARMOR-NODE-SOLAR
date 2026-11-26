@@ -67,7 +67,7 @@ std::atomic<std::uint64_t> g_summary_next_tick_ms{0};
 void summary_note(const solar::Poller& poller, std::size_t port, std::uint64_t now_ms) {
   if (!g_summary_wanted.load()) return;
   std::lock_guard<std::mutex> guard(g_summary_lock);
-  if (poller.kind() == config::Kind::kVoltronic) g_summary.note_inverter(port, poller.device(), poller.pv_power_w(), poller.status().out_w, now_ms);
+  if (poller.is_inverter()) g_summary.note_inverter(port, poller.device(), poller.pv_power_w(), poller.status().out_w, now_ms);
   else if (poller.kind() != config::Kind::kRaw) g_summary.note_battery(port, poller.device(), poller.modules(), now_ms);
 }
 
@@ -235,7 +235,7 @@ void port_task(void* argument) {
       fill(slot, poller, port->overruns(), port->framing_errors(), ready ? payload : std::string());
       if (after < slot.raw_wanted_until_ms.load() && poller.raw().total() != last_raw_total) {
         last_raw_total = poller.raw().total();
-        const std::string dump = poller.raw().dump();
+        const std::string dump = poller.diagnosis() + poller.raw().dump();
         std::lock_guard<std::mutex> guard(slot.lock);
         slot.raw = dump;
       }
@@ -339,7 +339,7 @@ void group_task(void* argument) {
       fill(slot, poller, 0, 0, turn.reading ? turn.payload : std::string());
       if (after < slot.raw_wanted_until_ms.load() && poller.raw().total() != last_raw_total[turn.member]) {
         last_raw_total[turn.member] = poller.raw().total();
-        const std::string dump = poller.raw().dump();
+        const std::string dump = poller.diagnosis() + poller.raw().dump();
         std::lock_guard<std::mutex> guard(slot.lock);
         slot.raw = dump;
       }
