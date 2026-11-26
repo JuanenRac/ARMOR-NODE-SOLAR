@@ -91,6 +91,7 @@ void write_port(json::Writer& w, std::size_t index) {
       .field("invert", s.invert);
   if (s.group >= 0) w.field("group", std::string(1, static_cast<char>('A' + s.group))).field("channel", s.channel + 1);
   if (!s.detail.empty()) w.field("detail", s.detail);
+  if (!s.cause.empty()) w.field("cause", s.cause).field("sample", s.sample);
   w.end_object();
 }
 

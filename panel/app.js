@@ -291,6 +291,8 @@ function psPill(state) {
   return el("span", { class: "pill " + (ok ? "ok" : plain ? "" : warn ? "warn" : "bad") }, t("ps_" + state));
 }
 const portErrorText = s => (s.state === "error" && L["pe_" + s.error] ? t("pe_" + s.error) : s.error && L["le_" + s.error] ? t("le_" + s.error) : s.error || "");
+// Why a port that hears bytes reads nothing, as the node says it (core/port_diag.hpp).
+const CAUSES = ["flat", "echo", "noise", "text", "frames"];
 const portLiveText = s => t("portCounters", s.bytes_rx, s.bytes_tx, s.replies_ok, s.replies_bad, s.timeouts, s.readings);
 
 const BOARD_NAMES = { "s3-wifi": "ESP32-S3-WROOM-1 N16R8", "s3-eth": "Waveshare ESP32-S3-ETH" };
@@ -746,7 +748,8 @@ function portCard(index) {
       st.enabled ? el("div", { class: "actions" }, psPill(st.state), el("span", { class: "muted", id: "port-live-" + index }, portLiveText(st))) : null,
       st.enabled && st.detail ? el("p", { class: "muted" }, t("portDetail") + ": " + st.detail) : null,
       st.enabled && (st.error || st.state === "error") ? el("p", { class: "err" }, portErrorText(st)) : null,
-      st.state === "silent" || st.state === "garbled" || st.state === "waiting" ? el("p", { class: "hint" }, t(st.state === "silent" && cfg.kind === "pylontech" ? "hint_silent_pylontech" : st.state === "silent" && cfg.kind === "voltronic" ? "hint_silent_inverter" : "hint_" + st.state)) : null,
+      st.state === "silent" || st.state === "garbled" || st.state === "waiting" ? el("p", { class: "hint" }, t(st.state === "silent" && cfg.kind === "pylontech" ? "hint_silent_pylontech" : st.state === "silent" && cfg.kind === "voltronic" ? "hint_silent_inverter" : st.state === "garbled" && CAUSES.includes(st.cause) ? "hint_cause_" + st.cause : "hint_" + st.state)) : null,
+      st.state === "garbled" && st.cause ? el("p", { class: "muted mono" }, t("portLine", st.baud, st.rx, st.tx, st.bytes_rx, st.sample) + " · " + t(st.invert ? "portInverted" : "portNormal")) : null,
       st.enabled ? el("div", { class: "actions" }, el("button", { class: "b", onclick: () => showRaw(index) }, t(S.rawOpen === index ? "hideRaw" : "showRaw")),
         S.rawOpen === index && isAdmin() ? el("button", { class: "b", onclick: () => downloadRaw(index) }, t("downloadRaw")) : null,
         cfg.kind === "ant" ? el("button", { class: "b", disabled: !isAdmin() || (S.bms && S.bms.port === index && S.bms.state === "running"), onclick: () => readBmsSettings(index) }, t("antRead")) : null) : null,
@@ -864,7 +867,10 @@ function cellBars(x, limits) {
   return box;
 }
 
-function moduleCard(x, limits, key) {
+// A battery of a console stack that is there and has told nothing about itself: its `info` and `stat` were asked with the first reading and got no answer.
+const noSheet = x => !!x.present && !!(x.cells_v && x.cells_v.length) && x.model === undefined && x.full_capacity_ah === undefined && x.cycles === undefined && x.counters === undefined && x.soft_version === undefined;
+
+function moduleCard(x, limits, key, console_) {
   if (!x.present) return el("div", { class: "rv-module absent" }, el("header", {}, el("h3", {}, t("rd_module") + " " + x.n), el("span", { class: "pill" }, t("rv_absent"))));
   const health = moduleHealth(x, limits), cells = x.cells_v || [];
   const delta = cells.length ? Math.round((Math.max(...cells) - Math.min(...cells)) * 1000) : null;
@@ -882,6 +888,7 @@ function moduleCard(x, limits, key) {
     el("div", { class: "rv-chips" }, chip("V", num(x.voltage_v, 2)), chip("A", num(current, 2)), chip("°C", num(x.temperature_c, 1), isNum(x.temperature_c) && tempOut(x.temperature_c) ? 2 : undefined),
       delta === null ? null : chip("Δ mV", String(delta), deltaLevel(delta))),
     cellBars(x, limits),
+    console_ && noSheet(x) ? el("p", { class: "muted rv-nosheet" }, t("rv_noSheet")) : null,
     health.problems.length ? el("ul", { class: "rv-problems" }, health.problems.map(p => el("li", { class: levelClass(p[0]) }, t(p[1])))) : null,
     details.length ? el("details", { open: !!S.open[key], ontoggle: e => { S.open[key] = e.target.open; } }, el("summary", {}, t("rv_details")), kv(details)) : null);
   return health.level === 2 ? blink(box) : box;
@@ -912,7 +919,7 @@ function batterySection(port, m) {
         chip(t("rd_temp"), num(m.temperature_min_c, 1) + " – " + num(m.temperature_max_c, 1) + " °C"),
         m.capacity_ah === undefined || m.full_capacity_ah === undefined ? null : chip(t("rd_capacity"), aboutFull(m) + num(m.capacity_ah, 1) + " / " + num(m.full_capacity_ah, 1) + " Ah" + (m.energy_kwh === undefined ? "" : " · " + num(m.energy_kwh, 2) + " kWh")),
         m.balancing ? chip(t("rv_balancing"), String(m.balancing)) : null)),
-    el("div", { class: "rv-modules" }, (m.stack || []).map(x => moduleCard(x, limits, port.port + ":" + x.n))));
+    el("div", { class: "rv-modules" }, (m.stack || []).map(x => moduleCard(x, limits, port.port + ":" + x.n, port.kind === "pylontech"))));
   return section;
 }
 

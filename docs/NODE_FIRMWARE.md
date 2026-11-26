@@ -90,6 +90,17 @@ and RX, the ground, the converter, the speed), *garbled* (bytes come but no answ
 could not be opened: unusable pins, a wrong speed). A reading is published only when it is whole: an inverter needs all three answers, so a missing list of warnings
 never looks like "no warnings".
 
+**Why a port is garbled.** After a few unanswered questions the card also says what the bytes look like, with the speed, the pins, the polarity, how many bytes were heard and the
+last six of them (`core/port_diag.hpp`; `cause` and `sample` in `GET /api/v1/ports`): *flat* (only `00` or `FF`: nothing drives the receive line, so a loose wire, no level converter or
+the equipment off), *echo* (what was sent comes back: TX and RX joined), *noise* (unreadable bytes on a text protocol: speed, level or polarity), *text* (readable but not the expected
+answer: another equipment or mode) and *frames* (a binary protocol that never gets a whole frame). The node also writes one line in its log, such as
+`port 3 unreadable flat 115200bd rx16 tx15 n230 [00 00 00 00 00 00]`, one port at a time and again every five minutes; the health report carries the last error line, so the server
+and the console can tell it too. Tested on a computer only.
+
+**A battery that does not answer its data sheet.** In a Pylontech stack, `info <n>` and `stat <n>` for a module behind the first one go through the first battery. When a module gives
+its cells (`bat <n>`) but nothing to those two, its card says so instead of leaving the fields empty. The console shows no prompt while it still waits for that module, so the first time
+a missing sheet is asked again it is given ten seconds instead of three. Whether a longer wait is enough for a given battery is not known: it has to be tried on the stack.
+
 ## Asking a battery's console a question (*Ask the battery*)
 
 A Pylontech port's card in the panel has a small tool for an administrator: it sends **one question** to the battery's console, from a short list of commands that only read (`pwrsys`, `pwr`, `help`, and `bat`, `info`, `stat`, `soh`, `data` with a module from 1 to 16), and shows the answer exactly as it came. The text that goes on the wire is rebuilt from that list and never copied from what was typed, so no command that changes anything can be sent; the port's readings pause while it waits (at most eight seconds), and in the mux profile the question is asked between two turns. It is there to capture what a command whose output is not described anywhere (`pwrsys`) really answers on the battery in front of you, so that it can be turned into a reading. Not run against a real battery.

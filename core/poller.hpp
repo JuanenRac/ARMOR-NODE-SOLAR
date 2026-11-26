@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "ant_bms.hpp"
+#include "port_diag.hpp"
 #include "pylontech.hpp"
 #include "solar_config.hpp"
 #include "solar_json.hpp"
@@ -53,6 +54,14 @@ class RawLog {
     total_ += length;
   }
   std::size_t total() const { return total_; }
+  // The last `count` bytes kept, oldest first.
+  std::vector<std::uint8_t> tail(std::size_t count) const {
+    std::vector<std::uint8_t> out;
+    const std::size_t n = count < size_ ? count : size_;
+    out.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) out.push_back(bytes_[(head_ + kCapacity - n + i) % kCapacity]);
+    return out;
+  }
   // The kept bytes, oldest first, sixteen to a line: "48 65 6C 6C 6F 0D  |Hello.|".
   std::string dump(std::size_t max_lines = 128) const {
     std::string out;
@@ -99,6 +108,7 @@ class Poller {
   static constexpr std::uint64_t kVoltronicTimeoutMs = 2500;
   static constexpr std::uint64_t kConsoleTableTimeoutMs = 5000;
   static constexpr std::uint64_t kConsoleExtraTimeoutMs = 3000;
+  static constexpr std::uint64_t kConsoleSlowTimeoutMs = 10000;   // the first time a missing sheet is asked again: a console shows no prompt while it still waits for the module that was asked
   static constexpr std::uint64_t kAntTimeoutMs = 2000;
   static constexpr std::uint64_t kDriverTimeoutMs = 3000;   // a driver's question (the longest answer, JK's, is about 300 bytes)
   static constexpr int kGiveUpTries = 3;                    // QMOD or QPIWS that has never answered this many cycles is done without
@@ -170,10 +180,12 @@ class Poller {
   std::string asking() const {
     if (driver_) return driver_->command();
     std::string text;
+    std::size_t first = 0;   // a console question may start with a bare Enter that wakes the console
+    while (first < last_tx_.size() && last_tx_[first] == '\r') ++first;
     // a Voltronic question is its letters, a CRC (two bytes that may look like text) and CR
     const std::size_t tail = tx_plain_ ? 1 : 3;   // CR, and the CRC when there is one
     if (kind_ == config::Kind::kVoltronic && last_tx_.size() > tail && last_tx_[0] != '^') { text.assign(last_tx_.begin(), last_tx_.end() - static_cast<std::ptrdiff_t>(tail)); return text; }
-    for (const std::uint8_t b : last_tx_) { if (b < 0x20 || b >= 0x7F || text.size() >= 24) break; text += static_cast<char>(b); }
+    for (std::size_t i = first; i < last_tx_.size(); ++i) { const std::uint8_t b = last_tx_[i]; if (b < 0x20 || b >= 0x7F || text.size() >= 24) break; text += static_cast<char>(b); }
     return text;
   }
   // Which of the two messages this port's readings become.
@@ -240,6 +252,14 @@ class Poller {
     return stats_.readings > 0 ? "silent" : "garbled";
   }
 
+  // Why a port that is "garbled" reads nothing (core/port_diag.hpp): "flat", "echo", "noise", "text", "frames"; "" while it reads, hears nothing or has not failed often enough to say.
+  std::string unreadable_cause(std::uint64_t now_ms) const {
+    if (kind_ == config::Kind::kRaw || stats_.timeouts + stats_.replies_bad < kGiveUpTries || state(now_ms) != "garbled") return "";
+    const bool text = kind_ == config::Kind::kPylontech || kind_ == config::Kind::kVoltronic || kind_ == config::Kind::kVedirect;
+    return portdiag::classify(raw_.tail(portdiag::kClassifiedBytes), last_tx_, text);
+  }
+  std::string heard_sample() const { return portdiag::sample_hex(raw_.tail(portdiag::kSampleBytes)); }
+
   // What the last reading said, for the summary of the whole system (core/solar_system.hpp): the inverter's numbers and the modules of a battery stack.
   const voltronic::Status& status() const { return status_; }
   double pv_power_w() const { return status_.pv_w + (has_pv2_ ? pv2_.power_w : 0.0); }   // the same figure the inverter's message carries as pv_w
@@ -292,7 +312,7 @@ class Poller {
   // A console that was still answering when its question timed out is let finish: the next question waits for silence, and its time to be answered starts when it goes out.
   bool still_settling(std::uint64_t now_ms) {
     if (!settling_) return false;
-    if (now_ms - settle_started_ms_ < kSettleMaxMs && now_ms - last_rx_ms_ < kQuietMs) { deadline_ms_ = now_ms + kConsoleExtraTimeoutMs; return true; }
+    if (now_ms - settle_started_ms_ < kSettleMaxMs && now_ms - last_rx_ms_ < kQuietMs) { deadline_ms_ = now_ms + console_timeout_ms_; return true; }
     settling_ = false;
     return false;
   }
@@ -309,6 +329,7 @@ class Poller {
 
   void send(std::string_view text, std::uint64_t now_ms, std::uint64_t timeout_ms) {
     pending_.assign(text.begin(), text.end());
+    console_timeout_ms_ = timeout_ms;
     deadline_ms_ = now_ms + timeout_ms;
   }
   void send_query(const char* text, std::uint64_t now_ms) {
@@ -779,14 +800,16 @@ class Poller {
       catching_up_ = true;
     }
     had_capacity_ = m.capacity_ah >= 0;
+    // a module that has told nothing at all is given longer once: its answer may come through the first battery later than the usual time
+    slow_sheet_ = catching_up_ && e.misses == 1 && e.model.empty() && e.full_capacity_ah < 0 && e.counters.empty();
     step_ = Step::kInfo;
     buffer_.clear();
-    send("info " + std::to_string(m.number) + "\r", now_ms, kConsoleExtraTimeoutMs);
+    send("info " + std::to_string(m.number) + "\r", now_ms, slow_sheet_ ? kConsoleSlowTimeoutMs : kConsoleExtraTimeoutMs);
   }
   void ask_stat(std::uint64_t now_ms) {
     step_ = Step::kStat;
     buffer_.clear();
-    send("stat " + std::to_string(modules_[module_at_].number) + "\r", now_ms, kConsoleExtraTimeoutMs);
+    send("stat " + std::to_string(modules_[module_at_].number) + "\r", now_ms, slow_sheet_ ? kConsoleSlowTimeoutMs : kConsoleExtraTimeoutMs);
   }
   // The newest entry of the battery's event log is asked when `stat` says there are entries and the one kept is not the newest (the log's last item is taken to be the count of
   // `Data Items`; a battery that answers something else just leaves the event out).
@@ -947,6 +970,8 @@ class Poller {
   std::array<Extras, 17> extras_;   // by module number (1 to 16): what `info` and `stat` said, kept between cycles
   bool had_capacity_ = false;
   bool caught_up_ = false, catching_up_ = false;   // this cycle has asked a missing sheet again; the exchange under way is that one
+  bool slow_sheet_ = false;                        // `info` and `stat` of this module are given the longer time
+  std::uint64_t console_timeout_ms_ = kConsoleExtraTimeoutMs;   // how long the console question under way is given
   bool settling_ = false;                          // a question timed out: the next one waits for silence
   std::uint64_t settle_started_ms_ = 0;
   std::size_t module_at_ = 0;
