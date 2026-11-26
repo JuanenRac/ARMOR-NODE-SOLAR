@@ -55,7 +55,7 @@ const config = {
   ],
   profile: process.argv.includes("--mux") ? "mux" : "direct",
   mux: [{ tx: 15, rx: 16, s0: 17, s1: 18, channels: 4 }, { tx: 1, rx: 2, s0: 38, s1: 46, channels: 4 }, { tx: 40, rx: 41, s0: 42, s1: -1, channels: 2 }],
-  leds: { data: 21, clock: 39, latch: 47 },
+  leds: { data: 21, clock: 39, latch: 47, led9: 3, led10: 45 },
   time: { ntp_enabled: true, ntp: "pool.ntp.org", zone: "CET-1CEST,M3.5.0,M10.5.0/3" },
   system: { auto_restart_hours: 0, login_limit_per_minute: 30 },
   security: { seal_secrets: false, ota_check_board: true, ota_require_board_mark: true },
