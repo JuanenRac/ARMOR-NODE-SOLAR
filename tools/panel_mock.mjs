@@ -30,6 +30,7 @@ let rebootAt = 0;
 let logText = "I (1200) armor-node: A.R.M.O.R. node armor-a1b2c3, firmware 0.2.3\nI (1500) armor-net: link up\nI (2600) armor-net: address 192.168.0.181, gateway 192.168.0.1, netmask 255.255.255.0 (wire)\nW (9000) armor-radar: radar 2: no data (RX not connected, no power or the wrong pin) (0 bytes, 0 frames, 0 bad)\n";
 
 const config = {
+  cell_limits: { low_alarm_mv: 2800, low_warn_mv: 3000, high_warn_mv: 3550, high_alarm_mv: 3650, delta_warn_mv: 50, delta_bad_mv: 100, temp_low_c: 0, temp_high_c: 50 },
   v: 1, node: { id: "solar-a1b2c3", name: "Solar house", hostname: "" },
   uplink: wired ? "ethernet" : "wifi", ip: { dhcp: true, address: "", netmask: "255.255.255.0", gateway: "", dns1: "", dns2: "" },
   ap: { enabled: true, ssid: "ARMOR-NODE-SOLAR-A1B2C3", security: "wpa2", password_set: true, channel: 0, hidden: false, max_clients: 8, tx_power_dbm: 15, bandwidth_mhz: 20, country: "ES" },

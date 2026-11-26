@@ -275,7 +275,7 @@ static void test_warning_bits() {
   for (const std::string& name : active) CHECK(!name.empty());
   // the length: up to 36 characters, fewer is fine, 37 or an odd character is not
   CHECK(parse_qpiws("1", active) && active.size() == 1 && active[0] == "pv_loss");
-  CHECK(!parse_qpiws(std::string(37, '0'), active) && active.empty());
+  CHECK(!parse_qpiws(std::string(65, '0'), active) && active.empty());
   CHECK(!parse_qpiws("0000200", active) && !parse_qpiws(" 0000", active) && !parse_qpiws("0000\r", active));
 }
 

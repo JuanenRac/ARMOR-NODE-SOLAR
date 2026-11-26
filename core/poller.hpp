@@ -16,6 +16,8 @@
 //   ANT-BMS battery (serial):        one request, one whole frame back (core/ant_bms.hpp). Its firmware speaks one of two protocols: the port asks in the old one
 //                                    and, when nothing answers, in the new one, and keeps to the one that answered (it looks again after three misses).
 //   Raw:                             nothing is asked; what arrives is kept so it can be looked at (a protocol that is not decoded yet).
+//   Other protocols:                 Modbus RTU inverters, DALY, JBD and JK battery boards and Victron VE.Direct each have a driver (core/driver_*.hpp, listed in
+//                                    core/solar_protocols.hpp); the poller only moves their bytes and times their questions.
 //
 // Nothing here has run against an inverter or a battery.
 #pragma once
@@ -31,6 +33,7 @@
 #include "pylontech.hpp"
 #include "solar_config.hpp"
 #include "solar_json.hpp"
+#include "solar_protocols.hpp"
 #include "voltronic.hpp"
 #include "voltronic_pi18.hpp"
 
@@ -93,6 +96,9 @@ class Poller {
   static constexpr std::uint64_t kConsoleTableTimeoutMs = 5000;
   static constexpr std::uint64_t kConsoleExtraTimeoutMs = 3000;
   static constexpr std::uint64_t kAntTimeoutMs = 2000;
+  static constexpr std::uint64_t kDriverTimeoutMs = 3000;   // a driver's question (the longest answer, JK's, is about 300 bytes)
+  static constexpr int kGiveUpTries = 3;                    // QMOD or QPIWS that has never answered this many cycles is done without
+  static constexpr std::size_t kDiagnosticBytes = 48;       // how much of the last question and answer the panel shows
   static constexpr std::uint64_t kExtrasRefreshMs = 30ULL * 60ULL * 1000ULL;   // how long the identity and the history of a module are kept
   static constexpr std::uint64_t kRatingsEveryMs = 10ULL * 60ULL * 1000ULL;    // an inverter's ratings and settings (QPIRI) are asked again this often: they can be changed at the unit
   static constexpr std::uint64_t kEnergyEveryMs = 5ULL * 60ULL * 1000ULL;      // and the energy the panels have made in all (QET)
@@ -105,30 +111,52 @@ class Poller {
         cells_per_cycle_(cells_per_cycle > 0 ? cells_per_cycle : 0) {
     if (dialect == "pi18") { dialect_ = Dialect::kPi18; auto_ = false; }
     else if (dialect == "revo") { dialect_ = Dialect::kRevo; auto_ = false; }
+    else if (dialect == "pi41") { dialect_ = Dialect::kPi41; auto_ = false; }
+    else if (dialect == "pi34") { dialect_ = Dialect::kPi34; auto_ = false; }
     else if (dialect == "pi30") auto_ = false;
     known_ = !auto_;
+    driver_ = protocols::make_driver(kind, dialect);
   }
 
   // The bytes to send now, or none. Call it often (every few tens of milliseconds).
   std::vector<std::uint8_t> next_tx(std::uint64_t now_ms) {
     if (kind_ == config::Kind::kRaw) return {};
     if (step_ != Step::kIdle && now_ms >= deadline_ms_) on_timeout(now_ms);
-    if (!pending_.empty()) {
-      std::vector<std::uint8_t> out;
-      out.swap(pending_);
-      stats_.bytes_tx += static_cast<std::uint32_t>(out.size());
-      if (capture_) capture_(true, out.data(), out.size());
-      return out;
-    }
+    if (!pending_.empty()) return take_pending();
     // a reading that has not been taken yet is not overwritten by the next cycle
     if (step_ == Step::kIdle && !ready_ && now_ms >= next_cycle_ms_) begin_cycle(now_ms);
     if (pending_.empty()) return {};
-    std::vector<std::uint8_t> out;
-    out.swap(pending_);
-    stats_.bytes_tx += static_cast<std::uint32_t>(out.size());
-    if (capture_) capture_(true, out.data(), out.size());
+    return take_pending();
+  }
+
+  // ---- what the panel shows to tell why a port does not read ----
+  // Three lines put before the raw dump: what was asked last (its name and its bytes in hexadecimal), what has been counted and the last error.
+  std::string diagnosis() const {
+    if (kind_ == config::Kind::kRaw) return "";
+    return "asked: " + asking() + " | " + (last_tx_.empty() ? std::string("nothing sent yet") : last_sent_hex()) + "\nbytes sent " + std::to_string(stats_.bytes_tx) + ", heard " +
+           std::to_string(stats_.bytes_rx) + ", answers " + std::to_string(stats_.replies_ok) + ", refused " + std::to_string(stats_.replies_bad) + ", silences " +
+           std::to_string(stats_.timeouts) + "\nlast error: " + (stats_.last_error.empty() ? std::string("none") : stats_.last_error) + "\n";
+  }
+  std::string last_sent_hex() const {
+    std::string out;
+    static const char kDigits[] = "0123456789ABCDEF";
+    for (const std::uint8_t b : last_tx_) {
+      if (!out.empty()) out += ' ';
+      out += kDigits[b >> 4];
+      out += kDigits[b & 15];
+    }
     return out;
   }
+  std::string asking() const {
+    if (driver_) return driver_->command();
+    std::string text;
+    // a Voltronic question is its letters, a CRC (two bytes that may look like text) and CR
+    if (kind_ == config::Kind::kVoltronic && dialect_ != Dialect::kPi18 && last_tx_.size() > 3) { text.assign(last_tx_.begin(), last_tx_.end() - 3); return text; }
+    for (const std::uint8_t b : last_tx_) { if (b < 0x20 || b >= 0x7F || text.size() >= 24) break; text += static_cast<char>(b); }
+    return text;
+  }
+  // Which of the two messages this port's readings become.
+  bool is_inverter() const { return driver_ ? driver_->inverter() : kind_ == config::Kind::kVoltronic; }
 
   // Optional readings of an inverter in the standard dialect, asked after the three that make the message and never at the cost of them: the second PV input (QPIGS2; an
   // inverter that has only one answers NAK, and after two misses it is not asked again) and the units of a parallel system (QPGS0 to QPGS<n-1>; a unit that is not there is skipped).
@@ -160,6 +188,7 @@ class Poller {
     if (kind_ == config::Kind::kVoltronic) rx_voltronic(data, length, now_ms);
     else if (kind_ == config::Kind::kPylontech) rx_pylontech(data, length, now_ms);
     else if (kind_ == config::Kind::kAnt) rx_ant(data, length, now_ms);
+    else if (driver_) rx_driver(data, length, now_ms);
   }
 
   // A whole reading, if one is ready: the topic and the JSON payload (timestamped with the node's clock, `wall_ms`). False when none is.
@@ -168,7 +197,8 @@ class Poller {
     ready_ = false;
     topic = solar::topic(node_id_, device_);
     if (topic.empty()) return false;
-    if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.warnings_unknown = dialect_ == Dialect::kRevo; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
+    if (driver_ && driver_->inverter()) { InverterExtras extras; extras.warnings_unknown = !driver_->out().warnings_known; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
+    else if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.warnings_unknown = dialect_ == Dialect::kRevo || dialect_ == Dialect::kPi41 || dialect_ == Dialect::kPi34 || !warnings_read_; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
     else payload = battery_json(node_id_, device_, wall_ms, modules_);   // a Pylontech stack or an ANT-BMS (one module)
     ++stats_.readings;
     last_reading_ms_ = last_rx_ms_;
@@ -209,8 +239,17 @@ class Poller {
   std::uint64_t last_rx_ms() const { return last_rx_ms_; }
 
  private:
-  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt };
-  enum class Dialect { kPi30, kRevo, kPi18 };
+  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt, kDriver };
+  enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34 };
+
+  std::vector<std::uint8_t> take_pending() {
+    std::vector<std::uint8_t> out;
+    out.swap(pending_);
+    stats_.bytes_tx += static_cast<std::uint32_t>(out.size());
+    last_tx_.assign(out.begin(), out.begin() + static_cast<std::ptrdiff_t>(out.size() < kDiagnosticBytes ? out.size() : kDiagnosticBytes));
+    if (capture_) capture_(true, out.data(), out.size());
+    return out;
+  }
 
   void send(std::string_view text, std::uint64_t now_ms, std::uint64_t timeout_ms) {
     pending_.assign(text.begin(), text.end());
@@ -221,14 +260,18 @@ class Poller {
     else voltronic::build_command(text, pending_);
     deadline_ms_ = now_ms + kVoltronicTimeoutMs;
   }
-  const char* dialect_name() const { return dialect_ == Dialect::kPi18 ? "pi18" : dialect_ == Dialect::kRevo ? "revo" : "pi30"; }
+  const char* dialect_name() const { return dialect_ == Dialect::kPi18 ? "pi18" : dialect_ == Dialect::kRevo ? "revo" : dialect_ == Dialect::kPi41 ? "pi41" : dialect_ == Dialect::kPi34 ? "pi34" : "pi30"; }
 
   void begin_cycle(std::uint64_t now_ms) {
     cycle_started_ms_ = now_ms;
     buffer_.clear();
     framer_ = voltronic::ReplyFramer();
     framer18_ = voltronic::pi18::ReplyFramer();
-    if (kind_ == config::Kind::kAnt) {
+    if (driver_) {
+      step_ = Step::kDriver;
+      pending_ = driver_->begin();
+      deadline_ms_ = now_ms + kDriverTimeoutMs;
+    } else if (kind_ == config::Kind::kAnt) {
       step_ = Step::kAnt;
       ant_framer_.clear();
       pending_ = ant::request(ant_protocol_);
@@ -237,6 +280,7 @@ class Poller {
       mode_ = 0;
       warnings_.clear();
       has_pv2_ = false;
+      warnings_read_ = false;
       units_.clear();
       if (dialect_ == Dialect::kPi18) { step_ = Step::kGs; send_query("GS", now_ms); }
       else { step_ = Step::kQpigs; send_query("QPIGS", now_ms); }
@@ -318,26 +362,79 @@ class Poller {
         learn(Dialect::kRevo);
       } else { fail("crc", now_ms); return; }
     }
-    if (text == "NAK") { learn(dialect_); fail("nak", now_ms); return; }
+    if (text == "NAK") {
+      learn(dialect_);
+      if (step_ == Step::kQmod) { mode_missed("nak", now_ms); return; }
+      if (step_ == Step::kQpiws) { warnings_missed("nak", now_ms); return; }
+      fail("nak", now_ms);
+      return;
+    }
     const bool revo = dialect_ == Dialect::kRevo;
     if (step_ == Step::kQpigs) {
-      if (!(revo ? voltronic::parse_qpigs_revo(text, status_) : voltronic::parse_qpigs(text, status_))) { fail("format", now_ms); return; }
+      const bool read = revo ? voltronic::parse_qpigs_revo(text, status_)
+                        : dialect_ == Dialect::kPi41 ? voltronic::parse_qpigs_pi41(text, status_)
+                        : dialect_ == Dialect::kPi34 ? voltronic::parse_qpigs_pi34(text, status_)
+                                                     : voltronic::parse_qpigs(text, status_);
+      if (!read) { fail("format", now_ms); return; }
       learn(dialect_);
       ++stats_.replies_ok;
+      if (dialect_ == Dialect::kPi34) { stats_.last_error.clear(); finish(now_ms); return; }   // a charge controller is not asked for QMOD
       step_ = Step::kQmod;
       send_query("QMOD", now_ms);
     } else if (step_ == Step::kQmod) {
-      if (!voltronic::parse_qmod(text, mode_)) { fail("format", now_ms); return; }
+      if (!voltronic::parse_qmod(text, mode_)) { mode_missed("format", now_ms); return; }
+      mode_ever_ = true;
       ++stats_.replies_ok;
-      if (revo) { stats_.last_error.clear(); finish(now_ms); return; }   // the REVO dialect has no warning list to ask for
-      step_ = Step::kQpiws;
-      send_query("QPIWS", now_ms);
+      after_mode(now_ms);
     } else if (step_ == Step::kQpiws) {
-      if (!voltronic::parse_qpiws(text, warnings_)) { fail("format", now_ms); return; }
+      std::vector<std::string> flags;
+      if (!voltronic::parse_qpiws(text, flags)) { warnings_missed("format", now_ms); return; }
+      // the names are those of the PI30 documents: another family's flags mean other things and are not named
+      if (dialect_ != Dialect::kPi41) { warnings_ = flags; warnings_read_ = true; }
+      warnings_ever_ = true;
       ++stats_.replies_ok;
       stats_.last_error.clear();
       after_main_readings(now_ms);
     }
+  }
+
+  // QMOD and QPIWS: an inverter that has answered one before and misses it once loses the cycle (a missing warning list must not look like "no warnings"). One that has never
+  // answered it, cycle after cycle, would never be read at all: from the kGiveUpTries-th time the reading goes out without it and says so (mode "unknown", warnings_known false).
+  void mode_missed(const char* why, std::uint64_t now_ms) {
+    if (mode_ever_ || ++mode_misses_ < kGiveUpTries) { fail(why, now_ms); return; }
+    ++stats_.replies_bad;
+    stats_.last_error = why;
+    after_mode(now_ms);
+  }
+  void after_mode(std::uint64_t now_ms) {
+    if (dialect_ == Dialect::kRevo) { stats_.last_error.clear(); finish(now_ms); return; }   // the REVO dialect has no warning list to ask for
+    step_ = Step::kQpiws;
+    send_query("QPIWS", now_ms);
+  }
+  void warnings_missed(const char* why, std::uint64_t now_ms) {
+    if (warnings_ever_ || ++warnings_misses_ < kGiveUpTries) { fail(why, now_ms); return; }
+    ++stats_.replies_bad;
+    stats_.last_error = why;
+    warnings_.clear();
+    after_main_readings(now_ms);
+  }
+
+  // ---- the drivers of the other protocols ----
+  void rx_driver(const std::uint8_t* data, std::size_t length, std::uint64_t now_ms) {
+    std::vector<std::uint8_t> next;
+    for (std::size_t i = 0; i < length && step_ == Step::kDriver; ++i) {
+      const drivers::Rx result = driver_->feed(data[i], next);
+      if (result == drivers::Rx::kNext) { ++stats_.replies_ok; pending_ = next; deadline_ms_ = now_ms + kDriverTimeoutMs; }
+      else if (result == drivers::Rx::kDone) { ++stats_.replies_ok; driver_done(now_ms); }
+      else if (result == drivers::Rx::kBad) fail(driver_->error(), now_ms);
+    }
+  }
+  void driver_done(std::uint64_t now_ms) {
+    const drivers::Out& out = driver_->out();
+    if (driver_->inverter()) { status_ = out.status; mode_ = out.mode; warnings_ = out.warnings; has_pv2_ = false; }
+    else modules_ = out.modules;
+    stats_.last_error.clear();
+    finish(now_ms);
   }
 
   // ---- the optional readings (standard dialect only) ----
@@ -639,6 +736,17 @@ class Poller {
       after_bat(now_ms);
       return;
     }
+    if (step_ == Step::kDriver) {
+      std::vector<std::uint8_t> next;
+      const drivers::Rx result = driver_->timeout(next);
+      if (result == drivers::Rx::kNext) { pending_ = next; deadline_ms_ = now_ms + kDriverTimeoutMs; }
+      else if (result == drivers::Rx::kDone) driver_done(now_ms);
+      else { stats_.last_error = "timeout"; abandon(now_ms); }
+      return;
+    }
+    // a QMOD or QPIWS that has never been answered is done without in the end (see mode_missed)
+    if (step_ == Step::kQmod && !mode_ever_ && ++mode_misses_ >= kGiveUpTries) { stats_.last_error = "timeout"; after_mode(now_ms); return; }
+    if (step_ == Step::kQpiws && !warnings_ever_ && ++warnings_misses_ >= kGiveUpTries) { stats_.last_error = "timeout"; warnings_.clear(); after_main_readings(now_ms); return; }
     if (step_ == Step::kQpigs2) { miss_pv2(now_ms); return; }
     if (step_ == Step::kQpgs) { ++unit_at_; ask_unit(now_ms); return; }
     if (is_identity_step()) { identity_missed(); if (step_ == Step::kQpiri && have_ratings_) ratings_at_ms_ = now_ms; if (step_ == Step::kQet && have_energy_) energy_at_ms_ = now_ms; next_identity(now_ms); return; }
@@ -698,6 +806,11 @@ class Poller {
   int qid_tries_ = 0, qvfw_tries_ = 0, qpiri_tries_ = 0, qet_tries_ = 0;
   char mode_ = 0;
   std::vector<std::string> warnings_;
+  bool warnings_read_ = false;                          // the warnings of this cycle are the inverter's own answer
+  bool mode_ever_ = false, warnings_ever_ = false;
+  int mode_misses_ = 0, warnings_misses_ = 0;
+  std::unique_ptr<drivers::Driver> driver_;             // only for the protocols that have one
+  std::vector<std::uint8_t> last_tx_;
   std::vector<pylontech::Module> modules_;
   struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0; bool valid = false; };
   std::array<Extras, 17> extras_;   // by module number (1 to 16): what `info` and `stat` said, kept between cycles

@@ -97,7 +97,7 @@ struct Mqtt {
 };
 
 // What a port reads.
-enum class Kind { kVoltronic, kPylontech, kAnt, kRaw };
+enum class Kind { kVoltronic, kPylontech, kAnt, kRaw, kModbus, kDaly, kJbd, kJk, kVedirect };   // the protocols of each: core/solar_protocols.hpp
 struct KindInfo {
   Kind kind;
   const char* id;
@@ -111,6 +111,11 @@ constexpr KindInfo kKinds[] = {
     {Kind::kPylontech, "pylontech", 115200, 10, true, true},
     {Kind::kAnt, "ant", 19200, 5, true, true},
     {Kind::kRaw, "raw", 9600, 0, false, false},
+    {Kind::kModbus, "modbus", 9600, 5, true, true},
+    {Kind::kDaly, "daly", 9600, 10, true, true},
+    {Kind::kJbd, "jbd", 9600, 10, true, true},
+    {Kind::kJk, "jk", 115200, 10, true, true},
+    {Kind::kVedirect, "vedirect", 19200, 3, false, true},
 };
 inline bool kind_from_text(std::string_view text, Kind& out) {
   for (const KindInfo& info : kKinds) if (text == info.id) { out = info.kind; return true; }
@@ -131,7 +136,7 @@ struct PortConfig {
   int de = -1;        // an RS485 transceiver's driver-enable (and receiver-enable) pin, high while sending; -1: RS232 or none
   int poll_s = 0;     // seconds between two readings; 0: the kind's own
   int modules = 0;    // Pylontech: how many modules to ask cell by cell (0: all that answer, up to 16)
-  std::string dialect = "auto";   // inverter: "auto" (looks for it), "pi30", "revo" or "pi18"; the other kinds ignore it
+  std::string dialect = "auto";   // inverter: "auto" (looks for it), "pi30", "revo", "pi18", "pi41" or "pi34"; modbus: "smg2", "srne-hybrid", "srne-mppt"; vedirect: "monitor", "mppt"
   bool invert = false;            // the signals of the line arrive upside down (a device with TTL levels wired through a MAX3232 does): the UART flips them
   int cells_per_cycle = 0;        // Pylontech: the cells of this many modules per cycle, in rotation (0: every module every cycle); the others keep their last cells
   bool pv2 = false;               // inverter (standard dialect): also ask the second PV input (QPIGS2)
@@ -176,6 +181,15 @@ struct BatteryWrite {
 // The summary of the whole system (core/solar_system.hpp) and the alerts the node raises on its own. Everything is OFF until the owner turns it on: the message needs the broker to
 // let the node write armor/solar/<node>/system (mqtt_identity.sh of ARMOR-DEVOPS gives that line to the nodes it makes from now on; an older node needs `upgrade-node`), and an alert is a
 // decision about the owner's battery, so it is never taken for them. The limits are the owner's, in the configuration file; the numbers here are only where a panel starts.
+// The limits that mark a battery as faulty in the panel: the cells of a lithium iron phosphate battery (every Pylontech), the spread between the cells of one battery and its
+// temperature. A battery whose cells go above 3.8 V is another lithium chemistry and keeps fixed cell limits of its own in the panel.
+struct CellLimits {
+  int low_alarm_mv = 2800, low_warn_mv = 3000;     // a cell below these
+  int high_warn_mv = 3550, high_alarm_mv = 3650;   // a cell above these
+  int delta_warn_mv = 50, delta_bad_mv = 100;      // highest less lowest cell of a battery, at or above these
+  int temp_low_c = 0, temp_high_c = 50;            // a temperature at or below, at or above
+};
+
 struct SummarySettings {
   bool publish = false;                 // send the summary message
   bool alerts = false;                  // raise alerts (in the message and on the LEDs of the ports)
@@ -234,6 +248,7 @@ struct Settings {
   int capture_frames = framecap::kDefaultFrames;
   BatteryWrite battery;
   SummarySettings summary;
+  CellLimits cell_limits;
 };
 
 struct Problem {
@@ -279,6 +294,18 @@ inline std::size_t mux_port_count(const std::array<MuxGroup, kMuxGroups>& groups
   std::size_t n = 0;
   for (const MuxGroup& g : groups) n += g.channels >= 1 && g.channels <= 4 ? static_cast<std::size_t>(g.channels) : 0;
   return n;
+}
+
+// The variants of the protocol a kind of equipment can be set to; "auto" is the kind's usual one. The kinds with a single protocol ignore the setting.
+inline bool valid_dialect(Kind kind, const std::string& dialect) {
+  const auto among = [&dialect](std::initializer_list<const char*> names) {
+    for (const char* name : names) if (dialect == name) return true;
+    return false;
+  };
+  if (kind == Kind::kVoltronic) return among({"auto", "pi30", "revo", "pi18", "pi41", "pi34"});
+  if (kind == Kind::kModbus) return among({"auto", "smg2", "srne-hybrid", "srne-mppt"});
+  if (kind == Kind::kVedirect) return among({"auto", "monitor", "mppt"});
+  return true;
 }
 
 inline int effective_baud(const PortConfig& port) {
@@ -499,7 +526,7 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
       read_int(item, "de", port.de, -1, board::kLastGpio, base + "de", problems);
       read_int(item, "poll_s", port.poll_s, 0, 3600, base + "poll_s", problems);
       read_int(item, "modules", port.modules, 0, 16, base + "modules", problems);
-      read_text(item, "dialect", port.dialect, 8, base + "dialect", problems);
+      read_text(item, "dialect", port.dialect, 12, base + "dialect", problems);
       read_bool(item, "invert", port.invert, base + "invert", problems);
       read_int(item, "cells_per_cycle", port.cells_per_cycle, 0, 8, base + "cells_per_cycle", problems);
       read_bool(item, "pv2", port.pv2, base + "pv2", problems);
@@ -571,6 +598,17 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
   if (const json::Value* capture = document.get("capture"); capture != nullptr && capture->is_object()) {
     read_bool(*capture, "enabled", s.capture_enabled, "capture.enabled", problems);
     read_int(*capture, "frames", s.capture_frames, framecap::kMinFrames, framecap::kMaxFrames, "capture.frames", problems);
+  }
+  if (const json::Value* limits = document.get("cell_limits"); limits != nullptr && limits->is_object()) {
+    CellLimits& l = s.cell_limits;
+    read_int(*limits, "low_alarm_mv", l.low_alarm_mv, 2000, 4500, "cell_limits.low_alarm_mv", problems);
+    read_int(*limits, "low_warn_mv", l.low_warn_mv, 2000, 4500, "cell_limits.low_warn_mv", problems);
+    read_int(*limits, "high_warn_mv", l.high_warn_mv, 2000, 4500, "cell_limits.high_warn_mv", problems);
+    read_int(*limits, "high_alarm_mv", l.high_alarm_mv, 2000, 4500, "cell_limits.high_alarm_mv", problems);
+    read_int(*limits, "delta_warn_mv", l.delta_warn_mv, 5, 1000, "cell_limits.delta_warn_mv", problems);
+    read_int(*limits, "delta_bad_mv", l.delta_bad_mv, 5, 1000, "cell_limits.delta_bad_mv", problems);
+    read_int(*limits, "temp_low_c", l.temp_low_c, -40, 60, "cell_limits.temp_low_c", problems);
+    read_int(*limits, "temp_high_c", l.temp_high_c, 0, 120, "cell_limits.temp_high_c", problems);
   }
   if (const json::Value* summary = document.get("summary"); summary != nullptr && summary->is_object()) {
     read_bool(*summary, "publish", s.summary.publish, "summary.publish", problems);
@@ -753,6 +791,13 @@ inline Problems validate(const Settings& s) {
     if (s.leds.led10 >= 0) claim(s.leds.led10, "leds", "leds.led10");
   }
   if (s.summary.temperature_low_c >= s.summary.temperature_high_c) bad(problems, "summary.temperature_low_c", "range");
+  // the limits keep their order: an alarm is never inside the warning it follows
+  const CellLimits& l = s.cell_limits;
+  if (l.low_alarm_mv > l.low_warn_mv) bad(problems, "cell_limits.low_alarm_mv", "range");
+  if (l.low_warn_mv >= l.high_warn_mv) bad(problems, "cell_limits.low_warn_mv", "range");
+  if (l.high_warn_mv > l.high_alarm_mv) bad(problems, "cell_limits.high_warn_mv", "range");
+  if (l.delta_warn_mv > l.delta_bad_mv) bad(problems, "cell_limits.delta_warn_mv", "range");
+  if (l.temp_low_c >= l.temp_high_c) bad(problems, "cell_limits.temp_low_c", "range");
   const std::size_t mux_ports = mux_port_count(s.mux);
   for (std::size_t i = 0; i < kPortCount; ++i) {
     const PortConfig& port = s.ports[i];
@@ -761,11 +806,11 @@ inline Problems validate(const Settings& s) {
     if (mux && i >= mux_ports) { bad(problems, base + "enabled", "not_in_profile"); continue; }
     if (port.invert && !mux && is_soft_port(i)) bad(problems, base + "invert", "invalid");
     if (port.cells_per_cycle < 0 || port.cells_per_cycle > 8) bad(problems, base + "cells_per_cycle", "range");
-    if ((port.pv2 || port.parallel != 0) && (port.kind != "voltronic" || port.dialect == "revo" || port.dialect == "pi18")) bad(problems, port.pv2 ? base + "pv2" : base + "parallel", "invalid");   // only the standard dialect has QPIGS2 and QPGS
+    if ((port.pv2 || port.parallel != 0) && (port.kind != "voltronic" || (port.dialect != "auto" && port.dialect != "pi30"))) bad(problems, port.pv2 ? base + "pv2" : base + "parallel", "invalid");   // only the standard dialect has QPIGS2 and QPGS
     Kind kind = Kind::kVoltronic;
     const bool kind_ok = kind_from_text(port.kind, kind);
     if (!kind_ok) bad(problems, base + "kind", "invalid");
-    if (kind_ok && kind == Kind::kVoltronic && port.dialect != "auto" && port.dialect != "pi30" && port.dialect != "revo" && port.dialect != "pi18") bad(problems, base + "dialect", "invalid");
+    if (kind_ok && !valid_dialect(kind, port.dialect)) bad(problems, base + "dialect", "invalid");
     if (!valid_device_name(port.name)) bad(problems, base + "name", port.name.empty() ? "required" : "invalid");
     else if (std::find(names.begin(), names.end(), port.name) != names.end()) bad(problems, base + "name", "conflict");
     else names.push_back(port.name);
@@ -843,6 +888,9 @@ inline std::string to_json(const Settings& s, bool secrets) {
   w.key("system").begin_object().field("auto_restart_hours", s.auto_restart_hours).field("login_limit_per_minute", s.login_limit_per_minute).end_object();
   w.key("security").begin_object().field("seal_secrets", s.seal_secrets).field("ota_check_board", s.ota_check_board).field("ota_require_board_mark", s.ota_require_board_mark).field("control_require_sig", s.control_require_sig).field("ota_invalidate_rejected", s.ota_invalidate_rejected).end_object();
   w.key("capture").begin_object().field("enabled", s.capture_enabled).field("frames", s.capture_frames).end_object();
+  w.key("cell_limits").begin_object().field("low_alarm_mv", s.cell_limits.low_alarm_mv).field("low_warn_mv", s.cell_limits.low_warn_mv).field("high_warn_mv", s.cell_limits.high_warn_mv)
+      .field("high_alarm_mv", s.cell_limits.high_alarm_mv).field("delta_warn_mv", s.cell_limits.delta_warn_mv).field("delta_bad_mv", s.cell_limits.delta_bad_mv)
+      .field("temp_low_c", s.cell_limits.temp_low_c).field("temp_high_c", s.cell_limits.temp_high_c).end_object();
   w.key("summary").begin_object().field("publish", s.summary.publish).field("alerts", s.summary.alerts).field("every_s", s.summary.every_s).field("soc_low_percent", s.summary.soc_low_percent)
       .field("cell_over_mv", s.summary.cell_over_mv).field("temperature_high_c", s.summary.temperature_high_c).field("temperature_low_c", s.summary.temperature_low_c).end_object();
   w.key("battery").begin_object().field("write_enabled", s.battery.enabled).field("expert_mode", s.battery.expert_mode);

@@ -11,6 +11,38 @@ capability matrix in ARMOR-DOCS).
 | Pylontech, RS485 | RS485, 9600 or 115200 | The frame: start, version, address, command, the length and its check, the checksum | The meaning of `INFO`, which differs between protocol versions: not decoded until a capture exists |
 | ANT-BMS (home-made batteries) | 3.3 V TTL UART, 19200 baud 8N1 | The status frame of both protocols (old and new): the cells, sensors, state of charge, current, capacities, MOSFET and balancer states, checked with frames captured on four real models | Every write command (on purpose), the settings registers, the device information, the Bluetooth link |
 
+## The catalogue
+
+Each protocol has an id, the same in the node, the server and the clients (`core/solar_protocols.hpp`; ARMOR-COMMON's `solar_protocols.json`). None has been tried on real equipment
+by this node, except as the compatibility page says.
+
+| Id | Port type and variant | Speed | Asked | State |
+| --- | --- | --- | --- | --- |
+| `pi30` | voltronic, pi30 | 2400 | `QPIGS`, `QMOD`, `QPIWS` and the optional ones | decoded |
+| `pi30-revo` | voltronic, revo | 2400 | `QPIGS`, `QMOD` | decoded |
+| `pi18` | voltronic, pi18 | 2400 | `GS`, `MOD`, `FWS` | decoded |
+| `pi41` | voltronic, pi41 | 2400 | `QPIGS`, `QMOD`, `QPIWS` | partial: first phase, warnings not named |
+| `pi34` | voltronic, pi34 | 2400 | `QPIGS` | partial: a charge controller, no AC side |
+| `modbus-smg2` | modbus, smg2 | 9600 | registers 201-234, 100-101, 108-109 | decoded |
+| `modbus-srne-hybrid` | modbus, srne-hybrid | 9600 | registers 0x0100-0x010E, 0x0210-0x0221 | partial: needs a capture |
+| `modbus-srne-mppt` | modbus, srne-mppt | 9600 | registers 0x0100-0x010D | partial |
+| `vedirect-mppt`, `vedirect-monitor` | vedirect, mppt or monitor | 19200 | nothing: it listens | decoded (text mode) |
+| `pylontech-console` | pylontech | 115200 | `pwr`, `bat`, `info`, `stat` ... | decoded |
+| `ant-bms` | ant | 19200 | the status frame | decoded |
+| `daly-uart` | daly | 9600 | 0x90, 0x93-0x96, 0x98 | decoded |
+| `jbd` | jbd | 9600 | 0x03, 0x04 | decoded |
+| `jk-rs485` | jk | 115200 | read all data | decoded |
+
+A value the equipment does not give is left out of the message where the contract allows it (temperatures, cell range); the fields an inverter message requires are zero for a
+charge controller, which has no AC side.
+
+**Not implemented, and why:** PI00 (frames without a checksum), PI16 and PI17 (three-phase families whose fields do not fit the message; they need captures), DALY over CAN (the node
+has no CAN transceiver), JK over Bluetooth and the JK Modbus map, the hexadecimal mode of VE.Direct (configuration; the text mode gives the readings), Pylontech RS485 `INFO` (needs a
+capture), EASun SMT III (only reverse-engineered notes without a documented checksum).
+
+**An inverter that answers only part.** `QPIGS` is essential. `QMOD` and `QPIWS` are too while the inverter has answered them: a missed one loses that cycle. One that has never
+answered them is read without them from the third try (mode `unknown`, `warnings_known` false) instead of never being published.
+
 ## Voltronic / MPP Solar
 
 - A command is text, a CRC-16 and a carriage return; a reply is `(`, text, a CRC-16 and a carriage return. The CRC is CRC-16/XMODEM, and a CRC byte
