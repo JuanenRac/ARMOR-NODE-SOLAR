@@ -163,14 +163,15 @@ const std::string& kept_before_restart() {
 }
 
 std::string probe_stamp() {
-  char out[40];
+  char out[48];
   if (mqtt_link::clock_is_set()) {
     const std::uint64_t ms = mqtt_link::wall_clock_ms();
     const std::time_t seconds = static_cast<std::time_t>(ms / 1000);
     std::tm parts{};
     gmtime_r(&seconds, &parts);
-    const std::size_t n = std::strftime(out, sizeof out, "%Y-%m-%d %H:%M:%S", &parts);
-    std::snprintf(out + n, sizeof out - n, ".%03uZ", static_cast<unsigned>(ms % 1000));
+    char date[32] = {};
+    std::strftime(date, sizeof date, "%Y-%m-%d %H:%M:%S", &parts);
+    std::snprintf(out, sizeof out, "%s.%03uZ", date, static_cast<unsigned>(ms % 1000));
   } else {
     const std::uint64_t ms = uptime_ms();
     std::snprintf(out, sizeof out, "+%llu.%03us", static_cast<unsigned long long>(ms / 1000), static_cast<unsigned>(ms % 1000));
@@ -204,7 +205,7 @@ std::unique_ptr<probe::Probe> probe_begin(Slot& slot, bool emulated, bool has_tx
   setup.can_transmit = has_tx;
   setup.baud = config::effective_baud(slot.config);
   setup.invert = slot.config.invert && !emulated;
-  setup.max_baud = emulated ? static_cast<int>(solar::softuart::kMaxBaud) : 115200;
+  setup.max_baud = emulated ? static_cast<int>(softuart::kMaxBaud) : 115200;
   setup.inverter = slot.config.kind == "voltronic" || slot.config.kind == "modbus" || slot.config.kind == "vedirect";
   setup.version = esp_app_get_description()->version;
   { std::lock_guard<std::mutex> guard(g_probe.lock); setup.fast = g_probe.fast; }
