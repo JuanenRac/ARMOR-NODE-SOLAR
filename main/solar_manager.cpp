@@ -163,14 +163,15 @@ const std::string& kept_before_restart() {
 }
 
 std::string probe_stamp() {
-  char out[40];
+  char out[48];
   if (mqtt_link::clock_is_set()) {
     const std::uint64_t ms = mqtt_link::wall_clock_ms();
     const std::time_t seconds = static_cast<std::time_t>(ms / 1000);
     std::tm parts{};
     gmtime_r(&seconds, &parts);
-    const std::size_t n = std::strftime(out, sizeof out, "%Y-%m-%d %H:%M:%S", &parts);
-    std::snprintf(out + n, sizeof out - n, ".%03uZ", static_cast<unsigned>(ms % 1000));
+    char date[32] = {};
+    std::strftime(date, sizeof date, "%Y-%m-%d %H:%M:%S", &parts);
+    std::snprintf(out, sizeof out, "%s.%03uZ", date, static_cast<unsigned>(ms % 1000));
   } else {
     const std::uint64_t ms = uptime_ms();
     std::snprintf(out, sizeof out, "+%llu.%03us", static_cast<unsigned long long>(ms / 1000), static_cast<unsigned>(ms % 1000));
