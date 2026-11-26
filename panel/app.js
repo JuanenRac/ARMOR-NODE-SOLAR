@@ -33,7 +33,7 @@ function el(tag, attrs, ...kids) {
 }
 
 const S = {
-  session: null, cfg: null, saved: "", channelAuto: 1, firmware: "", status: null, catalog: [], ports: [], readings: [], users: [],
+  session: null, cfg: null, saved: "", channelAuto: 1, firmware: "", status: null, catalog: [], ports: [], readings: {}, open: {}, readingsDrawn: "", polling: false, users: [],
   page: "overview", problems: {}, message: null, restartNeeded: false, rawOpen: -1, raw: "", scan: { busy: false, list: null, error: "" }, log: { next: 0, text: "" }, busy: false, rebooting: false,
   github: { busy: false, checked: false, available: false, latest: "", error: "", installing: false, state: "", pct: 0 },
 };
@@ -303,7 +303,8 @@ function overviewPage() {
   const active = s.ports.filter(p => p.enabled);
   return el("div", { class: "grid" },
     card(t("ovNode"), kvf([[t("nodeId"), s.node_id], [t("nodeName"), s.name], [t("firmware"), s.version + " (" + s.partition + ")"], [t("uptime"), formatUptime(s.uptime_s)],
-      [t("resetReason"), reasonText(s.reset_reason)], [t("memory"), Math.round(s.heap_free / 1024) + " kB" + (s.psram_free ? " + " + Math.round(s.psram_free / 1048576 * 10) / 10 + " MB PSRAM" : "")], typeof s.chip_temperature_c === "number" ? [t("chipTemp"), s.chip_temperature_c.toFixed(1) + " °C"] : null])),
+      [t("resetReason"), reasonText(s.reset_reason)], [t("memory"), Math.round(s.heap_free / 1024) + " kB" + (s.psram_free ? " + " + Math.round(s.psram_free / 1048576 * 10) / 10 + " MB PSRAM" : "")],
+      isNum(s.heap_internal_free) ? [t("memInternal"), t("memInternalValue", Math.round(s.heap_internal_free / 1024), Math.round(s.heap_internal_min / 1024), Math.round(s.heap_internal_largest / 1024))] : null, typeof s.chip_temperature_c === "number" ? [t("chipTemp"), s.chip_temperature_c.toFixed(1) + " °C"] : null])),
         s.time ? card(t("ovTime"), kvf([[t("localTime"), s.time.set ? s.time.local + " (" + utcLabel(s.time.utc_offset_min) + ")" : t("clockNotSet")],
           [t("timeSource"), !s.time.set ? "—" : s.time.synced ? t("timeFromNtp") : s.time.ntp ? t("timeNtpWaiting") : t("timeManual")], [t("timeZone"), zoneName(s.time.zone)]])) : null,
         s.flash ? flashCard(s.flash) : null,
@@ -682,28 +683,184 @@ function portsPage() {
     el("div", { class: "grid wide" }, [boardCard()].concat(Array.from({ length: S.cfg.profile === "mux" ? Math.min(10, muxPortCount()) : 10 }, (_, i) => i).map(portCard))));
 }
 
+// ---- the readings page --------------------------------------------------------------------------------------------------------------
+// The readings come one port at a time (readings?port=N) and only when that port has a new one: the node never builds or sends them all at once. No inline style in the
+// markup (the panel's content-security policy): the sizes of the bars are set from here. The look is in readings.css.
+
 const num = (value, digits) => (typeof value === "number" ? value.toFixed(digits) : "—");
-function readingCard(m) {
-  if (m.kind === "inverter") {
-    return card(m.device + " · " + t("rd_inverter"), el("p", {}, el("span", { class: "pill " + (m.mode === "fault" ? "bad" : m.mode === "battery" ? "warn" : "ok") }, t("sm_" + m.mode))),
-      kv([[t("rd_grid"), num(m.grid_v, 1) + " V · " + num(m.grid_hz, 1) + " Hz"], [t("rd_out"), num(m.out_v, 1) + " V · " + num(m.out_hz, 1) + " Hz"],
-        [t("rd_load"), Math.round(m.out_w) + " W · " + Math.round(m.out_va) + " VA · " + Math.round(m.load_percent) + " %"], [t("rd_battery"), num(m.battery_v, 2) + " V · " + num(m.battery_a, 1) + " A · " + Math.round(m.battery_percent) + " %"],
-        [t("rd_pv"), num(m.pv_v, 1) + " V · " + num(m.pv_a, 1) + " A · " + Math.round(m.pv_w) + " W"], [t("rd_temp"), Math.round(m.heatsink_c) + " °C"],
-        [t("rd_warnings"), m.warnings.length ? m.warnings.map(w => w.replace(/_/g, " ")).join(", ") : t("rd_none")]]));
+const watts = w => (typeof w !== "number" ? "—" : Math.abs(w) >= 10000 ? (w / 1000).toFixed(1) + " kW" : Math.round(w) + " W");
+const isNum = v => typeof v === "number";
+
+// The limits that colour a cell: [low alarm, low warning, high warning, high alarm] in volts. Lithium iron phosphate (every Pylontech); a battery whose cells go above 3.8 V is another lithium chemistry.
+const CELL_LIMITS = { lfp: [2.8, 3.0, 3.55, 3.65], nmc: [3.0, 3.3, 4.18, 4.25] };
+const DELTA_WARN_MV = 50, DELTA_BAD_MV = 100, TEMP_LOW_C = 0, TEMP_HIGH_C = 50;
+const cellLimits = m => CELL_LIMITS[(m.stack || []).some(x => (x.cells_v || []).some(v => v > 3.8)) ? "nmc" : "lfp"];
+const cellLevel = (v, limits) => (v < limits[0] || v > limits[3] ? 2 : v < limits[1] || v > limits[2] ? 1 : 0);
+
+// What is wrong with one battery of a stack: level 0 (nothing), 1 (look at it) or 2 (alarm), and the words for it.
+function moduleHealth(x, limits) {
+  const problems = [];
+  const add = (level, key) => problems.push([level, key]);
+  const cells = x.cells_v || [];
+  if (cells.length) {
+    const low = Math.min(...cells), high = Math.max(...cells), delta = Math.round((high - low) * 1000);
+    if (low < limits[1]) add(cellLevel(low, limits), "rv_cellLow");
+    if (high > limits[2]) add(cellLevel(high, limits), "rv_cellHigh");
+    if (delta >= DELTA_WARN_MV) add(delta >= DELTA_BAD_MV ? 2 : 1, "rv_deltaHigh");
   }
-  const stack = (m.stack || []).filter(x => x.present);
-  return card(m.device + " · " + t("rd_battery_stack") + (m.model ? " · " + m.model : ""),
-    m.modules === 0 ? note(t("rd_no_modules")) : kv([[t("rd_state"), m.state], [t("rd_soc"), m.soc_percent === undefined ? "—" : m.soc_percent + " %"], [t("rd_voltage"), num(m.voltage_v, 2) + " V · " + num(m.current_a, 2) + " A"],
-      [t("rd_temp"), num(m.temperature_min_c, 1) + " – " + num(m.temperature_max_c, 1) + " °C"], [t("rd_cell_range"), num(m.cell_min_v, 3) + " – " + num(m.cell_max_v, 3) + " V"],
-      m.capacity_ah === undefined ? null : [t("rd_capacity"), num(m.capacity_ah, 1) + " / " + num(m.full_capacity_ah, 1) + " Ah" + (m.energy_kwh === undefined ? "" : " · " + num(m.energy_kwh, 2) + " kWh")],
-      m.cycles === undefined ? null : [t("rd_cycles"), m.cycles], [t("rd_modules"), m.modules], [t("rd_alarm"), m.alarm ? t("rd_yes") : t("rd_no")]]),
-    stack.map(x => el("div", {}, el("h3", {}, t("rd_module") + " " + x.n), el("p", { class: "muted" }, num(x.voltage_v, 3) + " V · " + num(x.current_a, 2) + " A · " + num(x.temperature_c, 1) + " °C" + (x.soc_percent === undefined ? "" : " · " + x.soc_percent + " %") +
-      (x.capacity_ah === undefined ? "" : " · " + num(x.capacity_ah, 1) + "/" + num(x.full_capacity_ah, 1) + " Ah")),
-      x.cells_v ? el("p", { class: "mono" }, x.cells_v.map(v => v.toFixed(3)).join("  ")) : null)));
+  const temps = (x.temperatures_c || []).concat(isNum(x.temperature_c) ? [x.temperature_c] : []);
+  if (temps.some(c => c <= TEMP_LOW_C || c >= TEMP_HIGH_C)) add(2, "rv_tempOut");
+  if (x.soh_abnormal && x.soh_abnormal.length) add(1, "rv_soh");
+  if (x.state && !/^(idle|charge|dischg|normal|full|balance)$/i.test(x.state)) add(2, "rv_stateBad");
+  return { level: problems.reduce((a, p) => Math.max(a, p[0]), 0), problems };
 }
 
+// A blink that stays in step when the page is drawn again, so a new reading does not restart it.
+function blink(node) { node.classList.add("rv-alarm"); node.style.animationDelay = "-" + (Date.now() % 1600) + "ms"; return node; }
+const levelClass = level => ["ok", "warn", "bad"][level];
+const chip = (label, value, level) => el("div", { class: "rv-chip " + (level === undefined ? "" : levelClass(level)) }, el("span", {}, label), el("strong", {}, value));
+
+function meter(percent, kind) {
+  const fill = el("i", { class: kind || "" });
+  fill.style.width = Math.max(0, Math.min(100, percent || 0)) + "%";
+  return el("div", { class: "rv-meter" }, fill);
+}
+const socKind = soc => (soc <= 10 ? "bad" : soc <= 25 ? "warn" : "ok");
+
+function ring(percent) {
+  const known = isNum(percent) && percent >= 0;
+  const node = el("div", { class: "rv-ring " + (known ? socKind(percent) : "") }, el("div", {}, el("strong", {}, known ? Math.round(percent) + " %" : "—"), el("small", {}, "SOC")));
+  node.style.setProperty("--p", String(known ? Math.min(100, percent) : 0));
+  return node;
+}
+
+function cellBars(x, limits) {
+  const cells = x.cells_v || [];
+  if (!cells.length) return el("p", { class: "muted" }, t("rv_noCells"));
+  const low = Math.min(...cells), high = Math.max(...cells), abnormal = x.soh_abnormal || [];
+  return el("div", { class: "rv-cells" }, cells.map((v, i) => {
+    const level = cellLevel(v, limits);
+    const bar = el("i");
+    bar.style.height = Math.max(6, Math.min(100, (v - limits[0]) / (limits[3] - limits[0]) * 100)) + "%";
+    const mark = high - low >= 0.01 ? (v === high ? " top" : v === low ? " low" : "") : "";
+    const cell = el("div", { class: "rv-cell " + levelClass(level) + mark + (abnormal.includes(i) ? " soh" : ""), title: t("rv_cell", i + 1) + ": " + v.toFixed(3) + " V" },
+      el("div", { class: "rv-tube" }, bar), el("b", {}, v.toFixed(3)), el("small", {}, String(i + 1)));
+    return level === 2 ? blink(cell) : cell;
+  }));
+}
+
+function moduleCard(x, limits, key) {
+  if (!x.present) return el("div", { class: "rv-module absent" }, el("header", {}, el("h3", {}, t("rd_module") + " " + x.n), el("span", { class: "pill" }, t("rv_absent"))));
+  const health = moduleHealth(x, limits), cells = x.cells_v || [];
+  const delta = cells.length ? Math.round((Math.max(...cells) - Math.min(...cells)) * 1000) : null;
+  const current = x.current_a;
+  const flow = current > 0.5 ? "rv_charging" : current < -0.5 ? "rv_discharging" : "rv_idle";
+  const details = [x.health_percent === undefined ? null : [t("rv_health"), x.health_percent + " %"], x.cycles === undefined ? null : [t("rd_cycles"), x.cycles],
+    x.capacity_ah === undefined ? null : [t("rd_capacity"), num(x.capacity_ah, 1) + " / " + num(x.full_capacity_ah, 1) + " Ah"],
+    x.temperatures_c ? [t("rd_temp"), x.temperatures_c.map(c => num(c, 1)).join(" · ") + " °C"] : null, x.state ? [t("rd_state"), x.state] : null,
+    x.model ? [t("rv_model"), x.model] : null, x.soft_version ? [t("firmware"), x.soft_version] : null,
+    x.soh_abnormal && x.soh_abnormal.length ? [t("rv_soh"), x.soh_abnormal.map(i => i + 1).join(", ")] : null,
+    x.last_event ? [t("rv_event"), [x.last_event.time, x.last_event.voltage_state, x.last_event.current_state, x.last_event.temperature_state, x.last_event.power_events, x.last_event.battery_events].filter(Boolean).join(" · ")] : null].filter(Boolean);
+  const box = el("div", { class: "rv-module " + levelClass(health.level) },
+    el("header", {}, el("h3", {}, t("rd_module") + " " + x.n), el("span", { class: "pill " + levelClass(health.level) }, health.level ? t(health.level === 2 ? "rd_alarm" : "rv_check") : t(flow))),
+    el("div", { class: "rv-soc" }, meter(x.soc_percent, socKind(x.soc_percent)), el("strong", {}, x.soc_percent === undefined ? "—" : x.soc_percent + " %")),
+    el("div", { class: "rv-chips" }, chip("V", num(x.voltage_v, 2)), chip("A", num(current, 2)), chip("°C", num(x.temperature_c, 1), isNum(x.temperature_c) && (x.temperature_c <= TEMP_LOW_C || x.temperature_c >= TEMP_HIGH_C) ? 2 : undefined),
+      delta === null ? null : chip("Δ mV", String(delta), delta >= DELTA_BAD_MV ? 2 : delta >= DELTA_WARN_MV ? 1 : 0)),
+    cellBars(x, limits),
+    health.problems.length ? el("ul", { class: "rv-problems" }, health.problems.map(p => el("li", { class: levelClass(p[0]) }, t(p[1])))) : null,
+    details.length ? el("details", { open: !!S.open[key], ontoggle: e => { S.open[key] = e.target.open; } }, el("summary", {}, t("rv_details")), kv(details)) : null);
+  return health.level === 2 ? blink(box) : box;
+}
+
+const stale = port => port.state !== "reporting";
+const staleNote = port => (stale(port) ? el("span", { class: "pill warn" }, t("rv_stale")) : null);
+const stackAlarm = m => !!m.alarm || !!m.protecting || (m.stack || []).some(x => x.present && moduleHealth(x, cellLimits(m)).level === 2);
+
+function batterySection(port, m) {
+  const limits = cellLimits(m), alarm = stackAlarm(m);
+  const head = el("header", { class: "rv-head" },
+    el("div", {}, el("h2", {}, m.device), el("p", { class: "muted" }, t("portN", port.port) + " · " + t("rd_battery_stack") + (m.model ? " · " + m.model : "") + " · " + t("rv_batteries", m.modules))),
+    el("div", { class: "rv-pills" }, staleNote(port), psPill(port.state), m.protecting ? el("span", { class: "pill bad" }, t("rv_protect")) : null,
+      m.modules ? el("span", { class: "pill " + (alarm ? "bad" : "ok") }, alarm ? t("rd_alarm") : t("rv_allOk")) : null));
+  if (!m.modules) return el("section", { class: "rv-section" }, head, note(t("rd_no_modules")));
+  const delta = Math.round((m.cell_max_v - m.cell_min_v) * 1000);
+  const section = el("section", { class: "rv-section" + (stale(port) ? " old" : "") }, head,
+    el("div", { class: "rv-summary" }, ring(m.soc_percent),
+      el("div", { class: "rv-chips" }, chip(t("rd_voltage"), num(m.voltage_v, 2) + " V · " + num(m.current_a, 1) + " A"), chip(t("rv_power"), watts(isNum(m.power_w) ? m.power_w : m.voltage_v * m.current_a)),
+        chip(t("rv_cellRange"), num(m.cell_min_v, 3) + " – " + num(m.cell_max_v, 3) + " V"), chip("Δ mV", String(delta), delta >= DELTA_BAD_MV ? 2 : delta >= DELTA_WARN_MV ? 1 : 0),
+        chip(t("rd_temp"), num(m.temperature_min_c, 1) + " – " + num(m.temperature_max_c, 1) + " °C"),
+        m.capacity_ah === undefined || m.full_capacity_ah === undefined ? null : chip(t("rd_capacity"), num(m.capacity_ah, 1) + " / " + num(m.full_capacity_ah, 1) + " Ah" + (m.energy_kwh === undefined ? "" : " · " + num(m.energy_kwh, 2) + " kWh")),
+        m.balancing ? chip(t("rv_balancing"), String(m.balancing)) : null)),
+    el("div", { class: "rv-modules" }, (m.stack || []).map(x => moduleCard(x, limits, port.port + ":" + x.n))));
+  return section;
+}
+
+function inverterSection(port, m) {
+  const fault = m.mode === "fault";
+  const tile = (icon, label, value, detail, percent) => el("div", { class: "rv-tile" }, el("span", { class: "rv-icon", "aria-hidden": "true" }, icon), el("span", {}, label), el("strong", {}, value), el("small", {}, detail), percent === undefined ? null : meter(percent, percent >= 90 ? "bad" : percent >= 70 ? "warn" : "ok"));
+  const warnings = (m.warnings || []).map(w => w.replace(/_/g, " "));
+  const section = el("section", { class: "rv-section" + (stale(port) ? " old" : "") },
+    el("header", { class: "rv-head" }, el("div", {}, el("h2", {}, m.device), el("p", { class: "muted" }, t("portN", port.port) + " · " + t("rd_inverter") + (port.detail ? " · " + port.detail.toUpperCase() : ""))),
+      el("div", { class: "rv-pills" }, staleNote(port), psPill(port.state), el("span", { class: "pill " + (fault ? "bad" : m.mode === "battery" ? "warn" : "ok") }, t("sm_" + m.mode)))),
+    el("div", { class: "rv-tiles" },
+      tile("☀", t("rd_pv"), watts(m.pv_w), num(m.pv_v, 1) + " V · " + num(m.pv_a, 1) + " A"),
+      tile("⚡", t("rd_grid"), num(m.grid_v, 0) + " V", num(m.grid_hz, 1) + " Hz"),
+      tile("⌂", t("rd_load"), watts(m.out_w), Math.round(m.out_va) + " VA · " + num(m.out_v, 0) + " V · " + num(m.out_hz, 1) + " Hz · " + Math.round(m.load_percent) + " %", m.load_percent),
+      tile("▮", t("rd_battery"), Math.round(m.battery_percent) + " %", num(m.battery_v, 2) + " V · " + num(m.battery_a, 1) + " A"),
+      tile("°", t("rd_temp"), Math.round(m.heatsink_c) + " °C", "")),
+    m.warnings_known === false ? el("p", { class: "muted" }, t("rd_warnings") + ": —") : warnings.length
+      ? el("ul", { class: "rv-problems" }, warnings.map(w => el("li", { class: fault ? "bad" : "warn" }, w))) : el("p", { class: "muted" }, t("rd_warnings") + ": " + t("rd_none")));
+  return fault ? blink(section) : section;
+}
+
+// The whole of what answers now: a port that went silent does not stay in the totals. A total of charge is only given when every stack gives its own.
+function bankSummary(list) {
+  const banks = list.filter(r => r.m.kind === "battery" && r.m.modules > 0 && !stale(r.port)).map(r => r.m);
+  const inverters = list.filter(r => r.m.kind === "inverter" && !stale(r.port)).map(r => r.m);
+  if (!banks.length && !inverters.length) return null;
+  const sum = (items, f) => items.reduce((a, m) => a + (f(m) || 0), 0);
+  const modules = sum(banks, m => m.modules);
+  const known = banks.length > 0 && banks.every(m => isNum(m.capacity_ah) && m.full_capacity_ah > 0);
+  const withSoc = banks.filter(m => isNum(m.soc_percent));
+  const soc = known ? sum(banks, m => m.capacity_ah) * 100 / sum(banks, m => m.full_capacity_ah) : withSoc.length ? sum(withSoc, m => m.soc_percent * m.modules) / sum(withSoc, m => m.modules) : undefined;
+  const power = sum(banks, m => (isNum(m.power_w) ? m.power_w : m.voltage_v * m.current_a));
+  const low = Math.min(...banks.map(m => m.cell_min_v)), high = Math.max(...banks.map(m => m.cell_max_v));
+  // the spread that matters is the one inside a battery: two banks at different voltages are not a fault
+  const delta = Math.max(0, ...banks.flatMap(m => (m.stack || []).filter(x => x.present && x.cells_v && x.cells_v.length).map(x => Math.round((Math.max(...x.cells_v) - Math.min(...x.cells_v)) * 1000))));
+  const alarms = banks.filter(stackAlarm).length + inverters.filter(m => m.mode === "fault").length;
+  const section = el("section", { class: "rv-section rv-bank" },
+    el("header", { class: "rv-head" }, el("div", {}, el("h2", {}, t("rv_bank")), el("p", { class: "muted" }, t("rv_bankNote"))),
+      el("div", { class: "rv-pills" }, el("span", { class: "pill " + (alarms ? "bad" : "ok") }, alarms ? t("rd_alarm") + ": " + alarms : t("rv_allOk")))),
+    el("div", { class: "rv-summary" }, banks.length ? ring(soc) : null,
+      el("div", { class: "rv-chips" },
+        banks.length ? [chip(t("rv_batteriesLabel"), String(modules)), chip(t("rd_voltage"), num(sum(banks, m => m.voltage_v * m.modules) / modules, 2) + " V · " + num(sum(banks, m => m.current_a), 1) + " A"),
+          chip(t("rv_power"), watts(power)), chip(t("rv_cellRange"), num(low, 3) + " – " + num(high, 3) + " V"), chip(t("rv_worstDelta"), String(delta), delta >= DELTA_BAD_MV ? 2 : delta >= DELTA_WARN_MV ? 1 : 0),
+          chip(t("rd_temp"), num(Math.min(...banks.map(m => m.temperature_min_c)), 1) + " – " + num(Math.max(...banks.map(m => m.temperature_max_c)), 1) + " °C"),
+          known ? chip(t("rd_capacity"), num(sum(banks, m => m.capacity_ah), 0) + " / " + num(sum(banks, m => m.full_capacity_ah), 0) + " Ah · " + num(sum(banks, m => m.energy_kwh), 2) + " kWh") : null] : null,
+        inverters.length ? [chip(t("rd_pv"), watts(sum(inverters, m => m.pv_w))), chip(t("rd_load"), watts(sum(inverters, m => m.out_w)))] : null)));
+  return alarms ? blink(section) : section;
+}
+
+const readingList = () => S.ports.filter(p => S.readings[p.port]).map(p => ({ port: p, m: S.readings[p.port].m }));
+const readingsSignature = () => lang + "|" + S.ports.map(p => p.port + p.state + (S.readings[p.port] ? S.readings[p.port].count : "")).join(",");
+
 function readingsPage() {
-  return el("div", {}, el("p", { class: "muted" }, t("readingsIntro")), S.readings.length ? el("div", { class: "grid wide" }, S.readings.map(readingCard)) : el("p", { class: "muted" }, t("readingsNone")));
+  const list = readingList();
+  S.readingsDrawn = readingsSignature();
+  return el("div", { class: "rv" }, el("p", { class: "muted" }, t("readingsIntro")),
+    list.length ? [bankSummary(list), list.map(r => (r.m.kind === "inverter" ? inverterSection(r.port, r.m) : batterySection(r.port, r.m)))] : el("p", { class: "muted" }, t("readingsNone")));
+}
+
+// One request per port that has something new, one after another.
+async function refreshReadings() {
+  const wanted = S.ports.filter(p => p.enabled && p.readings > 0 && p.kind !== "raw");
+  Object.keys(S.readings).forEach(n => { if (!wanted.some(p => String(p.port) === n)) delete S.readings[n]; });
+  for (const p of wanted) {
+    const kept = S.readings[p.port];
+    if (kept && kept.count === p.readings) continue;
+    const r = await api("GET", "readings?port=" + p.port);
+    if (r.ok && r.data.kind) S.readings[p.port] = { m: r.data, count: p.readings };
+  }
 }
 
 // ---- users and system ------------------------------------------------------------------------------------------------------------------
@@ -946,11 +1103,13 @@ async function setClockFromBrowser() {
   await refreshLive(); render();
 }
 
+// One request after another (the node has few connections and little memory), and the readings only while their page is shown.
 async function refreshLive() {
-  const [status, ports, readings] = await Promise.all([api("GET", "status"), api("GET", "ports"), api("GET", "readings")]);
+  const status = await api("GET", "status");
   if (status.ok) S.status = status.data;
+  const ports = await api("GET", "ports");
   if (ports.ok) { S.catalog = ports.data.catalog; S.ports = ports.data.ports; }
-  if (readings.ok) S.readings = readings.data;
+  if (S.page === "readings") await refreshReadings();
 }
 
 async function refreshLog() {
@@ -963,9 +1122,10 @@ async function refreshLog() {
 
 let pollTimer = null;
 async function poll() {
-  if (!S.session || !S.session.authenticated || S.rebooting) return;
-  await refreshLive();
-  if (S.page === "overview" || S.page === "readings") render(false);
+  if (!S.session || !S.session.authenticated || S.rebooting || S.polling || document.hidden) return;
+  S.polling = true;
+  try { await refreshLive(); } finally { S.polling = false; }
+  if (S.page === "overview" || (S.page === "readings" && S.readingsDrawn !== readingsSignature())) render(false);
   else if (S.page === "ports") { patchLive(); await refreshRaw(); }
   else if (S.page === "update") await refreshLog();
   updatePills();
@@ -1102,6 +1262,7 @@ function setupScreen() {
 // ---- start ---------------------------------------------------------------------------------------------------------------------------------
 
 async function start() {
+  if (!document.getElementById("rv-css")) document.head.append(el("link", { id: "rv-css", rel: "stylesheet", href: "readings.css" }));
   const r = await api("GET", "session");
   if (!r.ok) { $app.replaceChildren(el("div", { class: "center" }, el("p", { class: "note bad" }, t("unreachable")))); setTimeout(start, 3000); return; }
   S.session = r.data;
@@ -1113,6 +1274,7 @@ async function start() {
     if (users && users.ok) S.users = users.data;
     S.page = (location.hash.replace("#/", "") || "overview");
     if (!PAGES.some(p => p.id === S.page)) S.page = "overview";
+    if (S.page === "readings") await refreshReadings();
     if (S.page === "update") await refreshLog();
   }
   render();
@@ -1122,6 +1284,6 @@ async function start() {
 
 window.addEventListener("hashchange", () => {
   const id = location.hash.replace("#/", "");
-  if (PAGES.some(p => p.id === id) && S.session && S.session.authenticated) { S.page = id; if (id === "update") refreshLog(); render(); }
+  if (PAGES.some(p => p.id === id) && S.session && S.session.authenticated) { S.page = id; if (id === "update") refreshLog(); render(); if (id === "readings") refreshReadings().then(() => { if (S.page === "readings") render(false); }); }
 });
 start();

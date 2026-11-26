@@ -86,7 +86,7 @@ class HardwarePort final : public Port {
 // ---- emulated ---------------------------------------------------------------------------------------------------------------------------
 
 struct EdgeRecord {
-  std::uint64_t time_us;
+  std::uint32_t time_us;   // the low 32 bits of the clock: drain() puts the rest back (an edge waits far less than the 71 minutes they take to come round). 8 bytes an edge, not 16.
   std::uint8_t level;
 };
 
@@ -114,7 +114,7 @@ void IRAM_ATTR on_rx_edge(void* argument) {
   const std::uint32_t head = shared->head.load(std::memory_order_relaxed);
   const std::uint32_t next = (head + 1) % SoftShared::kRing;
   if (next == shared->tail.load(std::memory_order_acquire)) { shared->overruns.fetch_add(1, std::memory_order_relaxed); return; }
-  shared->ring[head] = {static_cast<std::uint64_t>(esp_timer_get_time()), static_cast<std::uint8_t>(gpio_get_level(static_cast<gpio_num_t>(shared->rx)))};
+  shared->ring[head] = {static_cast<std::uint32_t>(esp_timer_get_time()), static_cast<std::uint8_t>(gpio_get_level(static_cast<gpio_num_t>(shared->rx)))};
   shared->head.store(next, std::memory_order_release);
 }
 
@@ -261,8 +261,10 @@ class SoftPort final : public Port {
   void drain() {
     std::uint32_t tail = shared_.tail.load(std::memory_order_relaxed);
     const std::uint32_t head = shared_.head.load(std::memory_order_acquire);
+    const std::uint64_t now = static_cast<std::uint64_t>(esp_timer_get_time());
     while (tail != head) {
-      receiver_.edge(shared_.ring[tail].time_us, shared_.ring[tail].level != 0);
+      const std::uint32_t age = static_cast<std::uint32_t>(now) - shared_.ring[tail].time_us;
+      receiver_.edge(now - age, shared_.ring[tail].level != 0);
       tail = (tail + 1) % SoftShared::kRing;
     }
     shared_.tail.store(tail, std::memory_order_release);

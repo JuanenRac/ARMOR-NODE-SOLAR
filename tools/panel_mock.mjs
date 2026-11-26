@@ -79,7 +79,7 @@ const cells = (base, salt) => Array.from({ length: 15 }, (_, i) => Number((base 
 const readings = () => [
   { kind: "inverter", node_id: config.node.id, device: "axpert-1", timestamp_ms: Date.now(), mode: "line", grid_v: 231.4, grid_hz: 50, out_v: 230, out_hz: 50, out_va: 1450, out_w: 1180, load_percent: 24, battery_v: 52.4, battery_a: 14, battery_percent: 81, pv_v: 180, pv_a: 10.9, pv_w: 1960, heatsink_c: 41, ac_charging: false, pv_charging: true, load_on: true, warnings: [] },
   { kind: "battery", node_id: config.node.id, device: "us3000-1", timestamp_ms: Date.now(), modules: 2, model: "US3000C", state: "charging", voltage_v: 51.3, current_a: 19.2, temperature_min_c: 21, temperature_max_c: 23, cell_min_v: 3.399, cell_max_v: 3.444, soc_percent: 79, alarm: false, capacity_ah: 116.9, full_capacity_ah: 148, energy_kwh: 6, cycles: 181,
-    stack: [{ n: 1, present: true, voltage_v: 51.3, current_a: 9.6, temperature_c: 22, soc_percent: 79, state: "Charge", capacity_ah: 58.5, full_capacity_ah: 74, cycles: 181, cells_v: cells(3.4, 1) }, { n: 2, present: true, voltage_v: 51.3, current_a: 9.6, temperature_c: 22.5, soc_percent: 79, state: "Charge", capacity_ah: 58.4, full_capacity_ah: 74, cycles: 180, cells_v: cells(3.402, 2) }, { n: 3, present: false }] },
+    stack: [{ n: 1, present: true, voltage_v: 51.3, current_a: 9.6, temperature_c: 22, soc_percent: 79, state: "Charge", capacity_ah: 58.5, full_capacity_ah: 74, cycles: 181, cells_v: cells(3.4, 1) }, { n: 2, present: true, voltage_v: 51.3, current_a: 9.6, temperature_c: 22.5, soc_percent: 79, state: "Charge", capacity_ah: 58.4, full_capacity_ah: 74, cycles: 180, cells_v: cells(3.402, 2).map((v, i) => (i === 6 ? 2.96 : v)) }, { n: 3, present: false }] },
   { kind: "battery", node_id: config.node.id, device: "ant-6", timestamp_ms: Date.now(), modules: 1, model: "ANT-BMS", state: "idle", voltage_v: 52.84, current_a: 0.3, temperature_min_c: 1, temperature_max_c: 7, cell_min_v: 3.3, cell_max_v: 3.305, soc_percent: 91, alarm: false, capacity_ah: 252.6, full_capacity_ah: 280, energy_kwh: 13.35, cycles: 17,
     stack: [{ n: 1, present: true, voltage_v: 52.84, current_a: 0.3, temperature_c: 3, soc_percent: 91, state: "Idle", capacity_ah: 252.6, full_capacity_ah: 280, cycles: 17, cells_v: cells(3.3, 3).slice(0, 16), temperatures_c: [1, 2, 2, 7] }] },
 ];
@@ -89,7 +89,7 @@ const ports = () => config.ports.map((p, i) => {
   const state = !p.enabled ? "disabled" : i === 3 ? "silent" : i === 4 ? "listening" : "reporting";
   const on = p.enabled && state !== "silent";
   return { port: i + 1, enabled: p.enabled && (config.profile !== "mux" || !!slot), soft: config.profile !== "mux" && i >= 3, invert: !!p.invert, ...(slot ? { group: "ABC"[slot.group], channel: slot.channel + 1 } : {}), kind: p.kind, name: p.name, baud: p.baud || (p.kind === "pylontech" ? 115200 : p.kind === "ant" ? 19200 : p.kind === "raw" ? 9600 : 2400), rx: p.rx, tx: p.tx, de: p.de, poll_s: 5, state, error: i === 3 ? "timeout" : "",
-    bytes_rx: on ? 48000 + Math.floor((Date.now() - started) / 100) : 0, bytes_tx: p.enabled && p.kind !== "raw" ? 900 : 0, replies_ok: on && p.kind !== "raw" ? 410 : 0, replies_bad: 1, timeouts: i === 3 ? 42 : 2, readings: on && p.kind !== "raw" ? 136 : 0, overruns: 0, framing_errors: 0, ...(p.kind === "ant" && on ? { detail: "new charge=1 discharge=1 balancer=0 cells=16" } : {}) };
+    bytes_rx: on ? 48000 + Math.floor((Date.now() - started) / 100) : 0, bytes_tx: p.enabled && p.kind !== "raw" ? 900 : 0, replies_ok: on && p.kind !== "raw" ? 410 : 0, replies_bad: 1, timeouts: i === 3 ? 42 : 2, readings: on && p.kind !== "raw" ? 1 + Math.floor((Date.now() - started) / 5000) : 0, overruns: 0, framing_errors: 0, ...(p.kind === "ant" && on ? { detail: "new charge=1 discharge=1 balancer=0 cells=16" } : {}) };
 });
 let antRead = null;
 let consoleAsked = null;
@@ -102,7 +102,7 @@ const tokenOf = request => /armor_session=([0-9a-f]+)/.exec(request.headers.cook
 
 function status() {
   return {
-    node_id: config.node.id, name: config.node.name, version: "0.0.3", uptime_s: Math.floor((Date.now() - started) / 1000) + 5400, reset_reason: "power_on", heap_free: 182000, heap_min: 151000, psram_free: 7400000, partition: "ota_0",
+    node_id: config.node.id, name: config.node.name, version: "0.0.3", uptime_s: Math.floor((Date.now() - started) / 1000) + 5400, reset_reason: "power_on", heap_free: 182000, heap_min: 151000, psram_free: 7400000, heap_internal_free: 118000, heap_internal_min: 96000, heap_internal_largest: 61440, partition: "ota_0",
     network: { board, ethernet_available: wired, ethernet_ok: true, layout: wired ? "ethernet+ap" : "wifi-station+ap", link_up: true, has_ip: true, ip: "192.168.0.181", netmask: "255.255.255.0", gateway: "192.168.0.1", dns: "192.168.0.1", mac: "34:85:18:a1:b2:c3",
       ap_active: config.ap.enabled, ap_setup: users.size === 0, ap_ssid: users.size === 0 ? "ARMOR-SETUP-A1B2C3" : config.ap.ssid, ap_channel: 6, ap_clients: 1, sta_connected: true, sta_ssid: config.sta.ssid, sta_rssi: -52 },
     mqtt: { enabled: config.mqtt.enabled, connected: true, clock_set: true, published: 400 + Math.floor((Date.now() - started) / 5000), dropped: 0 },
@@ -125,7 +125,8 @@ const problems = doc => {
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://x");
-  if (request.method === "GET" && ["/", "/index.html"].includes(url.pathname)) { response.writeHead(200, { "Content-Type": "text/html" }); return response.end(readFileSync(path.join(panel, "index.html"))); }
+  if (request.method === "GET" && ["/", "/index.html"].includes(url.pathname)) { response.writeHead(200, { "Content-Type": "text/html", "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'" }); return response.end(readFileSync(path.join(panel, "index.html"))); }
+  if (request.method === "GET" && url.pathname === "/readings.css") { response.writeHead(200, { "Content-Type": "text/css" }); return response.end(readFileSync(path.join(panel, "readings.css"))); }
   if (request.method === "GET" && url.pathname === "/style.css") { response.writeHead(200, { "Content-Type": "text/css" }); return response.end(readFileSync(path.join(panel, "style.css"))); }
   if (request.method === "GET" && url.pathname === "/app.js") { response.writeHead(200, { "Content-Type": "text/javascript" }); return response.end(readFileSync(path.join(panel, "text.js"), "utf8") + "\n" + readFileSync(path.join(panel, "app.js"), "utf8")); }
   if (!url.pathname.startsWith("/api/v1/")) return json(response, 404, { error: "not_found" });
@@ -176,7 +177,11 @@ const server = createServer(async (request, response) => {
     return json(response, 200, { ok: true, restart_required: true });
   }
   if (method === "GET" && route === "ports") return json(response, 200, { ports: ports(), catalog });
-  if (method === "GET" && route === "readings") return json(response, 200, readings());
+  if (method === "GET" && route === "readings") {
+    const number = Number(url.searchParams.get("port"));
+    if (!number) return json(response, 200, readings());
+    return json(response, 200, readings().find(r => r.device === config.ports[number - 1]?.name) ?? {});
+  }
   if (route === "ports/console") {
     const number = Number(url.searchParams.get("port"));
     if (method === "POST") {

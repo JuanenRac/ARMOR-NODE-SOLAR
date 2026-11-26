@@ -31,6 +31,8 @@ add_executable(emit_samples emit_samples.cpp)
 add_executable(emit_poller_samples emit_poller_samples.cpp)
 
 add_executable(test_limits test_limits.cpp)
+# how much memory four stacks of eight batteries take, with limits (it counts every allocation)
+add_executable(test_memory test_memory.cpp)
 
 # rules shared with the other nodes (ARMOR-COMMON/firmware_base/tests); the _eth builds are the s3-eth board profile
 add_executable(test_shared test_shared.cpp)
@@ -86,6 +88,7 @@ add_test(NAME image_board COMMAND test_image_board)
 add_test(NAME image_board_alt COMMAND test_image_board_alt)
 add_test(NAME shared_eth COMMAND test_shared_eth)
 add_test(NAME limits COMMAND test_limits)
+add_test(NAME memory COMMAND test_memory)
 
 # the panel's texts: eight languages in every row and a text for every error the firmware can answer with
 find_package(Python3 COMPONENTS Interpreter)
@@ -99,6 +102,8 @@ if(Python3_FOUND)
   add_test(NAME isr_memory COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_isr_memory.py)
   # the compatibility page says what the table says
   add_test(NAME compat_doc COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../tools/make_compatibility.py --check)
+  # the port tasks keep their data in the external memory and the readings go out port by port
+  add_test(NAME memory_routing COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_memory_routing.py)
   # a saved time zone applies at once; the panel can still say that a restart is needed
   add_test(NAME save_paths COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_save_paths.py)
   # the Bluetooth set-up keeps the session of the phone under its lock, and a request or an answer never crosses to another connection

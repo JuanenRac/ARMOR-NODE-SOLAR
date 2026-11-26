@@ -1,0 +1,56 @@
+/* ARMOR-NODE-SOLAR node panel - the readings page. Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
+   The common look is style.css (shared by the nodes); its colours are used here. */
+.rv { display: grid; gap: 1rem; }
+.rv-section { display: grid; gap: .8rem; padding: 1rem; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(155deg, rgba(16, 40, 51, .94), rgba(7, 23, 32, .94)); }
+.rv-section.old .rv-summary, .rv-section.old .rv-modules, .rv-section.old .rv-tiles { opacity: .55; }
+.rv-bank { border-color: #2d8879; background: radial-gradient(circle at 0 0, rgba(64, 202, 190, .18), transparent 22rem), rgba(7, 23, 32, .94); }
+.rv-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem; align-items: flex-start; }
+.rv-head h2 { font-size: 1.15rem; }
+.rv-pills { display: flex; flex-wrap: wrap; gap: .4rem; }
+.rv-summary { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+.rv-summary > .rv-chips { flex: 1 1 18rem; }
+.rv-ring { --p: 0; --c: var(--accent); display: grid; place-items: center; width: 116px; height: 116px; border-radius: 50%; background: conic-gradient(var(--c) calc(var(--p) * 1%), #143642 0); flex: 0 0 auto; }
+.rv-ring.ok { --c: var(--ok); } .rv-ring.warn { --c: var(--warn); } .rv-ring.bad { --c: var(--bad); }
+.rv-ring > div { display: grid; place-items: center; align-content: center; width: 92px; height: 92px; border-radius: 50%; background: #071720; }
+.rv-ring strong { font-size: 1.35rem; color: var(--strong); }
+.rv-ring small { font: 500 .6rem var(--mono); color: var(--dim); letter-spacing: .2em; }
+.rv-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.rv-chip { display: grid; gap: .1rem; padding: .35rem .6rem; border: 1px solid var(--line-soft); border-radius: 9px; background: #071a23; }
+.rv-chip span { font: 500 .55rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.rv-chip strong { font: 600 .82rem var(--mono); color: var(--strong); }
+.rv-chip.warn { border-color: #8c6d2d; background: #33290f; } .rv-chip.bad { border-color: #974b55; background: #3e1e28; }
+.rv-modules { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); align-items: start; }
+.rv-module { display: grid; gap: .55rem; padding: .75rem; border: 1px solid var(--line); border-radius: 12px; background: #081d27; min-width: 0; }
+.rv-module.warn { border-color: #8c6d2d; } .rv-module.bad { border-color: var(--bad); }
+.rv-module.absent { opacity: .55; }
+.rv-module header { display: flex; justify-content: space-between; gap: .5rem; align-items: center; }
+.rv-module h3 { font-size: .9rem; }
+.rv-soc { display: grid; grid-template-columns: 1fr auto; gap: .6rem; align-items: center; font: 600 .85rem var(--mono); }
+.rv-meter { height: 9px; border-radius: 6px; background: #0e2c37; overflow: hidden; }
+.rv-meter i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 6px; }
+.rv-meter i.ok { background: var(--ok); } .rv-meter i.warn { background: var(--warn); } .rv-meter i.bad { background: var(--bad); }
+.rv-cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.15rem, 1fr)); gap: .3rem .2rem; }
+.rv-cell { display: grid; justify-items: center; gap: .15rem; padding: .15rem 0; border: 1px solid transparent; border-radius: 7px; min-width: 0; }
+.rv-tube { display: flex; align-items: flex-end; width: 11px; height: 52px; border-radius: 4px; background: #0e2c37; overflow: hidden; }
+.rv-tube i { display: block; width: 100%; background: linear-gradient(180deg, var(--ok), #2d8879); }
+.rv-cell.warn .rv-tube i { background: var(--warn); } .rv-cell.bad .rv-tube i { background: var(--bad); }
+.rv-cell b { font: 500 .6rem var(--mono); color: #cdeff3; }
+.rv-cell small { font: 500 .52rem var(--mono); color: var(--dim); }
+.rv-cell.top { border-color: #3b7f99; } .rv-cell.low { border-color: #7a6aa8; }
+.rv-cell.warn { border-color: #8c6d2d; } .rv-cell.bad { border-color: var(--bad); background: #3e1e28; }
+.rv-cell.soh small { color: var(--warn); font-weight: 700; text-decoration: underline; }
+.rv-problems { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0; padding: 0; list-style: none; }
+.rv-problems li { padding: .2rem .55rem; border-radius: 7px; font-size: .74rem; }
+.rv-problems li.warn { background: #33290f; color: #ffe0a0; } .rv-problems li.bad { background: #3e1e28; color: #ffc9ca; }
+.rv-module summary { cursor: pointer; font-size: .76rem; color: var(--accent); }
+.rv-module details .kv { margin-top: .45rem; font-size: .74rem; }
+.rv-tiles { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.rv-tile { display: grid; gap: .2rem; align-content: start; padding: .7rem .8rem; border: 1px solid var(--line); border-radius: 12px; background: #081d27; font-size: .74rem; color: var(--muted); }
+.rv-tile .rv-icon { font-size: 1.3rem; color: var(--accent); line-height: 1; }
+.rv-tile strong { font: 600 1.35rem var(--mono); color: var(--strong); }
+.rv-tile small { font: 500 .66rem var(--mono); }
+/* A fault or an alarm: a soft pulse, well under two a second (1.6 s a turn); none for a person who asked for less movement. */
+.rv-alarm { animation: rv-pulse 1.6s ease-in-out infinite; }
+@keyframes rv-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 111, 121, 0); } 50% { box-shadow: 0 0 14px 2px rgba(255, 111, 121, .65); } }
+@media (prefers-reduced-motion: reduce) { .rv-alarm { animation: none; box-shadow: 0 0 0 2px var(--bad); } }
+@media (max-width: 800px) { .rv-section { padding: .7rem; } .rv-ring { width: 96px; height: 96px; } .rv-ring > div { width: 76px; height: 76px; } }

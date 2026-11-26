@@ -198,7 +198,6 @@ class Poller {
     if (driver_ && driver_->inverter()) { InverterExtras extras; extras.warnings_unknown = !driver_->out().warnings_known; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
     else if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.warnings_unknown = dialect_ == Dialect::kRevo || dialect_ == Dialect::kPi41 || dialect_ == Dialect::kPi34 || !warnings_read_; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
     else payload = battery_json(node_id_, device_, wall_ms, modules_);   // a Pylontech stack or an ANT-BMS (one module)
-    last_payload_ = payload;
     ++stats_.readings;
     last_reading_ms_ = last_rx_ms_;
     return true;
@@ -221,7 +220,6 @@ class Poller {
 
   const PortStats& stats() const { return stats_; }
   const RawLog& raw() const { return raw_; }
-  const std::string& last_payload() const { return last_payload_; }
   config::Kind kind() const { return kind_; }
   // What the last ANT-BMS frame said besides the message (empty for any other kind, and until a frame was read): "old", "new" and the MOSFET and balancer codes.
   // For an inverter port: the dialect it speaks ("pi30", "revo", "pi18"), once it is known.
@@ -808,7 +806,7 @@ class Poller {
   std::unique_ptr<drivers::Driver> driver_;             // only for the protocols that have one
   std::vector<std::uint8_t> last_tx_;
   std::vector<pylontech::Module> modules_;
-  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string, long long>> counters; pylontech::Event last_event; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0; bool valid = false; };
+  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0; bool valid = false; };
   std::array<Extras, 17> extras_;   // by module number (1 to 16): what `info` and `stat` said, kept between cycles
   bool had_capacity_ = false;
   std::size_t module_at_ = 0;
@@ -819,7 +817,6 @@ class Poller {
   int ant_misses_ = 0;
   bool ready_ = false;
   bool wake_ = true;                  // the next `pwr` is preceded by a bare Enter (at the start and after a silence)
-  std::string last_payload_;
   PortStats stats_;
   RawLog raw_;
   CaptureSink capture_;

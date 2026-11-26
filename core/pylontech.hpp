@@ -84,7 +84,7 @@ struct Module {
   double capacity_ah = -1, full_capacity_ah = -1;   // remaining and total capacity in ampere-hours, from the console's `info` text; -1 when it was not read
   int cycles = -1;
   int health_percent = -1;            // the capacity the module has learned (`stat`'s Pwr Coulomb) against its rated one, in percent; -1 when unknown
-  std::vector<std::pair<std::string, long long>> counters;   // the counters of `stat`'s text that are in stat_catalog(): the message key and the value, in the order the console printed them
+  std::vector<std::pair<std::string_view, long long>> counters;   // the counters of `stat`'s text that are in stat_catalog(): the message key (the catalogue's own text, not a copy) and the value, in the order the console printed them
   std::string model;                  // the device name from `info` (US3000C ...)
   int cell_count = -1;                // `info`: Cell Number
   std::string board_version, main_soft_version, soft_version;   // `info`: the board, the main software and the software of the module (V10R04, B68.2.0.0, V2.6)
@@ -285,6 +285,7 @@ inline int parse_info(const std::string& text, Module& module) {
   };
   for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
   handle(line);
+  module.counters.shrink_to_fit();
   if (specified_ah > 0 && module.full_capacity_ah < 0) { module.full_capacity_ah = specified_ah; ++found; }
   if (coulomb_mas > 0 && module.full_capacity_ah > 0) {   // health: what the battery holds now against what it was made to hold
     const double percent = static_cast<double>(coulomb_mas) / (module.full_capacity_ah * 3600000.0) * 100.0;
@@ -499,7 +500,7 @@ struct Stack {
   double voltage_v = 0, current_a = 0, temperature_min_c = 0, temperature_max_c = 0;
   int soc_percent = -1;
   double cell_low_v = 0, cell_high_v = 0;
-  double capacity_ah = -1, full_capacity_ah = -1, energy_kwh = -1;   // the modules' add up (they are in parallel); -1 when no module said
+  double capacity_ah = -1, full_capacity_ah = -1, energy_kwh = -1;   // the modules' add up (they are in parallel); -1 unless every present module said
   int cycles = -1;                    // of the most used module
   int health_percent = -1;            // the mean of the modules that know theirs
   std::string model;                  // the first module's
@@ -515,7 +516,7 @@ struct Stack {
 inline Stack summarise(const std::vector<Module>& modules) {
   Stack s;
   double voltage = 0, soc = 0, current = 0;
-  int with_soc = 0, with_health = 0;
+  int with_soc = 0, with_health = 0, with_capacity = 0, with_full = 0;
   double health = 0;
   bool first = true;
   for (const Module& m : modules) {
@@ -539,8 +540,8 @@ inline Stack summarise(const std::vector<Module>& modules) {
       if (cell_low < s.cell_low_v) s.cell_low_v = cell_low;
       if (cell_high > s.cell_high_v) s.cell_high_v = cell_high;
     }
-    if (m.capacity_ah >= 0) s.capacity_ah = (s.capacity_ah < 0 ? 0 : s.capacity_ah) + m.capacity_ah;
-    if (m.full_capacity_ah >= 0) s.full_capacity_ah = (s.full_capacity_ah < 0 ? 0 : s.full_capacity_ah) + m.full_capacity_ah;
+    if (m.capacity_ah >= 0) { s.capacity_ah = (s.capacity_ah < 0 ? 0 : s.capacity_ah) + m.capacity_ah; ++with_capacity; }
+    if (m.full_capacity_ah >= 0) { s.full_capacity_ah = (s.full_capacity_ah < 0 ? 0 : s.full_capacity_ah) + m.full_capacity_ah; ++with_full; }
     if (m.cycles > s.cycles) s.cycles = m.cycles;
     if (m.health_percent >= 0) { health += m.health_percent; ++with_health; }
     if (s.model.empty()) s.model = m.model;
@@ -552,6 +553,9 @@ inline Stack summarise(const std::vector<Module>& modules) {
     for (const std::string* state : {&m.voltage_state, &m.current_state, &m.temperature_state, &m.cell_voltage_state, &m.cell_temperature_state, &m.mosfet_temperature_state, &m.system_alarm_state})
       if (*state != "Normal" && !state->empty()) s.alarm = true;
   }
+  // a total is the whole stack's or it is not told: the sum of only some modules reads as a half empty (or a small) bank
+  if (with_capacity != s.modules) s.capacity_ah = -1;
+  if (with_full != s.modules) s.full_capacity_ah = -1;
   if (s.modules > 0) {
     s.voltage_v = voltage / s.modules;   // the modules of a stack are in parallel: the same voltage, so the mean is what the bus has
     s.current_a = current;               // and their currents add
