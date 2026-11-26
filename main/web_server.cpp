@@ -48,6 +48,7 @@ extern "C" {
 #include "solar_manager.hpp"
 #include "node_control.hpp"
 #include "node_store.hpp"
+#include "psram_new.hpp"
 #include "tls_cert.hpp"
 
 extern const std::uint8_t index_html_gz_start[] asm("_binary_index_html_gz_start");
@@ -533,6 +534,77 @@ esp_err_t get_console(httpd_req_t* r) {
   return send_json(r, 200, w.str());
 }
 
+// The probe of a port (core/port_probe.hpp): a diagnosis that only sends READING questions, launched by hand. Only an administrator: what comes back can hold serial numbers.
+// GET says how it goes, POST starts or stops it, GET .../log gives the record as plain text from a position (?from=0: all of it).
+esp_err_t get_probe(httpd_req_t* r) {
+  Who who;
+  if (!require(r, who, true, false)) return ESP_OK;
+  const memory::ExternalScope in_psram;
+  const manager::ProbeStatus s = manager::probe_status();
+  const solar::probe::Progress& p = s.progress;
+  json::Writer w;
+  w.begin_object().field("port", s.port).field("state", s.port == 0 ? "idle" : solar::probe::state_name(p.state)).field("previous", s.previous);
+  if (s.port != 0) {
+    w.field("step", static_cast<int>(p.step)).field("total", static_cast<int>(p.total)).field("combinations", static_cast<int>(p.combinations)).field("sent", static_cast<int>(p.sent))
+        .field("rx_bytes", static_cast<long long>(p.rx_bytes)).field("framing_errors", static_cast<long long>(p.framing_errors)).field("answers", static_cast<int>(p.answers))
+        .field("unknown", static_cast<int>(p.unknown)).field("echoes", static_cast<int>(p.echoes)).field("verdict", p.verdict()).field("baud", p.baud)
+        .field("format", solar::probe::format_name(p.format)).field("inverted", p.inverted).field("query", p.query).field("fast", s.fast)
+        .field("elapsed_s", static_cast<long long>(s.elapsed_ms / 1000)).field("log_size", static_cast<long long>(s.log_size)).field("truncated", s.truncated);
+    w.key("found").begin_array();
+    for (const solar::probe::Found& f : p.found)
+      w.begin_object().field("query", f.query).field("protocol", f.protocol).field("baud", f.baud).field("format", solar::probe::format_name(f.format)).field("inverted", f.inverted).end_object();
+    w.end_array();
+  }
+  w.end_object();
+  return send_json(r, 200, w.str());
+}
+
+esp_err_t post_probe(httpd_req_t* r) {
+  Who who;
+  if (!require(r, who, true, true)) return ESP_OK;
+  json::Value in;
+  if (!read_json(r, in)) return ESP_OK;
+  const std::string action = in.string_or("action", "");
+  if (action == "stop") {
+    if (!manager::stop_probe()) return send_error(r, 409, "not_running");
+    return send_json(r, 202, "{\"ok\":true}");
+  }
+  if (action != "start") return send_error(r, 422, "invalid");
+  const long number = query_port(r);
+  if (number < 1 || number > static_cast<long>(config::kPortCount)) return send_error(r, 422, "invalid_port");
+  // nothing else of the request reaches the line: which port, and whether the faster speeds too
+  const std::string why = manager::start_probe(static_cast<std::size_t>(number - 1), in.string_or("speeds", "") == "all");
+  if (!why.empty()) return send_error(r, why == "busy" ? 409 : 422, why.c_str());
+  ESP_LOGW(kTag, "probe of port %ld started by \"%s\"", number, who.user.c_str());
+  return send_json(r, 202, "{\"ok\":true}");
+}
+
+esp_err_t get_probe_log(httpd_req_t* r) {
+  Who who;
+  if (!require(r, who, true, false)) return ESP_OK;
+  std::size_t from = 0;
+  char query[48];
+  if (httpd_req_get_url_query_str(r, query, sizeof query) == ESP_OK) {
+    char value[12];
+    if (httpd_query_key_value(query, "from", value, sizeof value) == ESP_OK) from = static_cast<std::size_t>(std::strtoul(value, nullptr, 10));
+  }
+  const memory::ExternalScope in_psram;
+  std::vector<char> piece(2048);
+  security_headers(r);
+  httpd_resp_set_status(r, status_line(200));
+  httpd_resp_set_type(r, "text/plain; charset=utf-8");
+  esp_err_t sent = ESP_OK;
+  // a running probe keeps writing: one answer never goes past what was there plus a little
+  for (std::size_t total = 0; sent == ESP_OK && total < 512u * 1024u;) {
+    const std::size_t n = manager::probe_log_read(from + total, piece.data(), piece.size());
+    if (n == 0) break;
+    total += n;
+    sent = httpd_resp_send_chunk(r, piece.data(), static_cast<ssize_t>(n));
+  }
+  if (sent == ESP_OK) sent = httpd_resp_send_chunk(r, nullptr, 0);
+  return sent;
+}
+
 // What a port has heard, as hexadecimal lines: to look at a protocol that is not decoded yet, or to see what an inverter really answers.
 esp_err_t get_port_raw(httpd_req_t* r) {
   Who who;
@@ -967,6 +1039,8 @@ esp_err_t api_handler(httpd_req_t* r) {
     if (route == "ports/raw") return get_port_raw(r);
     if (route == "ports/ant-settings") return get_bms_settings(r);
     if (route == "ports/console") return get_console(r);
+    if (route == "ports/probe") return get_probe(r);
+    if (route == "ports/probe/log") return get_probe_log(r);
     if (route == "users") return get_users(r);
     if (route == "ble-pin") return get_ble_pin(r);
     if (route == "log") return get_log(r);
@@ -984,6 +1058,7 @@ esp_err_t api_handler(httpd_req_t* r) {
     if (route == "users") return post_user(r);
     if (route == "ports/ant-settings") return post_bms_settings(r);
     if (route == "ports/console") return post_console(r);
+    if (route == "ports/probe") return post_probe(r);
     if (route == "capture/clear") return post_capture_clear(r);
     if (route == "reboot") return post_reboot(r);
     if (route == "factory-reset") return post_factory_reset(r);

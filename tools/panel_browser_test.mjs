@@ -121,6 +121,15 @@ try {
   check("a question outside the allowed list is refused and the panel says so", (await text()).includes("did not send that question"));
   await shot(`spanel-${board}-console.png`);
 
+  // ---- the probe of a port: start, the record while it runs, stop, and the result
+  await goto("ports"); await sleep(400);
+  check("a port that is on offers to be probed", (await ev("document.querySelectorAll('.probe-start').length")) >= 1 && (await text()).includes("Probe this port"));
+  await ev("document.querySelector('.probe-start').click()"); await sleep(2500);
+  check("the record of the probe shows while it runs", ((await ev("document.getElementById('probe-log')?.textContent")) ?? "").includes("serial port probe") && ((await ev("document.getElementById('probe-verdict')?.textContent")) ?? "").includes("Probing, step"));
+  await ev("document.querySelector('.probe-stop').click()"); await sleep(2000);
+  check("the probe can be stopped and says how it ended", ((await ev("document.getElementById('probe-verdict')?.textContent")) ?? "").includes("Stopped by hand"));
+  await shot(`spanel-${board}-probe.png`);
+
   // ---- the firmware page can ask GitHub for a newer version (every node has it)
   await goto("update");
   body = await text();

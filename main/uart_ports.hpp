@@ -16,7 +16,7 @@ struct Options {
   bool invert = false;     // the signals arrive upside down (a hardware UART flips them)
 };
 
-// One open port. 8 data bits, no parity, one stop bit.
+// One open port. 8 data bits, no parity, one stop bit (the probe of a port tries others for a while).
 class Port {
  public:
   virtual ~Port() = default;
@@ -28,8 +28,10 @@ class Port {
   // How many edges or bytes the port had to drop because nobody read them in time (a busy node).
   virtual std::uint32_t overruns() const = 0;
   virtual std::uint32_t framing_errors() const = 0;
-  // Changes the speed and the polarity of the line (a hardware UART only: a group of ports that share it needs each port's own). False when the port cannot.
+  // Changes the speed and the polarity of the line. An emulated port takes only its slow speeds and never inverted. False when the port cannot.
   virtual bool set_line(int baud, bool invert) { (void)baud; (void)invert; return false; }
+  // Even parity or two stop bits instead of 8N1 (a hardware UART only). False when the port cannot.
+  virtual bool set_format(bool even_parity, bool two_stop_bits) { return !even_parity && !two_stop_bits; }
   // Drops whatever the port holds unread.
   virtual void discard() {}
 };

@@ -5,11 +5,17 @@
 // the broker link. A port that cannot be opened says why (pins, speed, driver) and stays out of the way of the others. Nothing here has run on a board.
 #include "solar_manager.hpp"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
 #include <memory>
 #include <mutex>
 extern "C" {
+#include "esp_app_desc.h"
+#include "esp_attr.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -20,10 +26,12 @@ extern "C" {
 #include "core/mux_group.hpp"
 #include "core/poller.hpp"
 #include "core/port_leds.hpp"
+#include "core/soft_uart.hpp"
 #include "core/solar_system.hpp"
 #include "mqtt_link.hpp"
 #include "mux_board.hpp"
 #include "port_leds_hw.hpp"
+#include "psram_mem.hpp"
 #include "psram_new.hpp"
 #include "uart_ports.hpp"
 
@@ -52,6 +60,9 @@ struct Slot {
   std::atomic<bool> battery_requested{false};
   std::shared_ptr<BatteryJob> battery_job;
   bool battery_running = false;
+  // the probe of this port, and whether a task holds the port open
+  std::atomic<bool> probe_requested{false};
+  bool open = false;
 };
 std::array<Slot, config::kPortCount> g_slots;
 Publish g_publish;
@@ -103,6 +114,147 @@ std::function<void(bool, const std::uint8_t*, std::size_t)> capture_sink(std::si
     std::lock_guard<std::mutex> guard(g_capture_lock);
     g_capture.push(static_cast<unsigned>(port), tx, data, length);
   };
+}
+
+// ---- the probe of a port (core/port_probe.hpp) ----------------------------------------------------------------------------------------------------
+
+namespace probe = solar::probe;
+
+// One probe at a time on the node: which port has it (-1: none) and what it has found so far.
+std::atomic<int> g_probe_port{-1};
+std::atomic<bool> g_probe_cancel{false};
+struct ProbeShared {
+  std::mutex lock;
+  int port = -1;
+  bool fast = false;
+  probe::Progress progress;
+  std::unique_ptr<probe::Log> log;   // made by the port's task, so in the external memory
+  std::uint64_t started_ms = 0, ended_ms = 0;
+} g_probe;
+
+// The summary of the last probe, in the memory of the clock domain: it survives a restart of the node (not a power cut) and nothing is written to the flash.
+struct ProbeKept {
+  std::uint32_t magic, length, sum;
+  char text[1200];
+};
+constexpr std::uint32_t kProbeKeptMagic = 0x50524F42;   // "PROB"
+RTC_NOINIT_ATTR ProbeKept g_probe_kept;
+
+std::uint32_t kept_sum(const char* text, std::size_t length) {
+  std::uint32_t sum = 2166136261u;
+  for (std::size_t i = 0; i < length; ++i) sum = (sum ^ static_cast<std::uint8_t>(text[i])) * 16777619u;
+  return sum;
+}
+void keep_probe_summary(const std::string& text) {
+  const std::size_t n = std::min(text.size(), sizeof g_probe_kept.text);
+  std::memcpy(g_probe_kept.text, text.data(), n);
+  g_probe_kept.length = static_cast<std::uint32_t>(n);
+  g_probe_kept.sum = kept_sum(g_probe_kept.text, n);
+  g_probe_kept.magic = kProbeKeptMagic;
+}
+// What the last start left (read once, before any probe of this start overwrites it).
+const std::string& kept_before_restart() {
+  static const std::string text = [] {
+    const ProbeKept& k = g_probe_kept;
+    if (k.magic != kProbeKeptMagic || k.length > sizeof k.text || kept_sum(k.text, k.length) != k.sum) return std::string();
+    return std::string(k.text, k.length);
+  }();
+  return text;
+}
+
+std::string probe_stamp() {
+  char out[40];
+  if (mqtt_link::clock_is_set()) {
+    const std::uint64_t ms = mqtt_link::wall_clock_ms();
+    const std::time_t seconds = static_cast<std::time_t>(ms / 1000);
+    std::tm parts{};
+    gmtime_r(&seconds, &parts);
+    const std::size_t n = std::strftime(out, sizeof out, "%Y-%m-%d %H:%M:%S", &parts);
+    std::snprintf(out + n, sizeof out - n, ".%03uZ", static_cast<unsigned>(ms % 1000));
+  } else {
+    const std::uint64_t ms = uptime_ms();
+    std::snprintf(out, sizeof out, "+%llu.%03us", static_cast<unsigned long long>(ms / 1000), static_cast<unsigned>(ms % 1000));
+  }
+  return out;
+}
+
+// A UART port or the line of a multiplexed group, as the probe wants them.
+struct PortProbeLine {
+  ports::Port& port;
+  bool configure(int baud, bool invert, probe::Format f) { return port.set_line(baud, invert) && port.set_format(f == probe::Format::k8E1, f == probe::Format::k8N2); }
+  void discard() { port.discard(); }
+  std::size_t read(std::uint8_t* out, std::size_t capacity, unsigned wait_ms) { return port.read(out, capacity, wait_ms); }
+  bool write(const std::uint8_t* data, std::size_t length) { return port.write(data, length); }
+  std::uint32_t framing_errors() { return port.framing_errors(); }
+};
+struct MuxProbeLine {
+  solar::MuxLine& line;
+  bool configure(int baud, bool invert, probe::Format f) { return line.configure(baud, invert) && line.set_format(f == probe::Format::k8E1, f == probe::Format::k8N2); }
+  void discard() { line.discard(); }
+  std::size_t read(std::uint8_t* out, std::size_t capacity, unsigned wait_ms) { return line.read(out, capacity, wait_ms); }
+  bool write(const std::uint8_t* data, std::size_t length) { return line.write(data, length); }
+  std::uint32_t framing_errors() { return line.framing_errors(); }
+};
+
+// The port's task takes the probe that was asked: from here on the port says "probing".
+std::unique_ptr<probe::Probe> probe_begin(Slot& slot, bool emulated, bool has_tx) {
+  probe::Setup setup;
+  setup.port = static_cast<int>(slot.index + 1);
+  setup.emulated = emulated;
+  setup.can_transmit = has_tx;
+  setup.baud = config::effective_baud(slot.config);
+  setup.invert = slot.config.invert && !emulated;
+  setup.max_baud = emulated ? static_cast<int>(solar::softuart::kMaxBaud) : 115200;
+  setup.inverter = slot.config.kind == "voltronic" || slot.config.kind == "modbus" || slot.config.kind == "vedirect";
+  setup.version = esp_app_get_description()->version;
+  { std::lock_guard<std::mutex> guard(g_probe.lock); setup.fast = g_probe.fast; }
+  probe::Clock clock;
+  clock.uptime_ms = uptime_ms;
+  clock.stamp = probe_stamp;
+  auto prober = std::make_unique<probe::Probe>(std::move(setup), std::move(clock));
+  auto log = std::make_unique<probe::Log>();
+  log->append(prober->header());
+  kept_before_restart();
+  keep_probe_summary("port " + std::to_string(slot.index + 1) + ": a probe was running when the node restarted (started " + probe_stamp() + ")\n");
+  ESP_LOGW(kTag, "port %u: probe started, %u steps; its readings wait", static_cast<unsigned>(slot.index + 1), static_cast<unsigned>(prober->progress().total));
+  {
+    std::lock_guard<std::mutex> guard(g_probe.lock);
+    g_probe.log = std::move(log);
+    g_probe.progress = prober->progress();
+    g_probe.started_ms = uptime_ms();
+    g_probe.ended_ms = 0;
+  }
+  std::lock_guard<std::mutex> guard(slot.lock);
+  slot.status.state = "probing";
+  slot.status.error.clear();
+  return prober;
+}
+
+// One step (or none, when it was stopped). True when the probe is over: its summary is written and the node is free for another one.
+template <class Line>
+bool probe_step(Slot& slot, probe::Probe& prober, Line line) {
+  if (g_probe_cancel.load()) prober.stop();
+  const std::string entry = prober.step(line, &g_probe_cancel);
+  const bool over = prober.finished();
+  const std::string summary = over ? prober.summary() : std::string();
+  {
+    std::lock_guard<std::mutex> guard(g_probe.lock);
+    if (g_probe.log) {
+      g_probe.log->append(entry);
+      if (over) g_probe.log->append(summary, true);
+    }
+    g_probe.progress = prober.progress();
+    if (over) g_probe.ended_ms = uptime_ms();
+  }
+  if (!over) return false;
+  keep_probe_summary(summary);
+  const probe::Progress& p = prober.progress();
+  ESP_LOGW(kTag, "port %u: probe %s: %s, %u of %u steps, %u combinations, %u bytes received, %u answers", static_cast<unsigned>(slot.index + 1), probe::state_name(p.state), p.verdict(),
+           static_cast<unsigned>(p.step), static_cast<unsigned>(p.total), static_cast<unsigned>(p.combinations), static_cast<unsigned>(p.rx_bytes), static_cast<unsigned>(p.answers));
+  for (const probe::Found& f : p.found)
+    ESP_LOGW(kTag, "port %u: answered %s at %d %s %s", static_cast<unsigned>(slot.index + 1), f.query, f.baud, probe::format_name(f.format), f.inverted ? "inverted" : "normal");
+  g_probe_port.store(-1);
+  return true;
 }
 
 void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::uint32_t framing_errors, std::string payload) {
@@ -231,7 +383,25 @@ void port_task(void* argument) {
   poller.set_capture(capture_sink(slot.index + 1));
   std::uint8_t buffer[256];
   std::uint64_t last_fill_ms = 0, last_raw_total = 0;
+  std::unique_ptr<probe::Probe> prober;
+  { std::lock_guard<std::mutex> guard(slot.lock); slot.open = true; }
   for (;;) {
+    if (slot.probe_requested.exchange(false)) {
+      poller.abort(uptime_ms());
+      prober = probe_begin(slot, port->soft(), cfg.tx >= 0);
+    }
+    if (prober) {
+      if (probe_step(slot, *prober, PortProbeLine{*port})) {
+        prober.reset();
+        // the port goes back to its own settings
+        port->set_format(false, false);
+        port->set_line(options.baud, options.invert && !port->soft());
+        port->discard();
+      }
+      summary_tick(uptime_ms());
+      vTaskDelay(1);
+      continue;
+    }
     if (slot.settings_requested.exchange(false)) run_bms_settings(slot, *port);
     if (slot.console_requested.exchange(false)) run_console(slot, *port);
     if (slot.battery_requested.exchange(false)) run_battery(slot, *port);
@@ -307,7 +477,30 @@ void group_task(void* argument) {
   clock.wall_clock_ms = [] { return mqtt_link::wall_clock_ms(); };
   std::vector<std::uint64_t> last_fill(job.ports.size(), 0), last_raw_total(job.ports.size(), 0);
   std::uint32_t reported_failures = 0;
+  std::unique_ptr<probe::Probe> prober;
+  std::size_t probed = 0;   // the member whose port is being probed
+  for (std::size_t index : job.ports) { std::lock_guard<std::mutex> guard(g_slots[index].lock); g_slots[index].open = true; }
   for (;;) {
+    for (std::size_t k = 0; k < job.ports.size(); ++k) {
+      Slot& slot = g_slots[job.ports[k]];
+      if (!slot.probe_requested.exchange(false)) continue;
+      probed = k;
+      group->set_paused(k, true);   // the others of the group go on taking their turns between two steps of the probe
+      prober = probe_begin(slot, false, pins.tx >= 0);
+    }
+    if (prober && (!group->has_line() || g_probe_cancel.load())) {
+      Slot& slot = g_slots[job.ports[probed]];
+      const bool free_line = !group->has_line();
+      if (free_line) {
+        group->poller(probed).abort(uptime_ms());
+        line->select(group->members()[probed].channel);
+      } else {
+        prober->stop();   // stopped while another port has the line: nothing is sent
+      }
+      const bool over = probe_step(slot, *prober, MuxProbeLine{*line});
+      if (free_line) { line->set_format(false, false); group->invalidate_line(); }
+      if (over) { prober.reset(); group->set_paused(probed, false); }
+    }
     // the reading of an ANT-BMS's settings asked in the panel is done between two turns, on that port's channel
     if (!group->has_line()) {
       for (std::size_t k = 0; k < job.ports.size(); ++k) {
@@ -398,6 +591,7 @@ static void start_mux(const config::Settings& settings) {
 
 void start(const config::Settings& settings, Publish publish) {
   g_publish = std::move(publish);
+  kept_before_restart();
   {
     std::lock_guard<std::mutex> guard(g_summary_lock);
     g_summary.configure(settings.summary);
@@ -431,13 +625,62 @@ std::string start_bms_settings(std::size_t index) {
   Slot& slot = g_slots[index];
   std::lock_guard<std::mutex> guard(slot.lock);
   if (!slot.status.enabled || slot.status.kind != "ant") return "not_ant";
-  if (slot.settings.state == "running") return "busy";
+  if (slot.settings.state == "running" || g_probe_port.load() == static_cast<int>(index)) return "busy";
   if (!slot.ant_new_protocol) return slot.status.detail.empty() ? "protocol_unknown" : "old_protocol";
   slot.settings = BmsSettingsStatus();
   slot.settings.state = "running";
   slot.settings.total = solar::ant::SettingsReader::total();
   slot.settings_requested = true;
   return "";
+}
+
+std::string start_probe(std::size_t index, bool fast) {
+  if (index >= config::kPortCount) return "no_port";
+  const memory::ExternalScope in_psram;
+  // the record of a probe is a few hundred kilobytes: only with external memory to spare
+  if (memory::snapshot().psram_free < 1024u * 1024u) return "no_memory";
+  Slot& slot = g_slots[index];
+  std::lock_guard<std::mutex> guard(slot.lock);
+  if (!slot.status.enabled || !slot.open) return "port_off";
+  if (slot.console.state == "running" || slot.settings.state == "running" || slot.battery_running) return "busy";
+  int nobody = -1;
+  if (!g_probe_port.compare_exchange_strong(nobody, static_cast<int>(index))) return "busy";
+  {
+    std::lock_guard<std::mutex> shared(g_probe.lock);
+    g_probe.port = static_cast<int>(index);
+    g_probe.fast = fast;
+    g_probe.progress = probe::Progress();
+    g_probe.log.reset();
+    g_probe.started_ms = uptime_ms();
+    g_probe.ended_ms = 0;
+  }
+  g_probe_cancel = false;
+  slot.probe_requested = true;
+  return "";
+}
+
+bool stop_probe() {
+  if (g_probe_port.load() < 0) return false;
+  g_probe_cancel = true;
+  return true;
+}
+
+ProbeStatus probe_status() {
+  ProbeStatus out;
+  std::lock_guard<std::mutex> guard(g_probe.lock);
+  out.previous = kept_before_restart();
+  if (g_probe.port < 0) return out;
+  out.port = g_probe.port + 1;
+  out.fast = g_probe.fast;
+  out.progress = g_probe.progress;
+  out.elapsed_ms = (g_probe.ended_ms != 0 ? g_probe.ended_ms : uptime_ms()) - g_probe.started_ms;
+  if (g_probe.log) { out.log_size = g_probe.log->size(); out.truncated = g_probe.log->truncated(); }
+  return out;
+}
+
+std::size_t probe_log_read(std::size_t from, char* out, std::size_t capacity) {
+  std::lock_guard<std::mutex> guard(g_probe.lock);
+  return g_probe.log ? g_probe.log->read(from, out, capacity) : 0;
 }
 
 std::string start_console(std::size_t index, const std::string& command) {
@@ -447,7 +690,7 @@ std::string start_console(std::size_t index, const std::string& command) {
   if (!slot.status.enabled || slot.status.kind != "pylontech") return "not_pylontech";
   std::string canonical;
   if (!solar::console::allowed(command, canonical)) return "not_allowed";
-  if (slot.console.state == "running") return "busy";
+  if (slot.console.state == "running" || g_probe_port.load() == static_cast<int>(index)) return "busy";
   slot.console = ConsoleStatus();
   slot.console.state = "running";
   slot.console.command = canonical;
@@ -492,7 +735,7 @@ std::string start_battery_job(std::size_t index, std::shared_ptr<BatteryJob> job
   Slot& slot = g_slots[index];
   std::lock_guard<std::mutex> guard(slot.lock);
   if (!slot.status.enabled || slot.status.kind != "pylontech") return "not_pylontech";
-  if (slot.battery_running || slot.battery_job) return "busy";
+  if (slot.battery_running || slot.battery_job || g_probe_port.load() == static_cast<int>(index)) return "busy";
   slot.battery_job = std::move(job);
   slot.battery_running = true;
   slot.battery_requested = true;
