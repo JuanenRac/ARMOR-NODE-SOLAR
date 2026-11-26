@@ -87,6 +87,8 @@ struct PortStats {
 
 class Poller {
  public:
+  static constexpr int kMaxModules = 16;   // a console answers for up to sixteen, and so does the message; with no limit in the settings all of them are asked
+  static constexpr std::uint64_t kExtrasRetryMs = 5ULL * 60ULL * 1000ULL;   // a module whose capacity is still unknown is asked again after this, not after half an hour
   static constexpr std::uint64_t kVoltronicTimeoutMs = 2500;
   static constexpr std::uint64_t kConsoleTableTimeoutMs = 5000;
   static constexpr std::uint64_t kConsoleExtraTimeoutMs = 3000;
@@ -99,7 +101,7 @@ class Poller {
   // `cells_per_cycle`: a Pylontech stack of several modules takes long to read cell by cell on a line that other ports share; with a number here (1 to 8) each cycle reads the
   // cells of that many modules, in rotation, and the others keep the cells of their last turn. 0 (the default): every module every cycle.
   Poller(config::Kind kind, std::string node_id, std::string device, int poll_s, int max_modules, const std::string& dialect = "auto", int cells_per_cycle = 0)
-      : kind_(kind), node_id_(std::move(node_id)), device_(std::move(device)), poll_ms_(static_cast<std::uint64_t>(poll_s) * 1000ULL), max_modules_(max_modules > 0 ? max_modules : 8),
+      : kind_(kind), node_id_(std::move(node_id)), device_(std::move(device)), poll_ms_(static_cast<std::uint64_t>(poll_s) * 1000ULL), max_modules_(max_modules > 0 ? max_modules : kMaxModules),
         cells_per_cycle_(cells_per_cycle > 0 ? cells_per_cycle : 0) {
     if (dialect == "pi18") { dialect_ = Dialect::kPi18; auto_ = false; }
     else if (dialect == "revo") { dialect_ = Dialect::kRevo; auto_ = false; }
@@ -257,6 +259,7 @@ class Poller {
   void finish(std::uint64_t now_ms) {
     step_ = Step::kIdle;
     ready_ = true;
+    if (kind_ == config::Kind::kPylontech) for (pylontech::Module& m : modules_) pylontech::estimate_remaining(m);
     next_cycle_ms_ = cycle_started_ms_ + poll_ms_;
     if (next_cycle_ms_ < now_ms) next_cycle_ms_ = now_ms;
     buffer_.clear();
@@ -586,9 +589,12 @@ class Poller {
   }
   // Both extras have been asked (answered or not): keep what came, unless the module also reports its remaining charge there (that one has to be fresh every time).
   void end_extras(std::uint64_t now_ms) {
-    const pylontech::Module& m = modules_[module_at_];
+    pylontech::Module& m = modules_[module_at_];
     Extras& e = extras_[static_cast<std::size_t>(m.number)];
-    e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.counters = m.counters; if (m.last_event.valid) e.last_event = m.last_event; e.cell_count = m.cell_count; e.board_version = m.board_version; e.main_soft_version = m.main_soft_version; e.soft_version = m.soft_version; e.max_charge_a = m.max_charge_a; e.max_discharge_a = m.max_discharge_a; e.console_baud = m.console_baud; e.soh_counts = m.soh_counts; e.soh_abnormal = m.soh_abnormal; e.at_ms = now_ms;
+    // an `info` that did not answer this time does not take away the capacity it told before: without it the stack would have no total until the next refresh
+    if (m.full_capacity_ah < 0 && e.full_capacity_ah >= 0) m.full_capacity_ah = e.full_capacity_ah;
+    const bool capacity_told = m.full_capacity_ah >= 0;
+    e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.counters = m.counters; if (m.last_event.valid) e.last_event = m.last_event; e.cell_count = m.cell_count; e.board_version = m.board_version; e.main_soft_version = m.main_soft_version; e.soft_version = m.soft_version; e.max_charge_a = m.max_charge_a; e.max_discharge_a = m.max_discharge_a; e.console_baud = m.console_baud; e.soh_counts = m.soh_counts; e.soh_abnormal = m.soh_abnormal; e.at_ms = capacity_told ? now_ms : now_ms - (kExtrasRefreshMs - kExtrasRetryMs);   // unsigned: the difference stays right near the start
     e.valid = had_capacity_ || m.capacity_ah < 0;
     ++module_at_;
     ask_next_module(now_ms);

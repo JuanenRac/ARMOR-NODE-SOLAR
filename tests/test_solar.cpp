@@ -1,12 +1,15 @@
 // ARMOR-NODE-SOLAR - host tests: the Voltronic / MPP Solar protocol, the Pylontech console and frames, and the messages.
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 // The replies below are typical ones of the public documents of these devices, written by hand; no real device has been read.
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
 
 #include "../core/solar_json.hpp"
 #include "../core/solar_config.hpp"
+#include "../core/poller.hpp"
 #include "pylontech_real.hpp"
 #include "pylontech_us2000_real.hpp"
 #include "pylontech_logs_real.hpp"
@@ -353,6 +356,79 @@ static void test_pylontech_real_captures() {
   CHECK(pylontech::parse_info("@\r\nInvalid command or fail to excute.\r\nUsage:\r\nShow recorded data - datalist [event/history]\r\n$$\r\npylon_debug>\r\n", none) == 0);
 }
 
+// The charge left of a stack, with the two forms of the `bat` table: ampere-hours for each cell (a real US2000, whose cells differ) and percentages only.
+static std::string us_console(const std::string& command, int modules, const std::string& bat, bool info_answers) {
+  std::string out = "@\r\n";
+  if (command == "pwr") {
+    out += "Power Volt Curr Tempr Tlow Thigh Vlow Vhigh Base.St Volt.St Curr.St Temp.St Coulomb Time B.V.St B.T.St\r\n";
+    for (int i = 1; i <= modules; ++i) out += std::to_string(i) + " 51688 0 36000 36000 36000 3347 3495 Charge Normal Normal Normal 52% 2025-03-09 19:11:40 Normal Normal\r\n";
+  } else if (command.rfind("bat", 0) == 0) {
+    return bat;
+  } else if (command.rfind("info", 0) == 0 && info_answers) {
+    out += "Device name : US2000C\r\nSpecification : 48V/50AH\r\nCell Number : 15\r\n";
+  }
+  return out + "Command completed successfully\r\n$$\r\npylon>";
+}
+static std::string us_cycle(Poller& poller, std::uint64_t& now, int modules, const std::string& bat, bool info_answers, std::vector<std::string>* asked = nullptr) {
+  for (int turn = 0; turn < 4000; ++turn) {
+    const std::vector<std::uint8_t> tx = poller.next_tx(now);
+    now += 40;
+    if (!tx.empty()) {
+      std::string command(tx.begin(), tx.end());
+      while (!command.empty() && command.front() == '\r') command.erase(0, 1);
+      while (!command.empty() && command.back() == '\r') command.pop_back();
+      if (asked != nullptr) asked->push_back(command);
+      const std::string reply = us_console(command, modules, bat, info_answers);
+      poller.on_rx(reinterpret_cast<const std::uint8_t*>(reply.data()), reply.size(), now);
+    }
+    std::string topic, payload;
+    if (poller.take_message(now, topic, payload)) return payload;
+  }
+  return "";
+}
+static void test_pylontech_remaining_capacity() {
+  std::vector<double> cells;
+  double remaining = 0;
+  // a real US2000: the cells differ (26,039 to 30,541 mAh) and the module's charge is the lowest, which is its 52 % of 50 Ah
+  CHECK(pylontech::parse_bat(kUs2000Bat, cells, &remaining) == 15 && remaining > 26.038 && remaining < 26.040);
+  std::string percent_only = "@\r\nBattery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp. State  Coulomb\r\n";
+  for (int i = 0; i < 15; ++i) percent_only += std::to_string(i) + " 3425 0 36000 Charge Normal Normal Normal 60%\r\n";
+  percent_only += "Command completed successfully\r\n$$\r\npylon>";
+  CHECK(pylontech::parse_bat(percent_only, cells, &remaining) == 15 && remaining < 0);
+  armor::json::Value document;
+  for (const std::string& bat : {std::string(kUs2000Bat), percent_only}) {
+    const bool has_mah = bat != percent_only;
+    Poller poller(armor::config::Kind::kPylontech, "solar-1", "us2000-1", 5, 0);
+    std::uint64_t now = 1000;
+    CHECK(armor::json::parse(us_cycle(poller, now, 2, bat, true), document));
+    const double each = has_mah ? 26.039 : 26.0;   // the cells' own figure, or 52 % of 50 Ah
+    CHECK(document.get("capacity_ah") != nullptr && std::fabs(document.get("capacity_ah")->number - 2 * each) < 0.01);
+    CHECK(document.get("full_capacity_ah") != nullptr && document.get("full_capacity_ah")->number == 100.0 && document.get("energy_kwh") != nullptr);
+    CHECK(std::fabs(document.get("stack")->items[1].get("capacity_ah")->number - each) < 0.01);
+  }
+  // with no capacity told at all nothing is made up, and the module is asked again after five minutes, not half an hour; once told it is kept when `info` later stays silent
+  Poller poller(armor::config::Kind::kPylontech, "solar-1", "us2000-1", 5, 0);
+  std::uint64_t now = 1000;
+  CHECK(armor::json::parse(us_cycle(poller, now, 1, percent_only, false), document) && document.get("capacity_ah") == nullptr && document.get("full_capacity_ah") == nullptr);
+  now += Poller::kExtrasRetryMs + 1000;
+  CHECK(armor::json::parse(us_cycle(poller, now, 1, percent_only, true), document) && document.get("full_capacity_ah") != nullptr && document.get("capacity_ah") != nullptr);
+  now += Poller::kExtrasRefreshMs + 1000;
+  std::vector<std::string> asked;
+  CHECK(armor::json::parse(us_cycle(poller, now, 1, percent_only, false, &asked), document) && std::find(asked.begin(), asked.end(), "info 1") != asked.end());
+  CHECK(document.get("full_capacity_ah") != nullptr && document.get("full_capacity_ah")->number == 50.0);
+  // sixteen batteries with the setting at 0: every one is asked for its cells and counts in the totals
+  Poller tall(armor::config::Kind::kPylontech, "solar-1", "us2000-1", 5, 0);
+  now = 1000;
+  asked.clear();
+  CHECK(armor::json::parse(us_cycle(tall, now, 16, percent_only, true, &asked), document) && std::find(asked.begin(), asked.end(), "bat 16") != asked.end());
+  CHECK(document.get("full_capacity_ah") != nullptr && document.get("full_capacity_ah")->number == 800.0 && document.get("stack")->items[15].get("cells_v") != nullptr);
+  // a port limited to eight says nothing it does not know about the others: no totals
+  Poller limited(armor::config::Kind::kPylontech, "solar-1", "us2000-1", 5, 8);
+  now = 1000;
+  CHECK(armor::json::parse(us_cycle(limited, now, 9, percent_only, true), document) && document.get("full_capacity_ah") == nullptr && document.get("capacity_ah") == nullptr);
+  CHECK(document.get("stack")->items[8].get("cells_v") == nullptr);
+}
+
 static void test_messages() {
   CHECK(topic("perimetro-1", "axpert-1") == "armor/solar/perimetro-1/axpert-1/state");
   CHECK(topic("Bad", "x").empty() && topic("a", "").empty() && topic("a", "b/c").empty() && topic("-a", "b").empty() && topic("a", std::string(33, 'x')).empty());
@@ -513,7 +589,7 @@ static void test_pylontech_real_us2000() {
   std::vector<double> cells;
   double remaining = -1;
   int balancing = -1;
-  CHECK(pylontech::parse_bat(kUs2000Bat, cells, &remaining, &balancing) == 15 && cells[6] > 3.345 && cells[6] < 3.347 && cells[10] > 3.497 && remaining > 30.05 && remaining < 30.06);
+  CHECK(pylontech::parse_bat(kUs2000Bat, cells, &remaining, &balancing) == 15 && cells[6] > 3.345 && cells[6] < 3.347 && cells[10] > 3.497 && remaining > 26.03 && remaining < 26.04);
   // info: identity, the limits of the module and the speed of the console of an old unit
   pylontech::Module m;
   pylontech::parse_info(kUs2000Info, m);
@@ -605,6 +681,7 @@ int main() {
   test_pylontech_real_console_answers();
   test_pylontech_wake_frame();
   test_pylontech_real_us2000();
+  test_pylontech_remaining_capacity();
   test_pylontech_real_logs();
   test_pylontech_port_speeds();
   test_messages();

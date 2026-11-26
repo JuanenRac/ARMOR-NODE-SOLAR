@@ -130,7 +130,7 @@ struct PortConfig {
   int tx = -1;        // the GPIO that sends to the equipment's RX line (not needed by a raw port)
   int de = -1;        // an RS485 transceiver's driver-enable (and receiver-enable) pin, high while sending; -1: RS232 or none
   int poll_s = 0;     // seconds between two readings; 0: the kind's own
-  int modules = 0;    // Pylontech: how many modules to ask cell by cell (0: all that answer, up to 8)
+  int modules = 0;    // Pylontech: how many modules to ask cell by cell (0: all that answer, up to 16)
   std::string dialect = "auto";   // inverter: "auto" (looks for it), "pi30", "revo" or "pi18"; the other kinds ignore it
   bool invert = false;            // the signals of the line arrive upside down (a device with TTL levels wired through a MAX3232 does): the UART flips them
   int cells_per_cycle = 0;        // Pylontech: the cells of this many modules per cycle, in rotation (0: every module every cycle); the others keep their last cells

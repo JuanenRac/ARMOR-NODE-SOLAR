@@ -46,7 +46,8 @@ void operator delete[](void* memory, std::size_t) noexcept { ::operator delete(m
 
 using namespace armor;
 
-constexpr int kStacks = 4, kModules = 8;
+constexpr int kStacks = 4;
+static int kModules = 8;   // measured with eight and with sixteen; the limits below are for eight and double with sixteen
 // The limits for ONE port with eight modules. What it keeps between two cycles (the poller and the last whole message), in all and in small blocks; the message; the most one cycle adds.
 constexpr long kKeptPerStack = 96 * 1024;
 constexpr long kSmallPerStack = 24 * 1024;
@@ -101,7 +102,7 @@ static void measure(int cells) {
   std::vector<Port> ports(kStacks);
   const long start = g_live, small_start = g_small;
   for (int s = 0; s < kStacks; ++s) {
-    ports[s].poller = std::make_unique<solar::Poller>(config::Kind::kPylontech, "solar-1", "bank-" + std::to_string(s + 1), 5, kModules);
+    ports[s].poller = std::make_unique<solar::Poller>(config::Kind::kPylontech, "solar-1", "bank-" + std::to_string(s + 1), 5, 0);   // 0: every battery that answers
     long after_second = 0;
     std::size_t message = 0;
     for (int round = 0; round < 4; ++round) {
@@ -110,20 +111,20 @@ static void measure(int cells) {
       {
         std::string payload = cycle(*ports[s].poller, cells, ports[s].now);
         message = payload.size();
-        CHECK(!payload.empty() && message <= kMessageBytes);
+        CHECK(!payload.empty() && message <= kMessageBytes * static_cast<std::size_t>(kModules / 8));
         ports[s].reading = std::make_shared<const std::string>(std::move(payload));
       }
       ports[s].now += 6000;
-      CHECK(g_peak - before <= kCyclePeak);
+      CHECK(g_peak - before <= kCyclePeak * (kModules / 8));
       if (round == 1) after_second = g_live;
     }
     CHECK(ports[s].poller->modules().size() == static_cast<std::size_t>(kModules));
     CHECK(ports[s].poller->modules().back().cells_v.size() == static_cast<std::size_t>(cells));
     CHECK(g_live - after_second <= 8 * 1024);   // nothing piles up from one cycle to the next (the message's buffer may differ by its growth)
     const long kept = g_live - start, small = g_small - small_start;
-    std::printf("%d cells, %d port(s): %ld bytes kept (%ld in blocks of up to 4096), message %zu bytes\n", cells, s + 1, kept, small, message);
-    CHECK(kept <= kKeptPerStack * (s + 1));
-    CHECK(small <= kSmallPerStack * (s + 1));
+    std::printf("%d batteries of %d cells, %d port(s): %ld bytes kept (%ld in blocks of up to 4096), message %zu bytes\n", kModules, cells, s + 1, kept, small, message);
+    CHECK(kept <= kKeptPerStack * (s + 1) * (kModules / 8));
+    CHECK(small <= kSmallPerStack * (s + 1) * (kModules / 8));
   }
   // the counters of `stat` name the catalogue's own text: no string of their own for each module
   for (const auto& counter : ports[0].poller->modules().front().counters) {
@@ -161,6 +162,9 @@ static void test_the_tasks_that_use_the_external_memory() {
 int main() {
   measure(15);
   measure(16);
+  kModules = 16;
+  measure(15);
+  kModules = 8;
   test_totals_are_whole_or_absent();
   test_the_tasks_that_use_the_external_memory();
   if (g_failures != 0) { std::printf("%d failure(s)\n", g_failures); return 1; }

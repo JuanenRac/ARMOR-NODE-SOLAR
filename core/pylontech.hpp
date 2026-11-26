@@ -181,8 +181,8 @@ inline std::size_t parse_pwr(const std::string& text, std::vector<Module>& modul
 
 // The cells of a module from the text a `bat <module>` command printed: one row per cell with the index, the voltage (mV), the current (mA), the temperature
 // (m°C), the four states and the charge (a percentage; the newer firmwares then give the charge in mAH and a Y or N for the cell being balanced). Returns how many cells were
-// read; a row that is not one is skipped, and a cell voltage out of 0 to 10 V refuses the whole table. `remaining_ah` gets the charge in ampere-hours when a row has it (-1
-// otherwise) and `balancing` how many cells are being balanced.
+// read; a row that is not one is skipped, and a cell voltage out of 0 to 10 V refuses the whole table. `remaining_ah` gets the module's charge in ampere-hours when the rows have it (-1
+// otherwise): the LOWEST of its cells, which are in series (a real US2000 reports exactly that one in `pwr` and `getpwr`), and `balancing` how many cells are being balanced.
 inline std::size_t parse_bat(const std::string& text, std::vector<double>& cells, double* remaining_ah = nullptr, int* balancing = nullptr) {
   cells.clear();
   if (remaining_ah != nullptr) *remaining_ah = -1;
@@ -198,13 +198,19 @@ inline std::size_t parse_bat(const std::string& text, std::vector<double>& cells
     if (static_cast<std::size_t>(index) != cells.size()) { bad = true; return; }   // the cells come in order, from 0
     cells.push_back(millivolts / 1000.0);
     long milliamp_hours = 0;
-    if (remaining_ah != nullptr && *remaining_ah < 0 && t.size() >= 11 && detail::integer(t[9], milliamp_hours) && milliamp_hours >= 0 && t[10] == "mAH") *remaining_ah = milliamp_hours / 1000.0;
+    if (remaining_ah != nullptr && t.size() >= 11 && detail::integer(t[9], milliamp_hours) && milliamp_hours >= 0 && t[10] == "mAH" && (*remaining_ah < 0 || milliamp_hours / 1000.0 < *remaining_ah)) *remaining_ah = milliamp_hours / 1000.0;
     if (balancing != nullptr && t.size() >= 12 && t[11] == "Y") ++*balancing;
   };
   for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
   handle(line);
   if (bad) cells.clear();
   return cells.size();
+}
+
+// A battery whose firmware tells no charge in ampere-hours (a `bat` table with only percentages, an `info` with no "Remain capacity") still says its state of charge and its capacity:
+// the charge left is that share of it, which is how the units that do print it count it (US2000: 52 % of 50 Ah is its 26,039 mAh). Nothing is made up without both figures.
+inline void estimate_remaining(Module& m) {
+  if (m.present && m.capacity_ah < 0 && m.full_capacity_ah >= 0 && m.soc_percent >= 0) m.capacity_ah = m.full_capacity_ah * m.soc_percent / 100.0;
 }
 
 // What a module says about itself in the text of the console's `info <module>` command: lines of "Name : value". Read: the device name, the remaining and the total
