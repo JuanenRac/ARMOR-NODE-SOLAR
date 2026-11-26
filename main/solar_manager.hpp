@@ -58,7 +58,6 @@ struct PortStatus {
   std::string error;          // why the port did not open, or the last error of an exchange
   std::string detail;   // what the equipment said besides the readings (an ANT-BMS: the protocol and its MOSFET codes)
   std::uint32_t bytes_rx = 0, bytes_tx = 0, replies_ok = 0, replies_bad = 0, timeouts = 0, readings = 0, overruns = 0, framing_errors = 0;
-  std::string last_payload;   // the last whole reading (JSON), or ""
 };
 PortStatus status(std::size_t index);
 
@@ -95,7 +94,7 @@ std::string capture_text();
 std::string capture_json();
 void capture_clear();
 
-// The last reading of every port that has one, as a JSON array of the messages the node publishes.
-std::string readings_json();
+// The last whole reading of a port (0 to 9) as the JSON the node publishes, or nullptr when it has none. It is shared, never copied: a stack of eight batteries is some 15 kB.
+std::shared_ptr<const std::string> reading(std::size_t index);
 
 }  // namespace armor::manager

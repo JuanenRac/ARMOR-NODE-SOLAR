@@ -59,14 +59,14 @@
         "pt": "Leituras"
       },
       "caption": {
-        "en": "Readings: what the node is reading right now, with the age of each value.",
-        "es": "Lecturas: lo que el nodo lee ahora mismo, con la antigüedad de cada valor.",
-        "fr": "Mesures : ce que le nœud lit en ce moment, avec l'âge de chaque valeur.",
-        "it": "Letture: ciò che il nodo legge in questo momento, con l'età di ogni valore.",
-        "de": "Messwerte: was der Knoten gerade liest, mit dem Alter jedes Wertes.",
-        "zh": "读数：节点此刻读取到的内容，以及每个数值的时效。",
-        "ja": "測定値：ノードがいま読み取っている値と、各値の経過時間。",
-        "pt": "Leituras: o que o nó está a ler neste momento, com a idade de cada valor."
+        "en": "Readings: the whole system added up, the inverter, and every battery with its cells.",
+        "es": "Lecturas: todo el sistema sumado, el inversor y cada batería con sus celdas.",
+        "fr": "Mesures : l'ensemble du système, l'onduleur et chaque batterie avec ses cellules.",
+        "it": "Letture: l'intero sistema, l'inverter e ogni batteria con le sue celle.",
+        "de": "Messwerte: das gesamte System, der Wechselrichter und jede Batterie mit ihren Zellen.",
+        "zh": "读数：整个系统的合计、逆变器，以及每个电池及其电芯。",
+        "ja": "測定値：システム全体の合計、インバーター、各バッテリーとそのセル。",
+        "pt": "Leituras: todo o sistema somado, o inversor e cada bateria com as suas células."
       }
     },
     {

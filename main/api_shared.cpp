@@ -30,6 +30,7 @@ extern "C" {
 #include "mqtt_link.hpp"
 #include "network.hpp"
 #include "psram_mem.hpp"
+#include "psram_new.hpp"
 #include "task_health.hpp"
 #include "node_store.hpp"
 #include "solar_manager.hpp"
@@ -90,7 +91,6 @@ void write_port(json::Writer& w, std::size_t index) {
       .field("invert", s.invert);
   if (s.group >= 0) w.field("group", std::string(1, static_cast<char>('A' + s.group))).field("channel", s.channel + 1);
   if (!s.detail.empty()) w.field("detail", s.detail);
-  if (!s.last_payload.empty()) w.key("reading").raw(s.last_payload);
   w.end_object();
 }
 
@@ -144,6 +144,7 @@ void write_flash(json::Writer& w) {
 }
 
 std::string status_json() {
+  const memory::ExternalScope in_psram;
   const config::Settings s = store::settings();
   const mqtt_link::Status m = mqtt_link::status();
   const esp_partition_t* running = esp_ota_get_running_partition();
@@ -173,6 +174,7 @@ std::string status_json() {
 }
 
 std::string ports_json() {
+  const memory::ExternalScope in_psram;
   json::Writer w;
   w.begin_object().key("ports").begin_array();
   for (std::size_t i = 0; i < config::kPortCount; ++i) write_port(w, i);
@@ -188,7 +190,6 @@ std::string ports_json() {
   return w.str();
 }
 
-std::string readings_json() { return manager::readings_json(); }
 
 std::string config_get_json() {
   const config::Settings s = store::settings();

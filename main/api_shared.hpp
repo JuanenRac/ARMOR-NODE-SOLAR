@@ -11,7 +11,6 @@ namespace armor::api {
 std::string version_text();
 std::string status_json();          // node, network, broker and ports, as the Overview page shows them
 std::string ports_json();           // {"ports":[...],"catalog":[...]}: the state of the ten ports and the pins the board offers
-std::string readings_json();        // the last reading of every port that has one: the messages the node publishes
 std::string config_get_json();      // {"config":{...},"channel_auto":n,"firmware":"x.y.z"}: no password ever leaves the node
 // The same document the flash keeps, secrets and all: an admin downloading the node's whole configuration to load onto an identical
 // unit (manufacturing a batch of nodes), not something the ordinary panel pages ever call.

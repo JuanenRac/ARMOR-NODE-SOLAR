@@ -24,6 +24,7 @@ extern "C" {
 #include "mqtt_link.hpp"
 #include "mux_board.hpp"
 #include "port_leds_hw.hpp"
+#include "psram_new.hpp"
 #include "uart_ports.hpp"
 
 namespace armor::manager {
@@ -33,6 +34,8 @@ constexpr char kTag[] = "armor-ports";
 struct Slot {
   std::mutex lock;
   PortStatus status;
+  std::shared_ptr<const std::string> reading;   // the last whole reading (JSON)
+  BatteryPortFacts facts;                       // of that reading, for the preconditions of a write
   std::string raw;
   std::atomic<std::uint64_t> raw_wanted_until_ms{0};   // the dump is only made while the panel is looking at it (see raw_dump)
   std::string node_id;
@@ -102,8 +105,20 @@ std::function<void(bool, const std::uint8_t*, std::size_t)> capture_sink(std::si
   };
 }
 
-void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::uint32_t framing_errors, const std::string& payload) {
+void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::uint32_t framing_errors, std::string payload) {
   const solar::PortStats& stats = poller.stats();
+  std::shared_ptr<const std::string> whole;
+  BatteryPortFacts facts;
+  if (!payload.empty()) {
+    whole = std::make_shared<const std::string>(std::move(payload));
+    // the console answers for the module it is connected to (the first of the stack)
+    const std::vector<solar::pylontech::Module>& modules = poller.modules();
+    if (poller.kind() == config::Kind::kPylontech && !modules.empty()) {
+      facts.present = modules.front().present;
+      facts.current_ma = static_cast<long>(modules.front().current_a * 1000.0);
+      facts.critical_alarm = solar::pylontech::summarise(modules).alarm;
+    }
+  }
   std::lock_guard<std::mutex> guard(slot.lock);
   PortStatus& s = slot.status;
   s.state = poller.state(uptime_ms());
@@ -112,7 +127,7 @@ void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::
   s.bytes_rx = stats.bytes_rx; s.bytes_tx = stats.bytes_tx; s.replies_ok = stats.replies_ok; s.replies_bad = stats.replies_bad; s.timeouts = stats.timeouts; s.readings = stats.readings;
   s.overruns = overruns;
   s.framing_errors = framing_errors;
-  if (!payload.empty()) s.last_payload = payload;
+  if (whole) { slot.reading = std::move(whole); slot.facts = facts; }
   slot.ant_new_protocol = poller.ant_new_protocol();
 }
 
@@ -206,6 +221,8 @@ void port_task(void* argument) {
     vTaskDelete(nullptr);
     return;
   }
+  // from here on what this task makes (the readings, their JSON) goes to the external memory; the port above, which its interrupts read, stays where it is
+  memory::keep_data_in_psram();
   // on the heap: its raw log and its readings would eat the port task's small stack
   const std::unique_ptr<solar::Poller> poller_owner = std::make_unique<solar::Poller>(kind, slot.node_id, cfg.name, config::effective_poll_s(cfg), cfg.modules, cfg.dialect, cfg.cells_per_cycle);
   solar::Poller& poller = *poller_owner;
@@ -232,7 +249,7 @@ void port_task(void* argument) {
     const std::uint64_t after = uptime_ms();
     if (ready || after - last_fill_ms >= 1000) {
       last_fill_ms = after;
-      fill(slot, poller, port->overruns(), port->framing_errors(), ready ? payload : std::string());
+      fill(slot, poller, port->overruns(), port->framing_errors(), ready ? std::move(payload) : std::string());
       if (after < slot.raw_wanted_until_ms.load() && poller.raw().total() != last_raw_total) {
         last_raw_total = poller.raw().total();
         const std::string dump = poller.raw().dump();
@@ -264,6 +281,7 @@ void group_task(void* argument) {
     vTaskDelete(nullptr);
     return;
   }
+  memory::keep_data_in_psram();   // as in port_task: after the line is open
   // on the heap: every port's raw log and readings would eat the task's small stack
   std::vector<solar::MuxMember> members;
   for (std::size_t index : job.ports) {
@@ -323,7 +341,7 @@ void group_task(void* argument) {
         group->invalidate_line();
       }
     }
-    const solar::MuxTurn turn = group->step(*line, clock, 20);
+    solar::MuxTurn turn = group->step(*line, clock, 20);
     if (group->write_failures() != reported_failures) { reported_failures = group->write_failures(); ESP_LOGW(kTag, "group %c: a request could not be sent", static_cast<char>('A' + job.group)); }
     if (turn.reading && g_publish) g_publish(turn.topic, turn.payload);
     if (turn.reading) leds::good(turn.port);
@@ -336,7 +354,7 @@ void group_task(void* argument) {
     const std::uint64_t after = uptime_ms();
     if (turn.reading || turn.ended || after - last_fill[turn.member] >= 1000) {
       last_fill[turn.member] = after;
-      fill(slot, poller, 0, 0, turn.reading ? turn.payload : std::string());
+      fill(slot, poller, 0, 0, turn.reading ? std::move(turn.payload) : std::string());
       if (after < slot.raw_wanted_until_ms.load() && poller.raw().total() != last_raw_total[turn.member]) {
         last_raw_total[turn.member] = poller.raw().total();
         const std::string dump = poller.raw().dump();
@@ -462,22 +480,9 @@ BatteryPortFacts battery_port_facts(std::size_t index) {
   BatteryPortFacts facts;
   if (index >= config::kPortCount) return facts;
   Slot& slot = g_slots[index];
-  std::string payload;
-  {
-    std::lock_guard<std::mutex> guard(slot.lock);
-    facts.pylontech = slot.status.enabled && slot.status.kind == "pylontech";
-    payload = slot.status.last_payload;
-  }
-  if (!facts.pylontech || payload.empty()) return facts;
-  json::Value reading;
-  if (!json::parse(payload, reading) || reading.string_or("kind", "") != "battery") return facts;
-  const json::Value* stack = reading.get("stack");
-  if (stack == nullptr || !stack->is_array() || stack->items.empty()) return facts;
-  // the console answers for the module it is connected to (the first of the stack)
-  const json::Value& first = stack->items.front();
-  facts.present = first.bool_or("present", false);
-  facts.current_ma = static_cast<long>(first.number_or("current_a", 0.0) * 1000.0);
-  facts.critical_alarm = reading.bool_or("alarm", false);
+  std::lock_guard<std::mutex> guard(slot.lock);
+  facts = slot.facts;
+  facts.pylontech = slot.status.enabled && slot.status.kind == "pylontech";
   return facts;
 }
 
@@ -531,17 +536,11 @@ std::string raw_dump(std::size_t index) {
   return slot.raw;
 }
 
-std::string readings_json() {
-  std::string out = "[";
-  bool first = true;
-  for (Slot& slot : g_slots) {
-    std::lock_guard<std::mutex> guard(slot.lock);
-    if (slot.status.last_payload.empty()) continue;
-    if (!first) out += ',';
-    first = false;
-    out += slot.status.last_payload;
-  }
-  return out + "]";
+std::shared_ptr<const std::string> reading(std::size_t index) {
+  if (index >= config::kPortCount) return nullptr;
+  Slot& slot = g_slots[index];
+  std::lock_guard<std::mutex> guard(slot.lock);
+  return slot.reading;
 }
 
 }  // namespace armor::manager

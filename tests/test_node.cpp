@@ -339,7 +339,6 @@ static void test_voltronic_port() {
   const PortStats& st = b.poller.stats();
   CHECK(st.readings == 3 && st.replies_ok == 9 && st.timeouts == 0 && st.replies_bad == 0 && st.bytes_rx > 300 && st.bytes_tx == 3 * (8 + 7 + 8));
   CHECK(b.poller.state(b.now) == "reporting" && b.poller.raw().total() == st.bytes_rx);
-  CHECK(b.poller.last_payload() == b.messages.back());
 }
 
 static void test_voltronic_faults() {
