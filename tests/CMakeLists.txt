@@ -54,7 +54,8 @@ add_executable(test_image_board_alt test_image_board.cpp)
 target_compile_definitions(test_image_board_alt PRIVATE ARMOR_BOARD_S3_ETH=1)
 
 enable_testing()
-add_test(NAME release COMMAND test_release)
+# with a real answer of GitHub, longer than what the node used to accept for the look for a new version
+add_test(NAME release COMMAND test_release ${CMAKE_CURRENT_SOURCE_DIR}/data/github_release_answer.json)
 add_test(NAME link_watch COMMAND test_link_watch)
 add_test(NAME fuzz_link COMMAND test_fuzz_link)
 add_test(NAME fuzz_equipment COMMAND test_fuzz_equipment)

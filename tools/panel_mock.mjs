@@ -4,6 +4,7 @@
  * Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
  *
  *   node tools/panel_mock.mjs [port]          (default 8090)     open http://127.0.0.1:8090/
+ *   node tools/panel_mock.mjs --readings FILE   answers /api/v1/readings with the messages of FILE (a JSON array as the node's own answer) and takes its ports from them
  *
  * It serves the panel from panel/ (text.js is joined in front of app.js, as tools/pack_panel.py does) and answers /api/v1 like the firmware
  * does, from memory: a fresh mock is in set-up (code TESTCODE); `--user admin:adminpass123` starts it with an administrator. It is a development
@@ -21,6 +22,10 @@ const port = Number(process.argv.find(a => /^\d+$/.test(a)) ?? 8090);
 const board = process.argv.includes("--board") ? process.argv[process.argv.indexOf("--board") + 1] : "s3-wifi";
 const wired = board === "s3-eth";
 const seeded = process.argv.includes("--user") ? process.argv[process.argv.indexOf("--user") + 1] : "";
+const recorded = process.argv.includes("--readings") ? JSON.parse(readFileSync(process.argv[process.argv.indexOf("--readings") + 1], "utf8")) : null;
+// The pages and files the FIRMWARE serves (the list main/web_server.cpp registers): the stand-in answers 404 for any other, as a node does, so a file that was never registered shows here too.
+const registered = new Set(((/for \(const char\* path : \{([^}]*)\}\)/.exec(readFileSync(path.join(here, "..", "main", "web_server.cpp"), "utf8")) ?? [])[1] ?? "").match(/"[^"]+"/g)?.map(x => x.slice(1, -1)) ?? []);
+const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'";
 
 const users = new Map();
 if (seeded) { const [name, password] = seeded.split(":"); users.set(name, { password, role: "admin" }); }
@@ -77,7 +82,8 @@ for (let gpio = 0; gpio <= 48; ++gpio) {
   catalog.push({ gpio, use, reason, note, on_header: header });
 }
 const cells = (base, salt) => Array.from({ length: 15 }, (_, i) => Number((base + ((i * 7 + salt) % 5) * 0.0015 + (i === 9 ? 0.02 : 0)).toFixed(3)));
-const readings = () => [
+if (recorded) config.ports.forEach((p, i) => Object.assign(p, recorded[i] ? { enabled: true, kind: recorded[i].kind === "inverter" ? "voltronic" : "pylontech", name: recorded[i].device, modules: 0 } : { enabled: false }));
+const readings = () => recorded ?? [
   { kind: "inverter", node_id: config.node.id, device: "axpert-1", timestamp_ms: Date.now(), mode: "line", grid_v: 231.4, grid_hz: 50, out_v: 230, out_hz: 50, out_va: 1450, out_w: 1180, load_percent: 24, battery_v: 52.4, battery_a: 14, battery_percent: 81, pv_v: 180, pv_a: 10.9, pv_w: 1960, heatsink_c: 41, ac_charging: false, pv_charging: true, load_on: true, warnings: [] },
   { kind: "battery", node_id: config.node.id, device: "us3000-1", timestamp_ms: Date.now(), modules: 2, model: "US3000C", state: "charging", voltage_v: 51.3, current_a: 19.2, temperature_min_c: 21, temperature_max_c: 23, cell_min_v: 3.399, cell_max_v: 3.444, soc_percent: 79, alarm: false, capacity_ah: 116.9, full_capacity_ah: 148, energy_kwh: 6, cycles: 181,
     stack: [{ n: 1, present: true, voltage_v: 51.3, current_a: 9.6, temperature_c: 22, soc_percent: 79, state: "Charge", capacity_ah: 58.5, full_capacity_ah: 74, cycles: 181, cells_v: cells(3.4, 1) }, { n: 2, present: true, voltage_v: 51.3, current_a: 9.6, temperature_c: 22.5, soc_percent: 79, state: "Charge", capacity_ah: 58.4, full_capacity_ah: 74, cycles: 180, cells_v: cells(3.402, 2).map((v, i) => (i === 6 ? 2.96 : v)) }, { n: 3, present: false }] },
@@ -126,10 +132,12 @@ const problems = doc => {
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://x");
-  if (request.method === "GET" && ["/", "/index.html"].includes(url.pathname)) { response.writeHead(200, { "Content-Type": "text/html", "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'" }); return response.end(readFileSync(path.join(panel, "index.html"))); }
-  if (request.method === "GET" && url.pathname === "/readings.css") { response.writeHead(200, { "Content-Type": "text/css" }); return response.end(readFileSync(path.join(panel, "readings.css"))); }
-  if (request.method === "GET" && url.pathname === "/style.css") { response.writeHead(200, { "Content-Type": "text/css" }); return response.end(readFileSync(path.join(panel, "style.css"))); }
-  if (request.method === "GET" && url.pathname === "/app.js") { response.writeHead(200, { "Content-Type": "text/javascript" }); return response.end(readFileSync(path.join(panel, "text.js"), "utf8") + "\n" + readFileSync(path.join(panel, "app.js"), "utf8")); }
+  if (request.method === "GET" && registered.has(url.pathname)) {
+    const [file, type] = url.pathname === "/" ? ["index.html", "text/html"] : [url.pathname.slice(1), url.pathname.endsWith(".css") ? "text/css" : "text/javascript"];
+    const body = file === "app.js" ? readFileSync(path.join(panel, "text.js"), "utf8") + "\n" + readFileSync(path.join(panel, "app.js"), "utf8") : readFileSync(path.join(panel, file));
+    response.writeHead(200, { "Content-Type": type, "Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff" });
+    return response.end(body);
+  }
   if (!url.pathname.startsWith("/api/v1/")) return json(response, 404, { error: "not_found" });
 
   const route = url.pathname.slice(8), method = request.method;

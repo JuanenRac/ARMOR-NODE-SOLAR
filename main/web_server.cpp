@@ -1041,7 +1041,7 @@ void register_handlers(httpd_handle_t server, bool redirect_only) {
     api.handler = api_handler;
     httpd_register_uri_handler(server, &api);
   }
-  for (const char* path : {"/", "/app.js", "/style.css"}) {
+  for (const char* path : {"/", "/app.js", "/style.css", "/readings.css"}) {
     httpd_uri_t page{};
     page.uri = path;
     page.method = HTTP_GET;

@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The Readings page is drawn with its own style sheet again:** the node did not register `/readings.css`, so the browser got a 404 and the page came out as a plain list.
+- **The Readings page is easier to read:** the cells of a battery are an even grid (three rows of five for 15 cells, four of four for 16) with the highest and the lowest marked, the batteries of a stack are one, two or four to a row, and the figures are aligned. A stack that says it holds more than its full capacity no longer gives a state of charge of the whole system over 100 %. The stand-in node serves only the files the firmware registers, and can replay recorded readings (`--readings`).
+- **The look for a new version no longer answers "the request is too large":** GitHub's answer about a release grows with its files and its notes and passed the 24 kB the node kept. It is now read piece by piece as it arrives and only the tag and the names and addresses of the files are kept, so its length no longer matters (up to 512 kB). Tested on a computer with a real answer; not tried on a board.
+- **More internal memory for the node:** the packets and structures of Wi-Fi and the network are taken from the external memory first, and the Wi-Fi library code that was kept in internal memory for speed now runs from the flash (the node does not need that speed). Not tried on a board.
+- **The memory Bluetooth keeps when it is not used is given back to the node:** with Bluetooth off, or after its set-up window has closed, until the next restart. The log says the internal memory before and after. Not tried on a board.
+- **The log says why a message to the broker is not written:** its size, how long it took and the internal memory at that moment; a broker error also says its type and the socket error.
+- **The panel no longer shows an empty strip at the bottom of every page:** the bar for unsaved changes was visible even when it was hidden.
+- **A file the panel asks for and the server does not register is now a test failure** (`tests/check_routes.py`).
+
 ## [0.6.9] - Large battery banks without running out of memory, a Readings page and more equipment protocols
 
 - **The shared project tool is the current one:** the copy follows the shared repository, which now knows the new solar panel node.
