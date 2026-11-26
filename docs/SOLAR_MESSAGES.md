@@ -39,6 +39,8 @@ and what the module holds when full), and `cycles`; and, when the console tells 
 positive), `console_baud`, `soh_counts` and `soh_abnormal` (the health of each cell, and the cells counted from 0 that are not `Normal`), `counters` (the life counters of `stat`) and `last_event` (the newest entry of the module's event log, as printed); the stack carries `model`, `capacity_ah`, `full_capacity_ah` (the sums of its modules, each left out unless every present module told it; a module that has not told its full capacity counts in `full_capacity_ah` as the others when they all told the same one and name no different model, and then the total is an estimate: it is there while a present module has no `full_capacity_ah`), `energy_kwh` (the remaining
 energy at the mean voltage) and `cycles` (the highest of its modules). A field the battery did not report is left out.
 
+The console lists sixteen places whatever is connected: `stack` ends at the last battery that is there, or has been since the node started, so the empty places after it are not sent (one between two batteries is, with `present: false`).
+
 With no module present the message has `modules: 0` and the empty `stack`, and no other reading: the node says the battery does not answer instead of inventing numbers.
 `current_a` is the sum of the modules (negative discharging), `voltage_v` their mean, `soc_percent` the mean state of charge (left out when unknown: the contract has no nulls).
 

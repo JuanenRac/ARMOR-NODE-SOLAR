@@ -202,7 +202,11 @@ class Poller {
     if (topic.empty()) return false;
     if (driver_ && driver_->inverter()) { InverterExtras extras; extras.warnings_unknown = !driver_->out().warnings_known; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
     else if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.warnings_unknown = dialect_ == Dialect::kRevo || dialect_ == Dialect::kPi41 || dialect_ == Dialect::kPi34 || !warnings_read_; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
-    else payload = battery_json(node_id_, device_, wall_ms, modules_);   // a Pylontech stack or an ANT-BMS (one module)
+    else {   // a Pylontech stack or an ANT-BMS (one module)
+      const int present = last_present(modules_);
+      if (present > highest_seen_) highest_seen_ = present;
+      payload = battery_json(node_id_, device_, wall_ms, modules_, highest_seen_);
+    }
     ++stats_.readings;
     last_reading_ms_ = last_rx_ms_;
     return true;
@@ -814,6 +818,7 @@ class Poller {
   std::string node_id_, device_;
   std::uint64_t poll_ms_;
   int max_modules_;
+  int highest_seen_ = 0;   // the highest place a battery has been in since the port started: one that goes away is still told as not there
   int cells_per_cycle_ = 0;
   int bat_cursor_ = 1;                // the module whose cells come next in the rotation
   std::uint32_t cells_wanted_ = 0;    // bit n: this cycle asks the cells of module n

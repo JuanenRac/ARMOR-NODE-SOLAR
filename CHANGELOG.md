@@ -6,6 +6,7 @@ All notable changes to this project are documented here.
 
 ## [0.7.0] - Readings page and update check fixed, more internal memory and complete battery sheets
 
+- **No more empty batteries in a stack:** the console of a Pylontech lists sixteen places, and a stack of two sent fourteen empty ones that the Readings page drew as cards. The message now ends at the last battery that is there (or was, since the node started); an empty place between two batteries is still told. Same contract. Tried on a computer only.
 - **The fields of a serial port no longer run into each other:** the long help of the device name stays inside its column, where the equipment of the port (an inverter among them) is chosen.
 - **The Readings page is drawn with its own style sheet again:** the node did not register `/readings.css`, so the browser got a 404 and the page came out as a plain list.
 - **The Readings page is easier to read:** the cells of a battery are an even grid (three rows of five for 15 cells, four of four for 16) with the highest and the lowest marked, the batteries of a stack are one, two or four to a row, and the figures are aligned. A stack that says it holds more than its full capacity no longer gives a state of charge of the whole system over 100 %. The stand-in node serves only the files the firmware registers, and can replay recorded readings (`--readings`).
