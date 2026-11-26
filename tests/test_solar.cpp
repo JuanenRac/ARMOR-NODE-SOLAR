@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../core/solar_json.hpp"
@@ -854,6 +855,43 @@ static void test_port_diagnosis() {
   CHECK(schedule.take(2, diag::LogSchedule::kRepeatMs));
   schedule.clear(2);
   CHECK(schedule.take(2, diag::LogSchedule::kRepeatMs + diag::LogSchedule::kGapMs) && !schedule.take(99, 99999999));
+
+  // ten unreadable ports take turns: every one is said, never two closer than the gap
+  diag::LogSchedule ten;
+  std::uint32_t said = 0;
+  std::uint64_t last_said = 0;
+  for (std::uint64_t t = 0; t <= 30ULL * 60ULL * 1000ULL; t += 1000) {
+    for (std::size_t port = 0; port < 10; ++port) {
+      if (!ten.take(port, t)) continue;
+      CHECK(said == 0 || t - last_said >= diag::LogSchedule::kGapMs);
+      said |= 1u << port;
+      last_said = t;
+    }
+  }
+  CHECK(said == 0x3FFu);
+  // any bytes get one of the five words, and the sample never grows
+  std::uint32_t seed = 12345;
+  const auto random = [&]() { seed = seed * 1103515245u + 12345u; return static_cast<std::uint8_t>(seed >> 16); };
+  for (int round = 0; round < 500; ++round) {
+    std::vector<std::uint8_t> heard(static_cast<std::size_t>(random()) + 1), asked(static_cast<std::size_t>(random() % 8));
+    for (auto& b : heard) b = round % 5 == 0 ? static_cast<std::uint8_t>(random() & 1 ? 0xFF : 0x00) : random();
+    for (auto& b : asked) b = random();
+    const std::string word = diag::classify(heard, asked, round % 2 == 0);
+    CHECK(word == "flat" || word == "echo" || word == "noise" || word == "text" || word == "frames");
+    CHECK(diag::sample_hex(heard).size() <= diag::kSampleBytes * 3 - 1);
+  }
+  // an inverter port that hears rubbish and a Modbus port that never gets a frame
+  for (const auto& which : {std::make_pair(armor::config::Kind::kVoltronic, std::string("noise")), std::make_pair(armor::config::Kind::kModbus, std::string("frames"))}) {
+    Poller bad(which.first, "solar-1", "device-1", 5, 0);
+    std::uint64_t at = 1000;
+    const std::uint8_t rubbish[4] = {0x9A, 0x13, 0xE0, 0x81};
+    for (int turn = 0; turn < 8000 && bad.stats().timeouts + bad.stats().replies_bad < 4; ++turn) {
+      const std::vector<std::uint8_t> tx = bad.next_tx(at);
+      at += 40;
+      if (!tx.empty()) bad.on_rx(rubbish, sizeof rubbish, at);
+    }
+    CHECK(bad.unreadable_cause(at) == which.second);
+  }
 
   // a battery port that hears only zeros
   Poller poller(armor::config::Kind::kPylontech, "solar-1", "battery-3", 10, 0);
