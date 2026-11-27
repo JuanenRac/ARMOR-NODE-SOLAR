@@ -361,6 +361,8 @@ function networkPage() {
       options: [[0, t("autoRestartNever")], [1, t("autoRestart1")], [2, t("autoRestart2")], [3, t("autoRestart3")], [4, t("autoRestart4")], [6, t("autoRestart6")], [12, t("autoRestart12")], [24, t("autoRestart24")], [48, t("autoRestart48")]] }),
       note(t("autoRestartNote"), "info"),
       field("loginLimit", "system.login_limit_per_minute", { type: "number", min: 0, max: 120 }), note(t("loginLimitNote"), "info"),
+      field("webRecovery", "system.web_recovery", { type: "checkbox" }), field("webRecoveryAfter", "system.web_recovery_after_s", { type: "number", min: 60, max: 3600 }), note(t("webRecoveryNote"), "info"),
+      S.status && S.status.web_recovery ? note(t("webRecoveryLast", S.status.web_recovery.silent_for_s), "info") : null,
       field("sealSecrets", "security.seal_secrets", { type: "checkbox" }), note(t("sealSecretsNote"), "info"),
       field("otaCheckBoard", "security.ota_check_board", { type: "checkbox" }),
       field("otaRequireMark", "security.ota_require_board_mark", { type: "checkbox" }), note(t("otaBoardNote"), "info"),

@@ -414,7 +414,54 @@ static void test_rs485_faults() {
   }
 }
 
+// The rules of the recovery of a panel that does not answer, and its settings.
+static void test_web_recovery() {
+  namespace wr = armor::webrecovery;
+  const std::uint64_t start = wr::kGraceMs + 1000;
+  wr::Watch watch(300);
+  CHECK(watch.look(1000, wr::kPlainSilent, false, true) == wr::Action::kNone && watch.silent_for_s(1000) == 0);   // nothing is judged right after a start
+  CHECK(watch.look(start, wr::kPlainSilent, false, true) == wr::Action::kNone);
+  CHECK(watch.look(start + 299000, wr::kPlainSilent, false, true) == wr::Action::kNone);
+  CHECK(watch.look(start + 300000, wr::kTlsSilent, false, true) == wr::Action::kRestart);
+  CHECK(watch.silent() == (wr::kPlainSilent | wr::kTlsSilent) && watch.silent_for_s(start + 300000) == 300);
+  // one answer, or something that must not be cut, starts the count again
+  wr::Watch again(60);
+  CHECK(again.look(start, wr::kPlainSilent, false, true) == wr::Action::kNone && again.look(start + 50000, 0, false, true) == wr::Action::kNone);
+  CHECK(again.look(start + 61000, wr::kPlainSilent, false, true) == wr::Action::kNone);
+  CHECK(again.look(start + 100000, wr::kPlainSilent, true, true) == wr::Action::kNone);
+  CHECK(again.look(start + 130000, wr::kPlainSilent, false, true) == wr::Action::kNone && again.look(start + 189000, wr::kPlainSilent, false, true) == wr::Action::kNone);
+  CHECK(again.look(start + 190000, wr::kPlainSilent, false, true) == wr::Action::kRestart && again.silent() == wr::kPlainSilent);
+  // with the limit used up it says so, and again only after ten minutes
+  wr::Watch held(60);
+  CHECK(held.look(start, wr::kTlsSilent, false, false) == wr::Action::kNone && held.look(start + 60000, wr::kTlsSilent, false, false) == wr::Action::kHeld);
+  CHECK(held.look(start + 75000, wr::kTlsSilent, false, false) == wr::Action::kNone);
+  CHECK(held.look(start + 60000 + wr::kHeldSayEveryMs, wr::kTlsSilent, false, false) == wr::Action::kHeld);
+  // a time out of range is put inside it
+  wr::Watch low(1);
+  CHECK(low.look(start, 1, false, true) == wr::Action::kNone && low.look(start + 59000, 1, false, true) == wr::Action::kNone && low.look(start + 60000, 1, false, true) == wr::Action::kRestart);
+  // what is kept across the restart
+  CHECK(!wr::record_valid(wr::Record{}));
+  const wr::Record record = wr::make_record(wr::kPlainSilent, 312);
+  CHECK(wr::record_valid(record) && wr::restart_text(record) == "web recovery: restarted after 312 s without an answer (http)");
+  CHECK(wr::restart_text(wr::make_record(wr::kTlsSilent, 60)).find("(https)") != std::string::npos && wr::restart_text(wr::make_record(3, 60)).find("(http, https)") != std::string::npos);
+  wr::Record damaged = record;
+  damaged.silent_for_s = 1;
+  CHECK(!wr::record_valid(damaged) && !wr::record_valid(wr::make_record(0, 5)) && !wr::record_valid(wr::make_record(4, 5)));
+  // the settings: off by default, read and written, and a time out of range refused
+  const armor::config::Settings defaults = valid_settings();
+  CHECK(!defaults.web_recovery && defaults.web_recovery_after_s == 300);
+  const std::string written = armor::config::to_json(defaults, true);
+  CHECK(written.find("\"web_recovery\":false") != std::string::npos && written.find("\"web_recovery_after_s\":300") != std::string::npos);
+  armor::config::Settings read;
+  armor::config::Problems problems;
+  CHECK(armor::config::load("{\"system\":{\"web_recovery\":true,\"web_recovery_after_s\":120}}", defaults, read, problems) && read.web_recovery && read.web_recovery_after_s == 120);
+  problems.clear();
+  armor::config::Settings refused;
+  CHECK(!armor::config::load("{\"system\":{\"web_recovery_after_s\":5}}", defaults, refused, problems) && has(problems, "system.web_recovery_after_s", "range"));
+}
+
 int main() {
+  test_web_recovery();
   test_totals_and_message();
   test_weighted_soc();
   test_due();
