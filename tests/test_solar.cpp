@@ -359,6 +359,43 @@ static void test_pylontech_real_captures() {
   CHECK(pylontech::parse_info("@\r\nInvalid command or fail to excute.\r\nUsage:\r\nShow recorded data - datalist [event/history]\r\n$$\r\npylon_debug>\r\n", none) == 0);
 }
 
+// The data plate of a module (serial number, Board, chip...), with INVENTED serial numbers: the chip follows the maker's rules and is "unknown" whenever they cannot decide.
+static std::string plate_text(const std::string& model, const std::string& board, const std::string& serial) {
+  std::string out = "@\r\nDevice address      : 1\r\nDevice name         : " + model + "\r\nBoard version       : V10R04\r\n";
+  if (!board.empty()) out += "Board               : " + board + "\r\n";
+  out += "Main Soft version   : B68.8.0.0\r\nSoft  version       : V2.4\r\nBoot  version       : V2.1\r\nComm version        : V2.0\r\nRelease Date        : 00-01-01\r\n";
+  out += "Barcode             : " + serial + "\r\nSpecification       : 48V/74AH\r\nCell Number         : 15\r\nCommand completed successfully\r\n$$\r\npylon>";
+  return out;
+}
+static std::string chip_told(const std::string& model, const std::string& board, const std::string& serial) {
+  pylontech::DataPlate plate;
+  return pylontech::read_plate(plate_text(model, board, serial), plate) ? std::string(plate.chip) : std::string("none");
+}
+static void test_pylontech_data_plate() {
+  const std::string newer = "TEST00AE20000001", older = "TEST000XX0000001";
+  pylontech::DataPlate plate;
+  CHECK(pylontech::read_plate(plate_text("US3000C", "NF4.E2", newer), plate));
+  CHECK(plate.serial == newer && plate.board == "NF4.E2" && std::string(plate.chip) == "newer" && plate.specification == "48V/74AH");
+  CHECK(plate.boot_version == "V2.1" && plate.comm_version == "V2.0" && plate.release_date == "00-01-01");
+  CHECK(chip_told("US3000C", "", older) == "older" && chip_told("US2000C", "ST1", older) == "older");
+  // the serial number and the Board do not tell one story, or one of them is missing: it cannot be told
+  CHECK(chip_told("US3000C", "NF4.E2", older) == "unknown" && chip_told("US3000C", "", newer) == "unknown" && chip_told("US3000C", "XYZ", older) == "unknown");
+  CHECK(chip_told("US3000C", "NF4.E2", "") == "unknown" && chip_told("US3000C", "", "SHORT") == "unknown" && chip_told("US2000", "", older) == "unknown");
+  pylontech::DataPlate blank;
+  CHECK(pylontech::read_plate(plate_text("US3000C", "", "                "), blank) && blank.serial.empty() && blank.board.empty() && std::string(blank.chip) == "unknown");
+  pylontech::DataPlate odd;
+  CHECK(pylontech::read_plate(plate_text("US3000C", "NF4 E2", "TEST 0000 0001"), odd) && odd.serial.empty() && odd.board.empty() && std::string(odd.chip) == "unknown");
+  pylontech::DataPlate untouched;
+  CHECK(!pylontech::read_plate("@\r\nInvalid command or fail to excute.\r\n$$\r\npylon>", untouched) && untouched.chip == nullptr);
+  // the message says the plate of the module, and nothing about one whose `info` was not read
+  std::vector<pylontech::Module> modules(2);
+  for (int i = 0; i < 2; ++i) { modules[i].number = i + 1; modules[i].present = true; modules[i].voltage_v = 50; }
+  modules[0].plate = plate;
+  const std::string text = battery_json("solar-1", "us3000-1", 1, modules);
+  CHECK(text.find("\"serial\":\"TEST00AE20000001\"") != std::string::npos && text.find("\"chip\":\"newer\"") != std::string::npos && text.find("\"board\":\"NF4.E2\"") != std::string::npos);
+  CHECK(text.find("\"serial\"") == text.rfind("\"serial\"") && text.find("\"chip\"") == text.rfind("\"chip\""));
+}
+
 // The charge left of a stack, with the two forms of the `bat` table: ampere-hours for each cell (a real US2000, whose cells differ) and percentages only.
 static std::string us_console(const std::string& command, int modules, const std::string& bat, bool info_answers) {
   std::string out = "@\r\n";
@@ -953,6 +990,7 @@ int main() {
   test_pylontech_cells_and_capacity();
   test_pylontech_real_formats();
   test_pylontech_real_captures();
+  test_pylontech_data_plate();
   test_pylontech_stat_counters();
   test_pylontech_real_console_answers();
   test_pylontech_wake_frame();

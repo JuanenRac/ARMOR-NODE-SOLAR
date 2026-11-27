@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
   <img src="https://img.shields.io/badge/Tests-36%20host%20programs-2ea44f.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Version-0.7.3-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.7.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -36,7 +36,7 @@
 
 | | |
 |---|---|
-| 版本 | `0.7.3` |
+| 版本 | `0.7.4` |
 | 成熟度 | 可用 |
 | 角色 | ESP32-S3 太阳能现场节点：逆变器和电池（家族：Field Nodes，上级：ARMOR-COMMON） |
 | 技术栈 | C++17, ESP-IDF 5.5.5, ESP32-S3 |
@@ -77,6 +77,7 @@
 * **更多协议，统一目录：**Modbus 逆变器与充电器（EASun SMG II、SRNE）、DALY、JBD 和 JK 电池保护板、Victron VE.Direct，以及 Voltronic 系列的 PI41 和 PI34，各有自己的端口类型（[协议](docs/PROTOCOLS.md)）。依据公开文档编写，仅在计算机上试过。从不应答模式或告警的逆变器也能读取，端口的原始数据视图会显示发送内容和最后的错误。
 * **探测无应答端口：**从面板启动的诊断，仅用读取查询遍历速率、格式和极性（绝不发送写入命令），记录发送和接收的每个字节，并区分回显、应答和无响应。尚未在板上试验。
 * **无法读取的端口会说明原因：** *端口*页面会指出是只收到零、节点自己的询问原样返回、字节无法辨认（速率、电平或极性）、其他设备发出可读文字，还是始终收不到完整帧，并给出速率、引脚、极性、字节数和最后几个字节；若接的是 Pylontech 从机电池的控制台会明确说明，不应答资料卡的模块在*读数*页面上标出。已在电脑上测试，未在电路板上试过。
+* **指出没有结束的网页请求:** 同一请求持续 20 秒后,日志会记下它以及当时的内部内存,即使面板没有响应,健康报告也会把它送到服务器;耗时 5 秒以上的请求记为警告。已在电脑上测试,未在电路板上试过。
 * **电池阈值与系统电量：**单体电压、单体压差和温度的阈值是节点设置（默认 2.80 / 3.00 / 3.55 / 3.65 V、50 / 100 mV、0 / 50 °C）；整个系统的荷电状态按容量加权，若有电池组未给出容量则不给数值。
 * **Pylontech 电池**（US2000、US3000、US5000）：控制台的 `pwr` 表（每个模块的电压、电流、温度和电量）、`bat <n>`（每个电芯的电压和温度）以及 `info <n>`（型号、剩余和满容量、循环次数），汇总为一个电池组及其总容量和能量，还有带两项校验的 RS485 帧。这些格式是凭对公开控制台的记忆写成的，不同固件可能不同。各列按表头名称查找（包括带 Id 列、MosTempr 和 SysAlarm.St 的 US5000 V2.3 格式），剩余电量和均衡来自 `bat`，型号、额定容量和循环次数来自 `info` 和 `stat`，只询问一次并保留半小时。
 * **Pylontech 模块自述的信息：** 型号、电路板和软件版本、电芯数量和允许的电流、寿命计数器（`stat`）、每个电芯的健康状态（`soh`，标出异常的一个），以及其事件日志的最新条目，保护名称与控制台打印的完全一致。控制台只读，管理员可以把端口收到的内容下载为文本文件。
