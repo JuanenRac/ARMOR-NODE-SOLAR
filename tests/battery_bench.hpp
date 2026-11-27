@@ -30,7 +30,7 @@ inline std::vector<std::uint8_t> make_image(const std::string& board, int major,
 class Battery {
  public:
   // identity
-  std::string model = "US3000C", board = "", serial = "PPTBH02200409223", soft = "V3.0", spec = "48V/74AH";
+  std::string model = "US3000C", board = "", serial = "PPTBH00000000001", soft = "V3.0", spec = "48V/74AH";
   int cells = 15;
   // state
   bool debug_mode = false, off = false, in_bootloader = false;

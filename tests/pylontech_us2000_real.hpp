@@ -158,7 +158,7 @@ Soft  version       : V1.5
 Boot  version       : V1.2
 Comm version        : V2.0
 Release Date        : 15-6-02
-Barcode             : PPTAB05155301250
+Barcode             : PPTAB00000000001
 
 Specification       : 48V/50AH
 Cell Number         : 15
