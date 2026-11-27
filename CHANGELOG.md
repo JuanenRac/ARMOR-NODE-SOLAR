@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- The node's own panel can now write to Pylontech batteries and update a stack module by module (a *Battery maintenance* page for administrators, over HTTPS), with the same locks as the
+  server's way: off by default, the password asked again, the serial number typed twice, arm and execute with a one-time token that stays in the node, one operation per port, rate limits, a
+  record kept in flash and no way to force a doubtful chip or image. A firmware image is uploaded into the external memory only. Nothing here has been tried on a real battery.
+- The node refuses to restart, reset or change its firmware while a battery operation is under way.
+
 ## [0.7.6] - Update a stack module by module, quieter battery alarms and ordered equipment lists
 
 - **The equipment list of a port is in order:** three titled groups (inverters and chargers, batteries and BMS, others), and the protocol lists of an inverter and of VE.Direct in order. The stored values are the same.

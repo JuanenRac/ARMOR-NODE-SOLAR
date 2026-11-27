@@ -38,12 +38,14 @@ extern "C" {
 #include "core/netplan.hpp"
 #include "core/image_board.hpp"
 #include "core/json.hpp"
+#include "core/battery_panel.hpp"
 #include "core/web_policy.hpp"
 #include "entropy.hpp"
 #include "github_update.hpp"
 #include "log_buffer.hpp"
 #include "mqtt_link.hpp"
 #include "api_shared.hpp"
+#include "battery_maintenance.hpp"
 #include "clock_sync.hpp"
 #include "network.hpp"
 #include "solar_manager.hpp"
@@ -63,6 +65,8 @@ extern const std::uint8_t style_css_gz_start[] asm("_binary_style_css_gz_start")
 extern const std::uint8_t readings_css_gz_start[] asm("_binary_readings_css_gz_start");
 extern const std::uint8_t style_css_gz_end[] asm("_binary_style_css_gz_end");
 extern const std::uint8_t readings_css_gz_end[] asm("_binary_readings_css_gz_end");
+extern const std::uint8_t maintenance_js_gz_start[] asm("_binary_maintenance_js_gz_start");
+extern const std::uint8_t maintenance_js_gz_end[] asm("_binary_maintenance_js_gz_end");
 
 namespace armor::web {
 namespace {
@@ -782,6 +786,7 @@ esp_err_t put_account(httpd_req_t* r) {
 esp_err_t post_reboot(httpd_req_t* r) {
   Who who;
   if (!require(r, who, true, true)) return ESP_OK;
+  if (maintenance::busy()) return send_error(r, 409, "battery_busy");   // a battery operation is not cut
   ESP_LOGI(kTag, "restart requested by \"%s\"", who.user.c_str());
   restart_after(1500);
   return send_ok(r);
@@ -805,6 +810,7 @@ image_board::Verdict slot_board_verdict(const esp_partition_t* slot) {
 esp_err_t post_ota_switch(httpd_req_t* r) {
   Who who;
   if (!require(r, who, true, true)) return ESP_OK;
+  if (maintenance::busy()) return send_error(r, 409, "battery_busy");   // a battery operation is not cut
   if (!github_update::begin_manual_write()) return send_error(r, 409, "ota_busy");   // the slot is being written by an upload, an installation or a copy
   struct Release { ~Release() { github_update::end_manual_write(); } } release;
   const esp_partition_t* other = esp_ota_get_next_update_partition(nullptr);
@@ -838,6 +844,7 @@ esp_err_t get_ota_copy(httpd_req_t* r) {
 esp_err_t post_ota_copy(httpd_req_t* r) {
   Who who;
   if (!require(r, who, true, true)) return ESP_OK;
+  if (maintenance::busy()) return send_error(r, 409, "battery_busy");   // a battery operation is not cut
   if (!github_update::start_copy()) return send_error(r, 409, "ota_busy");
   ESP_LOGW(kTag, "copy of the running firmware to the other slot, started by \"%s\"", who.user.c_str());
   json::Writer w;
@@ -848,6 +855,7 @@ esp_err_t post_ota_copy(httpd_req_t* r) {
 esp_err_t post_factory_reset(httpd_req_t* r) {
   Who who;
   if (!require(r, who, true, true)) return ESP_OK;
+  if (maintenance::busy()) return send_error(r, 409, "battery_busy");   // a battery operation is not cut
   json::Value in;
   if (!read_json(r, in)) return ESP_OK;
   if (in.string_or("confirm", "") != "RESET") return send_error(r, 422, "confirm_required");
@@ -912,6 +920,7 @@ esp_err_t post_time(httpd_req_t* r) {
 esp_err_t post_ota(httpd_req_t* r) {
   Who who;
   if (!require(r, who, true, true)) return ESP_OK;
+  if (maintenance::busy()) return send_error(r, 409, "battery_busy");   // a battery operation is not cut
   const node_control::UploadGuard upload_guard;   // the node does not restart, pause or go to standby in the middle of an upload
   const std::size_t total = r->content_len;
   if (total < 100 * 1024 || total > kMaxFirmware) return send_error(r, 413, "bad_size");
@@ -1021,6 +1030,7 @@ esp_err_t get_ota_check(httpd_req_t* r) {
 esp_err_t post_ota_install(httpd_req_t* r) {
   Who who;
   if (!require(r, who, true, true)) return ESP_OK;
+  if (maintenance::busy()) return send_error(r, 409, "battery_busy");   // a battery operation is not cut
   // The task looks for the newest release and installs it: the request is answered at once.
   if (!github_update::start_latest(board::kId)) return send_error(r, 409, "ota_busy");
   ESP_LOGW(kTag, "installing the newest firmware from GitHub, started by \"%s\"", who.user.c_str());
@@ -1043,6 +1053,132 @@ esp_err_t get_ota_progress(httpd_req_t* r) {
   if (!p.version.empty()) w.field("version", p.version);
   w.end_object();
   return send_json(r, 200, w.str());
+}
+
+// ---- writing to a battery from the panel (core/battery_panel.hpp, main/battery_maintenance.cpp) ------------------------------------------------
+
+namespace bp = armor::solar::battery::panel;
+
+// The locks of every such request: an administrator, over HTTPS, with the writes on and the service password set, the node not paused. False when an error was sent.
+bool battery_gate(httpd_req_t* r, Who& who) {
+  if (!require(r, who, true, true)) return false;
+  bp::Gate gate;
+  gate.admin = true;
+  gate.https = is_tls(r);
+  maintenance::panel_flags(gate.enabled, gate.password);
+  gate.working = node_control::working();
+  const std::string why = bp::gate_refusal(gate);
+  if (why.empty()) return true;
+  if (why == "https_required") send_error(r, 403, "https_required");
+  else if (why == "battery_write_disabled") send_error(r, 403, "battery_write_disabled");
+  else if (why == "no_password") send_error(r, 409, "no_password");
+  else send_error(r, 409, "node_paused");
+  return false;
+}
+
+// The password of the person, asked again before anything is armed or written; wrong ones are counted like those of a login. False when an error was sent.
+bool password_again(httpd_req_t* r, const Who& who, const std::string& password, int port) {
+  const std::uint32_t source = source_of(r), person = auth::user_key(who.user);
+  bool blocked = false;
+  {
+    std::lock_guard<std::mutex> guard(g_lock);
+    blocked = !g_throttle.allowed(source, now_ms()) || !g_user_throttle.allowed(person, now_ms());
+  }
+  if (blocked) { send_error(r, 429, "too_many_attempts"); return false; }
+  auth::Role role = auth::Role::kViewer;
+  const bool good = store::user_verify(who.user, password, role) && role == auth::Role::kAdmin;
+  {
+    std::lock_guard<std::mutex> guard(g_lock);
+    if (good) { g_throttle.success(source); g_user_throttle.success(person); }
+    else { g_throttle.failure(source, now_ms()); g_user_throttle.failure(person, now_ms()); }
+  }
+  if (good) return true;
+  maintenance::panel_note(who.user, port, "refused", "wrong_password");
+  send_error(r, 403, "wrong_password");   // not 401: the session is still good
+  return false;
+}
+
+// The answer to an order: taken (its progress is asked for), or the refusal.
+esp_err_t battery_answer(httpd_req_t* r, const std::string& why, int module = 0) {
+  json::Writer w;
+  w.begin_object();
+  if (why.empty()) w.field("ok", true);
+  else w.field("error", why);
+  if (!why.empty() && module > 0) w.field("module", module);
+  w.end_object();
+  return send_json(r, why.empty() ? 202 : why == "too_many_orders" ? 429 : 409, w.str());
+}
+
+// The session as the battery's state knows it (a part of the token, never shown).
+std::string session_mark(const Who& who) { return who.token.substr(0, 16); }
+
+// What the page shows. Over plain HTTP it only says so: no reading of a battery goes out that way here.
+esp_err_t get_battery(httpd_req_t* r) {
+  Who who;
+  if (!require(r, who, true, false)) return ESP_OK;
+  if (!is_tls(r)) {
+    bool enabled = false, password = false;
+    maintenance::panel_flags(enabled, password);
+    json::Writer w;
+    w.begin_object().field("https", false).field("enabled", enabled).field("password", password).end_object();
+    return send_json(r, 200, w.str());
+  }
+  const memory::ExternalScope in_psram;
+  return send_json(r, 200, maintenance::panel_state(static_cast<int>(query_port(r)), session_mark(who)));
+}
+
+esp_err_t get_battery_audit(httpd_req_t* r) {
+  Who who;
+  if (!require(r, who, true, false)) return ESP_OK;
+  if (!is_tls(r)) return send_error(r, 403, "https_required");
+  return send_json(r, 200, maintenance::panel_audit());
+}
+
+// arm, execute, cancel and the steps of a campaign.
+esp_err_t post_battery(httpd_req_t* r, const std::string& action) {
+  Who who;
+  if (!battery_gate(r, who)) return ESP_OK;
+  json::Value in;
+  if (!read_json(r, in)) return ESP_OK;
+  const int port = static_cast<int>(in.integer_or("port", 0, 1, 10));
+  const std::string serial = in.string_or("serial", "");
+  const std::string step = action == "campaign" ? in.string_or("action", "") : action;
+  // giving up needs no password: it only ever stops something
+  if (step != "cancel" && !password_again(r, who, in.string_or("password", ""), port)) return ESP_OK;
+  if (action == "arm") {
+    json::Value none;
+    none.type = json::Type::kObject;
+    const json::Value* params = in.get("params");
+    return battery_answer(r, maintenance::panel_arm(who.user, session_mark(who), port, in.string_or("op", ""), params != nullptr && params->is_object() ? *params : none, serial));
+  }
+  if (action == "execute") return battery_answer(r, maintenance::panel_execute(who.user, session_mark(who), port, serial));
+  if (action == "cancel") return battery_answer(r, maintenance::panel_cancel(who.user, port));
+  int module = 0;
+  const std::string why = maintenance::panel_campaign(who.user, session_mark(who), step, port, serial, module);
+  return battery_answer(r, why, module);
+}
+
+// A firmware image for a battery: the raw .bin as the body, kept in the external memory only (never in flash, lost with a restart). A cut upload keeps nothing.
+esp_err_t post_battery_image(httpd_req_t* r) {
+  Who who;
+  if (!battery_gate(r, who)) return ESP_OK;
+  const node_control::UploadGuard upload_guard;
+  std::string why;
+  const std::shared_ptr<std::vector<std::uint8_t>> image = maintenance::panel_image_buffer(r->content_len, why);
+  if (!image) return why == "bad_size" ? send_error(r, 413, "bad_size") : battery_answer(r, why);
+  std::size_t got = 0;
+  std::int64_t last_data_us = esp_timer_get_time();
+  while (got < image->size()) {
+    const std::size_t want = image->size() - got < 2048 ? image->size() - got : 2048;
+    const int n = httpd_req_recv(r, reinterpret_cast<char*>(image->data()) + got, want);
+    if (n == HTTPD_SOCK_ERR_TIMEOUT) { if (esp_timer_get_time() - last_data_us > 15000000) return send_error(r, 408, "upload_stalled"); continue; }
+    if (n <= 0) return send_error(r, 400, "upload_interrupted");
+    last_data_us = esp_timer_get_time();
+    got += static_cast<std::size_t>(n);
+  }
+  why = maintenance::panel_image_keep(who.user, image);
+  if (why.empty()) return send_ok(r);
+  return why == "image_header" ? send_error(r, 422, "image_header") : battery_answer(r, why);
 }
 
 // ---- dispatch -----------------------------------------------------------------------------------------------------------------------
@@ -1080,6 +1216,8 @@ esp_err_t api_handler(httpd_req_t* r) {
     if (route == "ota/check") return get_ota_check(r);
     if (route == "ota/progress") return get_ota_progress(r);
     if (route == "ota/copy") return get_ota_copy(r);
+    if (route == "battery/maintenance") return get_battery(r);
+    if (route == "battery/audit") return get_battery_audit(r);
   } else if (method == HTTP_POST) {
     if (route == "setup") return post_setup(r);
     if (route == "login") return post_login(r);
@@ -1098,6 +1236,11 @@ esp_err_t api_handler(httpd_req_t* r) {
     if (route == "ota/install") return post_ota_install(r);
     if (route == "ota/check") return post_ota_check(r);
     if (route == "time") return post_time(r);
+    if (route == "battery/arm") return post_battery(r, "arm");
+    if (route == "battery/execute") return post_battery(r, "execute");
+    if (route == "battery/cancel") return post_battery(r, "cancel");
+    if (route == "battery/campaign") return post_battery(r, "campaign");
+    if (route == "battery/image") return post_battery_image(r);
   } else if (method == HTTP_PUT) {
     if (route == "config") return put_config(r);
     if (route == "account") return put_account(r);
@@ -1113,7 +1256,8 @@ std::atomic<std::uint32_t> g_tls_pings_sent{0}, g_tls_pings_done{0};
 
 // A request that does not end is said (req_watch.hpp).
 esp_err_t watched_api_handler(httpd_req_t* r) {
-  const bool long_one = slowreq::may_be_long(slowreq::label(r->method == HTTP_GET ? "GET" : "POST", r->uri));
+  const std::string what = slowreq::label(r->method == HTTP_GET ? "GET" : "POST", r->uri);
+  const bool long_one = slowreq::may_be_long(what) || what == "POST battery/image";
   if (long_one) ++g_long_requests;
   const esp_err_t result = reqwatch::run(r, is_tls(r), api_handler);
   if (long_one) --g_long_requests;
@@ -1125,6 +1269,7 @@ esp_err_t page_handler(httpd_req_t* r) {
   if (uri == "/app.js") return send_asset(r, app_js_gz_start, app_js_gz_end, "text/javascript");
   if (uri == "/style.css") return send_asset(r, style_css_gz_start, style_css_gz_end, "text/css");
   if (uri == "/readings.css") return send_asset(r, readings_css_gz_start, readings_css_gz_end, "text/css");
+  if (uri == "/maintenance.js") return send_asset(r, maintenance_js_gz_start, maintenance_js_gz_end, "text/javascript");
   return send_asset(r, index_html_gz_start, index_html_gz_end, "text/html");
 }
 
@@ -1165,7 +1310,7 @@ void register_handlers(httpd_handle_t server, bool redirect_only) {
     api.handler = watched_api_handler;
     httpd_register_uri_handler(server, &api);
   }
-  for (const char* path : {"/", "/app.js", "/style.css", "/readings.css"}) {
+  for (const char* path : {"/", "/app.js", "/style.css", "/readings.css", "/maintenance.js"}) {
     httpd_uri_t page{};
     page.uri = path;
     page.method = HTTP_GET;
