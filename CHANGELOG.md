@@ -4,11 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.7.5] - A silent panel can restart the node, and each battery module says its serial number and chip
+
 - **The shared tools read the output of processes as UTF-8:** `tools/status_lights.py`, `tools/sync_manifests.py` and `tools/universal_readme_check.py` are the current copies; on Windows a character outside the code page no longer breaks a check.
 - **A node whose panel stops answering can restart itself (off by default):** with *Restart if the panel stops answering* on, the node asks its own panel every 15 seconds (port 80 over the loopback address and the task of the HTTPS server); after the time set (300 s, from 60 to 3600) without an answer it restarts, at most three times an hour and never during a firmware upload or download or an operation on a battery. The reason is kept across the restart, written as an error in the log (the health report takes it to the server) and shown in the panel. Settings `system.web_recovery` and `system.web_recovery_after_s`. The rules are tested on a computer; it has not run on a board.
 - **A browser that vanished no longer keeps its place in the panel's server:** both servers (80 and 443) use TCP keep-alive (60 s idle, then 3 probes 10 s apart), so the connection of a client that is gone is closed with its memory. Not tried on a board.
 - **The memory gate of the panel cannot stay shut for ever:** when the internal memory settled between the levels that close it and the levels that open it, new panel connections were refused until the node was restarted by hand, although the node kept reporting. It now also opens after about a minute over the closing levels. Tested on a computer; not tried on a board.
 - **Each battery module says its serial number, Board and chip:** from its console's `info` the node publishes the serial number, the Board, the chip (older, newer or cannot be told, by the same rules that decide which firmware image fits), the specification and the boot, communication and release-date lines; the panel shows them in the details of the module. The serial number is private data: the readings are not retained and the panel asks for a signed-in user. A module that is reported absent takes what it said with it. The A.R.M.O.R. server has to be updated first to keep them. Nothing new is written to a battery. Tested on a computer with invented data; not tried on a battery.
+
 ## [0.7.4] - A web request that does not end is said
 
 - **A web request that does not end is said:** when the panel's server has been on the same request for 20 seconds, one error line names it, with the internal memory at that moment, and the health report takes it to the server although the panel does not answer. A request that took 5 seconds or more is a warning in the log. The firmware upload and the core dump download are left out. Tested on a computer; not tried on a board.
