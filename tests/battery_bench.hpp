@@ -56,6 +56,9 @@ class Battery {
   std::string image_board, image_version;
   std::vector<std::uint8_t> received_image;
   int packets_accepted = 0, packets_rejected = 0;
+  int refuse_transfers = 0;                            // the first N whole transfers end in "Updata error!" and the battery stays in its bootloader
+  bool stuck = false;                                  // in the bootloader with no application: it answers no command and says it is ready over and over
+  bool lose_capacity = false;                          // after an update `totalcoul` is taken but reads back 0
 
   void feed(const std::uint8_t* data, std::size_t length) {
     for (std::size_t i = 0; i < length; ++i) {
@@ -76,6 +79,7 @@ class Battery {
   void tick(std::uint64_t now_ms) {
     if (!in_bootloader || now_ms - last_c_ms_ < 1000) return;
     last_c_ms_ = now_ms;
+    if (stuck && buffer_.empty() && expected_block_ == 1) out_ += crlf("BootLoader soft  version: V1.4\nUpdata is ready!\nProgram start!\n");
     if (never_ask_crc) return;
     out_ += ask_checksum_mode ? static_cast<char>(armor::solar::xmodem::kNak) : 'C';
   }
@@ -146,7 +150,7 @@ class Battery {
       reply(echo, "");
       return;
     }
-    if (c == "totalcoul" && w.size() == 2) { writes.push_back(line); total_coul_mah = std::stol(w[1]) * 1000; reply(echo, "Test result:pass\n"); return; }
+    if (c == "totalcoul" && w.size() == 2) { writes.push_back(line); total_coul_mah = lose_capacity ? 0 : std::stol(w[1]) * 1000; reply(echo, "Test result:pass\n"); return; }
     if (c == "tbar" && w.size() == 2 && fail_tbar) { reply(echo, "Test result:fail CODE err\n"); return; }
     if (c == "tbar" && w.size() == 2) { writes.push_back(line); serial = w[1]; reply(echo, "Test result:pass\n"); return; }
     if (c == "tbar") { reply(echo, "Test result:fail CODE err\n"); return; }
@@ -207,6 +211,13 @@ class Battery {
   void finish_transfer() {
     using namespace armor::solar::xmodem;
     out_ += static_cast<char>(kAck);
+    if (refuse_transfers > 0) {
+      --refuse_transfers;
+      stuck = true; debug_mode = false; expected_block_ = 1; eot_nak_sent_ = false; packet_number_seen_ = 0; received_image.clear();
+      out_ += crlf("Updata error!\nPlease updata again!\nSystem will be restart!\nBootLoader soft  version: V1.4\nUpdata is ready!\nProgram start!\n");
+      return;
+    }
+    stuck = false;
     in_bootloader = false;
     if (bad_end) { out_ += crlf("Updata error last time\nPlease updata again\n"); return; }
     out_ += crlf("Updata OK!\nSystem will be started by BMS after 1 sec!\n\npylon>");

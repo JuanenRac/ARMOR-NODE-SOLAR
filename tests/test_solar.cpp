@@ -935,6 +935,14 @@ static void test_port_diagnosis() {
       "pwr\n\r@\r\r\n ----------------------------\r\r\n Power  4\r\r\n\r\r\n Voltage         : 50100       mV\r\r\n Current         : -1500       mA\r\r\n Temperature     : 21000       mC\r\r\n"
       " Coulomb         : 77          %\r\r\n Total Coulomb   : 50000       mAH\r\r\n Basic Status    : Dischg  \r\r\n ----------------------------\r\n\rCommand completed successfully\r\n\r$$\r\n\rpylon>";
   CHECK(armor::solar::pylontech::parse_pwr_slave(slave_sheet) == 4);
+  {
+    const armor::solar::pylontech::SlaveSheet said = armor::solar::pylontech::read_slave_sheet(slave_sheet);
+    CHECK(said.place == 4 && said.current_known && said.current_ma == -1500 && said.quiet);
+    std::string trouble = slave_sheet;
+    trouble.replace(trouble.find("Dischg  "), 8, "Protect ");
+    CHECK(!armor::solar::pylontech::read_slave_sheet(trouble).quiet);       // a status that has not been seen counts as an alarm
+    CHECK(armor::solar::pylontech::read_slave_sheet("").place == 0);
+  }
   CHECK(armor::solar::pylontech::parse_pwr_slave("Power 4\r\nBattery Voltage SOHCount SOHStatus\r\n0 3300 0 Normal\r\n") == 0);
   CHECK(armor::solar::pylontech::parse_pwr_slave("Power 99\r\nVoltage : 50000 mV\r\n") == 0 && armor::solar::pylontech::parse_pwr_slave("Voltage : 50000 mV\r\n") == 0 && armor::solar::pylontech::parse_pwr_slave("") == 0);
   {

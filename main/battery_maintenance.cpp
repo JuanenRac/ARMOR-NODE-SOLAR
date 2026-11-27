@@ -35,6 +35,7 @@ constexpr char kTag[] = "armor-battery";
 
 std::mutex g_lock;
 bat::Guard g_guard;
+bat::FailedUpdate g_failed[bat::Guard::kPorts];   // the last firmware update of each port that did not end well (in memory: lost with a restart)
 bat::ImageStage g_stage;
 std::string g_node;
 bool g_enabled = false;
@@ -105,6 +106,7 @@ struct Reply {
   bool has_battery = false;
   bat::Identity battery;
   std::string before;
+  std::string code;                  // why a preflight failed, when it says more than the refusal
   bool has_result = false;
   bat::RunResult result;
   std::size_t received = 0;
@@ -117,6 +119,7 @@ void say(const Reply& r) {
   w.field("command_id", r.ctx.command_id).field("port", r.ctx.port).field("action", r.ctx.action);
   if (!r.ctx.op.empty()) w.field("op", r.ctx.op);
   w.field("stage", r.stage).field("accepted", r.accepted).field("refusal", r.refusal);
+  if (!r.code.empty() && !r.has_result) w.field("code", r.code);
   if (!r.token.empty()) w.field("token", r.token);
   if (!r.canonical.empty()) w.field("canonical", r.canonical);
   if (!r.summary.empty()) w.field("summary", r.summary);
@@ -148,6 +151,9 @@ void say(const Reply& r) {
 void reject(const Context& ctx, const char* why) {
   Reply r;
   r.ctx = ctx; r.stage = "rejected"; r.accepted = false; r.refusal = why;
+  // The two answers about the bootloader are not refusals of the shared contract: they travel as the code of a failed preflight.
+  const std::string said = why;
+  if (said == bat::refusal::kBootloader || said == bat::refusal::kNothingToResume) { r.refusal = bat::refusal::kPreflightFailed; r.code = said; }
   ESP_LOGW(kTag, "port %d: %s refused (%s)", ctx.port, ctx.action.c_str(), why);
   say(r);
 }
@@ -173,9 +179,17 @@ json::Value params_of(const json::Value& in) {
   return empty;
 }
 
-void finish_job(const Context& ctx, bool uses_image, const bat::RunResult& result) {
+void finish_job(const Context& ctx, bool uses_image, const bat::Plan& plan, const bat::RunResult& result) {
   {
     std::lock_guard<std::mutex> guard(g_lock);
+    if (uses_image && ctx.port >= 1 && ctx.port <= bat::Guard::kPorts) {
+      bat::FailedUpdate& failed = g_failed[ctx.port - 1];
+      if (result.outcome == "ok") failed = bat::FailedUpdate{};
+      else if (result.wrote) {
+        const bool again = failed.valid && failed.image_crc32 == plan.image_crc32 && failed.identity.serial == plan.expected.serial;
+        failed = bat::FailedUpdate{true, plan.expected, plan.image_size, plan.image_crc32, again ? failed.resumes + 1 : 0};
+      }
+    }
     g_guard.finish(ctx.port, result.wrote, uptime_ms());
     if (uses_image) g_stage.clear();   // an image is used once
   }
@@ -187,13 +201,43 @@ void finish_job(const Context& ctx, bool uses_image, const bat::RunResult& resul
 
 // ---- arm: read the battery, check, make the token ----------------------------------------------------------------------------------------------
 
+// The request of a resumed update: the identity is the one read before the try that failed. "" when it may go on.
+std::string resume_request(int port, const std::string& typed, const json::Value& params, bat::Request& request, bat::Plan& plan) {
+  const bat::FailedUpdate& failed = g_failed[port - 1];
+  if (!failed.valid) return bat::refusal::kNothingToResume;
+  request.op = bat::Op::kFirmwareUpdate; request.params = params; request.identity = failed.identity; request.expert_mode = g_expert_mode; request.resume = true;
+  std::string why;
+  if (!bat::build_plan(request, plan, why)) return why;
+  const std::string refused = bat::resume_check(failed, plan, typed);
+  if (refused != bat::refusal::kNone) return refused;
+  const auto image = g_stage.image();
+  return image ? bat::check_firmware_request(plan, *image, failed.identity) : std::string(bat::refusal::kImageMissing);
+}
+
+void arm_resume(const Context& ctx, const std::string& typed, const json::Value& params) {
+  Reply r;
+  {
+    std::lock_guard<std::mutex> guard(g_lock);
+    bat::Request request;
+    bat::Plan plan;
+    const std::string refused = resume_request(ctx.port, typed, params, request, plan);
+    if (refused != bat::refusal::kNone) { reject(ctx, refused.c_str()); return; }
+    r.token = token_hex();
+    g_guard.arm(ctx.port, plan.canonical, typed, request.identity, "", r.token, uptime_ms());
+    r.canonical = plan.canonical; r.summary = plan.summary; r.atomic = plan.atomic; r.battery = request.identity;
+  }
+  r.ctx = ctx; r.stage = "armed"; r.accepted = true; r.refusal = "none"; r.risk = "irreversible"; r.has_battery = true;
+  say(r);
+}
+
 void arm(const Context& ctx, bat::Op op, const json::Value& in) {
   const std::string typed = in.string_or("serial", "");
   const json::Value params = params_of(in);
   if (needs_clock(op) && !mqtt_link::clock_is_set()) { reject(ctx, bat::refusal::kClockNotSet); return; }
   const manager::BatteryPortFacts live = manager::battery_port_facts(static_cast<std::size_t>(ctx.port - 1));
   if (!live.pylontech) { reject(ctx, bat::refusal::kNotPylontech); return; }
-  if (!live.present) { reject(ctx, bat::refusal::kNoBattery); return; }
+  // a battery in its bootloader reports nothing: only a resumed update may start without readings
+  if (!live.present && !(op == bat::Op::kFirmwareUpdate && params.bool_or("resume", false))) { reject(ctx, bat::refusal::kNoBattery); return; }
   std::string password;
   {
     std::lock_guard<std::mutex> guard(g_lock);
@@ -204,15 +248,20 @@ void arm(const Context& ctx, bat::Op op, const json::Value& in) {
   }
   const std::shared_ptr<manager::BatteryJob> job = std::make_shared<manager::BatteryJob>();
   job->plan = bat::preflight_plan();
+  const bool resume = op == bat::Op::kFirmwareUpdate && params.bool_or("resume", false);
+  if (resume) job->plan = bat::bootloader_listen_plan();
   job->secret = password;
-  const auto finish_arm = [ctx, op, typed, params](const bat::RunResult& result) {
+  const auto finish_arm = [ctx, op, typed, params, resume](const bat::RunResult& result) {
     {
       std::lock_guard<std::mutex> guard(g_lock);
       g_guard.finish(ctx.port, false, uptime_ms());
     }
+    if (result.outcome != "ok" && resume) { reject(ctx, bat::refusal::kNothingToResume); return; }   // the battery is not saying it is in its bootloader
+    if (resume) { arm_resume(ctx, typed, params); return; }
     if (result.outcome != "ok") {
       const char* why = bat::refusal::kPreflightFailed;
       if (result.outcome == "retry") why = bat::refusal::kNoAnswer;
+      else if (result.code == bat::refusal::kBootloader) why = bat::refusal::kBootloader;
       else if (result.code == "step_failed:login") why = bat::refusal::kLoginFailed;
       else if (result.outcome == "rejected") why = result.code.c_str();
       reject(ctx, why);
@@ -220,7 +269,7 @@ void arm(const Context& ctx, bat::Op op, const json::Value& in) {
     }
     const manager::BatteryPortFacts now_facts = manager::battery_port_facts(static_cast<std::size_t>(ctx.port - 1));
     bat::Facts facts;
-    facts.pylontech_port = now_facts.pylontech; facts.present = now_facts.present; facts.current_ma = now_facts.current_ma; facts.critical_alarm = now_facts.critical_alarm;
+    facts.pylontech_port = now_facts.pylontech; facts.present = now_facts.present; facts.slave = now_facts.slave; facts.current_ma = now_facts.current_ma; facts.critical_alarm = now_facts.critical_alarm;
     facts.identity = result.identity; facts.typed_serial = typed;
     const std::string pre = bat::preconditions(op, facts, params);
     if (pre != bat::refusal::kNone) { reject(ctx, pre.c_str()); return; }
@@ -268,14 +317,20 @@ void execute(const Context& ctx, bat::Op op, const json::Value& in) {
   {
     std::lock_guard<std::mutex> guard(g_lock);
     if (!g_guard.peek(ctx.port, armed)) { reject(ctx, bat::refusal::kNotArmed); return; }
+    const bool resume = op == bat::Op::kFirmwareUpdate && params.bool_or("resume", false);
     bat::Request request;
-    request.op = op; request.params = params; request.identity = armed.identity; request.expert_mode = g_expert_mode;
+    request.op = op; request.params = params; request.identity = armed.identity; request.expert_mode = g_expert_mode; request.resume = resume;
     std::string why;
     // the conditions of the arm step are checked again: the battery may have started to move current or raised an alarm since
-    {
+    if (resume) {
+      bat::Request again;
+      bat::Plan checked;
+      const std::string refused_resume = resume_request(ctx.port, typed, params, again, checked);
+      if (refused_resume != bat::refusal::kNone) { g_guard.forget(ctx.port); reject(ctx, refused_resume.c_str()); return; }
+    } else {
       const manager::BatteryPortFacts now_facts = manager::battery_port_facts(static_cast<std::size_t>(ctx.port - 1));
       bat::Facts facts;
-      facts.pylontech_port = now_facts.pylontech; facts.present = now_facts.present; facts.current_ma = now_facts.current_ma; facts.critical_alarm = now_facts.critical_alarm;
+      facts.pylontech_port = now_facts.pylontech; facts.present = now_facts.present; facts.slave = now_facts.slave; facts.current_ma = now_facts.current_ma; facts.critical_alarm = now_facts.critical_alarm;
       facts.identity = armed.identity; facts.typed_serial = typed;
       const std::string pre = bat::preconditions(op, facts, params);
       if (pre != bat::refusal::kNone) { g_guard.forget(ctx.port); reject(ctx, pre.c_str()); return; }
@@ -298,7 +353,7 @@ void execute(const Context& ctx, bat::Op op, const json::Value& in) {
   job->secret = password;
   job->image = image;
   const bool uses_image = plan.uses_image;
-  job->on_done = [ctx, uses_image](const bat::RunResult& result) { const bat::RunResult copy = result; post([ctx, uses_image, copy] { finish_job(ctx, uses_image, copy); }); };
+  job->on_done = [ctx, uses_image, plan](const bat::RunResult& result) { const bat::RunResult copy = result; post([ctx, uses_image, plan, copy] { finish_job(ctx, uses_image, plan, copy); }); };
   job->on_progress = [ctx](const bat::RunResult& result) {
     bat::RunResult copy = result;
     copy.outcome = "running";

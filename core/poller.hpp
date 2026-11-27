@@ -262,6 +262,7 @@ class Poller {
   }
   // The place in its stack of the battery whose console this port is on, when that is not the first one (0 otherwise).
   int slave_module() const { return slave_module_; }
+  const pylontech::SlaveSheet& slave_sheet() const { return slave_sheet_; }
   std::string heard_sample() const { return portdiag::sample_hex(raw_.tail(portdiag::kSampleBytes)); }
 
   // What the last reading said, for the summary of the whole system (core/solar_system.hpp): the inverter's numbers and the modules of a battery stack.
@@ -750,7 +751,8 @@ class Poller {
       std::vector<pylontech::Module> found;
       pylontech::parse_pwr(buffer_, found);
       // The battery is not read as a stack of one: the first battery of its stack counts it already, and its figures would be added twice.
-      slave_module_ = found.empty() ? pylontech::parse_pwr_slave(buffer_) : 0;
+      slave_sheet_ = found.empty() ? pylontech::read_slave_sheet(buffer_) : pylontech::SlaveSheet{};
+      slave_module_ = slave_sheet_.place;
       if (found.empty()) { fail("format", now_ms); return; }
       ++stats_.replies_ok;
       stats_.last_error.clear();
@@ -917,7 +919,7 @@ class Poller {
     if (step_ == Step::kEvent) { ask_soh(now_ms); return; }
     if (step_ == Step::kSoh) { end_extras(now_ms); return; }
     stats_.last_error = "timeout";
-    if (kind_ == config::Kind::kPylontech) { wake_ = true; slave_module_ = 0; }   // the console did not answer: the next try starts with a bare Enter
+    if (kind_ == config::Kind::kPylontech) { wake_ = true; slave_module_ = 0; slave_sheet_ = {}; }   // the console did not answer: the next try starts with a bare Enter
     if (kind_ == config::Kind::kVoltronic && auto_) {
       if (known_ && ++misses_ >= 3) { known_ = false; misses_ = 0; }
       if (!known_) dialect_ = next_dialect(dialect_);   // look for the next one at the next try
@@ -981,6 +983,7 @@ class Poller {
   bool had_capacity_ = false;
   bool caught_up_ = false, catching_up_ = false;   // this cycle has asked a missing sheet again; the exchange under way is that one
   int slave_module_ = 0;                           // the last `pwr` was the sheet of one battery in this place of its stack
+  pylontech::SlaveSheet slave_sheet_;              // ... and what it said
   bool slow_sheet_ = false;                        // `info` and `stat` of this module are given the longer time
   std::uint64_t console_timeout_ms_ = kConsoleExtraTimeoutMs;   // how long the console question under way is given
   bool settling_ = false;                          // a question timed out: the next one waits for silence
