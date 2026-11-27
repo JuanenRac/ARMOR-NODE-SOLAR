@@ -588,6 +588,10 @@ static void test_pylontech_alarm_levels() {
   CHECK(pylontech::state_alarms("OV", false) && pylontech::state_alarms("UnderVol", false) && pylontech::state_alarms("Protect", false) && pylontech::state_alarms("Whatever", false) && pylontech::state_alarms("High", true));
   std::vector<pylontech::Module> modules;
   pylontech::parse_pwr(kPwr, modules);
+  // a full battery just after an update: SOC 100, cells 3.508 to 3.536 V, the cells column reading High
+  modules[0].soc_percent = 100; modules[0].cell_low_v = 3.508; modules[0].cell_high_v = 3.536; modules[0].cell_voltage_state = "High";
+  CHECK(!pylontech::summarise(modules).alarm);
+  modules[0].cell_voltage_state = ""; modules[0].cell_low_v = 3.330; modules[0].cell_high_v = 3.348;
   modules[0].voltage_state = "High";
   CHECK(!pylontech::summarise(modules).alarm);
   modules[0].voltage_state = "OverVol";
