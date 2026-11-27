@@ -755,6 +755,7 @@ const L = {
   rv_lvl2: ["Protection or alarm", "Protección o alarma", "Schutz oder Alarm", "Protection ou alarme", "Protezione o allarme", "保護または警報", "保护或报警", "Proteção ou alarme"],
   rv_lvl3: ["BMS fault", "Fallo del BMS", "BMS-Fehler", "Panne du BMS", "Guasto del BMS", "BMS故障", "BMS故障", "Falha do BMS"],
   rv_unread: ["BMS fault: cells not read (0 V): {0}", "Fallo del BMS: celdas sin lectura (0 V): {0}", "BMS-Fehler: Zellen nicht gelesen (0 V): {0}", "Panne du BMS : cellules non lues (0 V) : {0}", "Guasto del BMS: celle non lette (0 V): {0}", "BMS故障：読み取れないセル（0 V）：{0}", "BMS故障：读不到的电芯（0 V）：{0}", "Falha do BMS: células sem leitura (0 V): {0}"],
+  rv_leftOut: ["Impossible figure left out: {0}", "Cifra imposible descartada: {0}", "Unmöglicher Wert verworfen: {0}", "Valeur impossible écartée : {0}", "Valore impossibile scartato: {0}", "あり得ない値を除外：{0}", "已忽略不可能的数值：{0}", "Valor impossível ignorado: {0}"],
   rv_notRead: ["not read", "sin lectura", "nicht gelesen", "non lue", "non letta", "読み取り不可", "读不到", "sem leitura"],
   rv_sohBad: ["poor health", "mala salud", "schlechter Zustand", "mauvaise santé", "cattiva salute", "健全性不良", "健康状态差", "má saúde"],
   rv_col_base: ["state", "estado", "Zustand", "état", "stato", "状態", "状态", "estado"],

@@ -399,7 +399,9 @@ static void test_pylontech_data_plate() {
 // The charge left of a stack, with the two forms of the `bat` table: ampere-hours for each cell (a real US2000, whose cells differ) and percentages only.
 static std::string us_console(const std::string& command, int modules, const std::string& bat, bool info_answers) {
   std::string out = "@\r\n";
-  if (command == "pwr") {
+  if (command == "pwr 1") {   // the sheet of one module (invented figures, the shape of a captured one)
+    out += " Power  1\r\n Voltage         : 38286       mV\r\n Power Events    : 0x0        \r\n System Fault    : 0x40       VOLT err \r\n";
+  } else if (command == "pwr") {
     out += "Power Volt Curr Tempr Tlow Thigh Vlow Vhigh Base.St Volt.St Curr.St Temp.St Coulomb Time B.V.St B.T.St\r\n";
     for (int i = 1; i <= modules; ++i) out += std::to_string(i) + " 51688 0 36000 36000 36000 3347 3495 Charge Normal Normal Normal 52% 2025-03-09 19:11:40 Normal Normal\r\n";
   } else if (command.rfind("bat", 0) == 0) {
@@ -1052,6 +1054,7 @@ static void test_pylontech_cells_not_read() {
   CHECK(module.get("cells_v")->items.size() == 15 && module.get("cells_v")->items[4].number == 0);
   CHECK(has_flag(module, "voltage", "UV", 3) && has_flag(module, "voltage", "UV", 5) && !has_flag(module, "voltage", "UV", 6));
   CHECK(document.get("alarm")->boolean == true && std::fabs(document.get("cell_min_v")->number - 3.425) < 0.001);
+  CHECK(has_flag(module, "system", "0x40 VOLT err", -1));   // the module is faulty: its own sheet was asked and the code goes with its states
   // and when the cells are read again the fault ends
   now += 6000;
   CHECK(armor::json::parse(us_cycle(poller, now, 1, bat_with_dead(0), true), document) && document.get("stack")->items[0].get("cells_unread") == nullptr);
@@ -1068,6 +1071,26 @@ static void test_pylontech_impossible_figures() {
   CHECK(document.get("alarm")->boolean == true && has_flag(document.get("stack")->items[0], "base", "SysError", -1));
   CHECK(has_flag(document.get("stack")->items[1], "voltage", "High", -1) && has_flag(document.get("stack")->items[1], "current", "OV", -1));
   CHECK(document.get("stack")->items[1].get("current_a") == nullptr && document.get("stack")->items[1].get("temperature_c") == nullptr && document.get("stack")->items[1].get("voltage_v") != nullptr);
+  // and the message says which figures were left out
+  const armor::json::Value* left = document.get("stack")->items[1].get("left_out");
+  CHECK(left != nullptr && left->items.size() == 2 && left->items[0].text == "current" && left->items[1].text == "temperature");
+  CHECK(document.get("stack")->items[0].get("left_out") != nullptr && document.get("stack")->items[0].get("left_out")->items[0].text == "cells");
+  // figures that were simply not told are not "left out"
+  pylontech::Module quiet_one;
+  quiet_one.number = 1; quiet_one.present = true;
+  pylontech::keep_plausible(quiet_one);
+  CHECK(quiet_one.left_out.empty());
+  pylontech::Module wild;
+  wild.soc_percent = 300; wild.capacity_ah = -7; wild.full_capacity_ah = 1e9; wild.cycles = -5; wild.health_percent = 200; wild.cell_count = 99; wild.max_charge_a = 1e6; wild.temperatures_c = {900}; wild.cells_v.assign(40, 3.3);
+  pylontech::keep_plausible(wild);
+  pylontech::keep_plausible(wild);   // twice, as the parser and the message do: nothing is named twice
+  CHECK(wild.left_out.size() == 8);
+  // the code of the module's own sheet: only of the module that was asked, only when it is not zero, at most 16 characters
+  const std::string sheet = " Power  3\r\n System Fault    : 0x40       VOLT err \r\n";
+  CHECK(pylontech::parse_system_fault(sheet, 3) == "0x40 VOLT err");
+  CHECK(pylontech::parse_system_fault(sheet, 2).empty() && pylontech::parse_system_fault("System Fault : 0x40", 1).empty());
+  CHECK(pylontech::parse_system_fault(" Power 1\r\nSystem Fault : 0x0 \r\n", 1).empty() && pylontech::parse_system_fault(" Power 1\r\nSystem Fault : none\r\n", 1).empty());
+  CHECK(pylontech::parse_system_fault(" Power 1\r\nSystem Fault : 0x10000100 VOLT err TMPR err\r\n", 1) == "0x10000100 VOLT ");
   // whatever protocol: a cell beyond 10 V or a figure that is not a number never reaches the message
   pylontech::Module odd;
   odd.number = 1; odd.present = true; odd.cell_low_v = 3.3; odd.cell_high_v = 33.4; odd.cells_v = {3.3, 33.4}; odd.voltage_v = std::nan(""); odd.current_a = 1; odd.base_state = "Idle";

@@ -829,6 +829,7 @@ const cellLevel = (v, limits) => (v < limits[0] || v > limits[3] ? 2 : v < limit
 // is not known: it is shown as it is), 3 a fault of the battery's own electronics (SysError, cells it does not read). The words are the battery's.
 const flagLevel = f => (f.word === "SysError" ? 3 : /^(High|Low|COCAlm|DOCAlm)$/.test(f.word) && f.column !== "system" ? 1 : 2);
 const unreadCells = x => x.cells_unread || [];
+const leftOut = x => x.left_out || [];
 const readCells = x => (x.cells_v || []).filter((v, i) => !unreadCells(x).includes(i));
 const bmsFault = x => unreadCells(x).length > 0 || (x.flags || []).some(f => flagLevel(f) === 3) || x.state === "SysError";
 const flagText = f => (f.cell === undefined ? "" : t("rv_cell", f.cell + 1) + " · ") + t("rv_col_" + f.column) + " · " + f.word;
@@ -840,6 +841,7 @@ function moduleHealth(x, limits) {
   const add = (level, key, arg) => problems.push([level, key, arg]);
   if (unreadCells(x).length) add(2, "rv_unread", unreadCells(x).map(i => i + 1).join(", "));
   (x.flags || []).forEach(f => add(flagLevel(f) === 1 ? 1 : 2, "rv_lvl" + flagLevel(f), flagText(f)));
+  if (leftOut(x).length) add(1, "rv_leftOut", leftOut(x).join(", "));
   const cells = readCells(x);
   if (cells.length) {
     const low = Math.min(...cells), high = Math.max(...cells), delta = Math.round((high - low) * 1000);

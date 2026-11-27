@@ -108,6 +108,8 @@ struct Module {
   std::string manufacturer;           // who made it, as the equipment said it or as its protocol or model tells; "" when not known
   bool manufacturer_deduced = false;  // true: the equipment did not say it, its protocol or model does
   bool has_voltage = true, has_current = true;   // false: the figure that came was impossible and is not told (see keep_plausible)
+  std::vector<const char*> left_out;             // which figures came impossible and were left out (the contract's `left_out`): the screens say so
+  std::string fault_code;                        // `System Fault` of the module's own sheet (`pwr <n>`) when it is not zero: "0x40 VOLT err"
   int cell_count = -1;                // `info`: Cell Number
   std::string board_version, main_soft_version, soft_version;   // `info`: the board, the main software and the software of the module (V10R04, B68.2.0.0, V2.6)
   double max_charge_a = -1, max_discharge_a = -1;   // `info`: Max Charge Curr / Max Dischg Curr, the module's current limits in amperes (both positive); -1 when not told
@@ -156,24 +158,37 @@ inline bool integer(const std::string& text, long& out) {
 // spoiled one (bytes lost on the line, a row run into the next, not a number) is left out here and the rest of the reading still goes.
 inline bool within(double value, double low, double high) { return value >= low && value <= high; }   // false for a NaN
 
+// Notes once that a figure was left out for being impossible (a figure that was simply not told, -1, is not).
+inline void note_left_out(Module& m, const char* name) {
+  for (const char* known : m.left_out) if (std::string_view(known) == name) return;
+  m.left_out.push_back(name);
+}
+
 inline void keep_plausible(Module& m) {
-  if (m.has_voltage && !within(m.voltage_v, 0, 1000)) m.has_voltage = false;
+  if (m.has_voltage && !within(m.voltage_v, 0, 1000)) { m.has_voltage = false; note_left_out(m, "voltage"); }
   if (!m.has_voltage) m.voltage_v = 0;
-  if (m.has_current && !within(m.current_a, -1000, 1000)) m.has_current = false;
+  if (m.has_current && !within(m.current_a, -1000, 1000)) { m.has_current = false; note_left_out(m, "current"); }
   if (!m.has_current) m.current_a = 0;
-  if (m.has_temperature && !(within(m.temperature_c, -50, 200) && within(m.temperature_low_c, -50, 200) && within(m.temperature_high_c, -50, 200))) m.has_temperature = false;
+  if (m.has_temperature && !(within(m.temperature_c, -50, 200) && within(m.temperature_low_c, -50, 200) && within(m.temperature_high_c, -50, 200))) { m.has_temperature = false; note_left_out(m, "temperature"); }
   if (!m.has_temperature) m.temperature_c = m.temperature_low_c = m.temperature_high_c = 0;
   if (m.temperatures_c.size() > 8) m.temperatures_c.resize(8);
-  for (const double t : m.temperatures_c) if (!within(t, -50, 200)) { m.temperatures_c.clear(); break; }
-  if (!(within(m.cell_low_v, 0, 10) && within(m.cell_high_v, 0, 10) && m.cell_low_v <= m.cell_high_v)) m.cell_low_v = m.cell_high_v = 0;   // 0 and 0: not told
-  if (m.cells_v.size() > 32) m.cells_v.clear();
-  for (const double v : m.cells_v) if (!within(v, 0, 10)) { m.cells_v.clear(); break; }
+  for (const double t : m.temperatures_c) if (!within(t, -50, 200)) { m.temperatures_c.clear(); note_left_out(m, "temperatures"); break; }
+  if (!(within(m.cell_low_v, 0, 10) && within(m.cell_high_v, 0, 10) && m.cell_low_v <= m.cell_high_v)) { m.cell_low_v = m.cell_high_v = 0; note_left_out(m, "cells"); }   // 0 and 0: not told
+  if (m.cells_v.size() > 32) { m.cells_v.clear(); note_left_out(m, "cells"); }
+  for (const double v : m.cells_v) if (!within(v, 0, 10)) { m.cells_v.clear(); note_left_out(m, "cells"); break; }
+  if (m.soc_percent != -1 && (m.soc_percent < 0 || m.soc_percent > 100)) note_left_out(m, "soc");
   if (m.soc_percent < 0 || m.soc_percent > 100) m.soc_percent = -1;
+  if (m.capacity_ah != -1 && !within(m.capacity_ah, 0, 100000)) note_left_out(m, "capacity");
   if (!within(m.capacity_ah, 0, 100000)) m.capacity_ah = -1;
+  if (m.full_capacity_ah != -1 && !within(m.full_capacity_ah, 0, 100000)) note_left_out(m, "capacity");
   if (!within(m.full_capacity_ah, 0, 100000)) m.full_capacity_ah = -1;
+  if (m.cycles != -1 && (m.cycles < 0 || m.cycles > 1000000)) note_left_out(m, "cycles");
   if (m.cycles < 0 || m.cycles > 1000000) m.cycles = -1;
+  if (m.health_percent != -1 && (m.health_percent < 0 || m.health_percent > 100)) note_left_out(m, "health");
   if (m.health_percent < 0 || m.health_percent > 100) m.health_percent = -1;
+  if (m.cell_count != -1 && (m.cell_count < 1 || m.cell_count > 32)) note_left_out(m, "cell_count");
   if (m.cell_count < 1 || m.cell_count > 32) m.cell_count = -1;
+  if ((m.max_charge_a != -1 && !within(m.max_charge_a, 0, 1000)) || (m.max_discharge_a != -1 && !within(m.max_discharge_a, 0, 1000))) note_left_out(m, "limits");
   if (!within(m.max_charge_a, 0, 1000)) m.max_charge_a = -1;
   if (!within(m.max_discharge_a, 0, 1000)) m.max_discharge_a = -1;
   if (m.console_baud < 300 || m.console_baud > 1000000) m.console_baud = -1;
@@ -535,6 +550,26 @@ inline bool parse_event(const std::string& text, Event& out) {
   e.valid = in_item && !e.time.empty();
   if (e.valid) out = e;
   return e.valid;
+}
+
+// The code of the `System Fault` line of one module's own sheet (`pwr <module>`: "System Fault    : 0x40       VOLT err" gives "0x40 VOLT err", at most the 16 characters the
+// contract takes). "" when the text is not the sheet of that module (its "Power <n>" line) or the code is zero. Read only: the sheet changes nothing in the battery.
+inline std::string parse_system_fault(const std::string& text, int module) {
+  bool mine = false;
+  std::string code, line;
+  const auto handle = [&](const std::string& row) {
+    const std::vector<std::string> t = detail::tokens(row);
+    long n = 0;
+    if (t.size() == 2 && t[0] == "Power" && detail::integer(t[1], n)) mine = n == module;
+    if (!mine || t.size() < 4 || t[0] != "System" || t[1] != "Fault" || t[2] != ":" || t[3].compare(0, 2, "0x") != 0) return;
+    if (t[3].find_first_not_of('0', 2) == std::string::npos) return;   // 0x0: no fault
+    code = t[3];
+    for (std::size_t i = 4; i < t.size(); ++i) code += " " + t[i];
+    if (code.size() > 16) code.resize(16);
+  };
+  for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
+  handle(line);
+  return code;
 }
 
 // The health of each cell from the text a `soh <module>` command printed: rows of cell, voltage (mV), SOH count and status (Normal, Abnormal ...). Fills soh_counts in cell order and

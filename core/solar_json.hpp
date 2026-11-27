@@ -135,6 +135,7 @@ inline void write_flags(json::Writer& w, const pylontech::Module& m) {
   };
   for (const Column& c : columns)
     if (c.name[0] == 'b' ? pylontech::base_word_matters(*c.word) : pylontech::state_word_matters(*c.word)) one(c.name, *c.word, -1);
+  one("system", m.fault_code, -1);   // the battery's own code for its fault, when its sheet was read
   for (const pylontech::CellFlag& f : m.cell_flags) one(f.column, f.word, f.cell);
   if (written > 0) w.end_array();
   if (!m.cells_unread.empty()) {
@@ -237,6 +238,7 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
       }
       if (!m.cells_v.empty()) { w.key("cells_v").begin_array(); for (double v : m.cells_v) w.number(v, 3); w.end_array(); }
       write_flags(w, m);
+      if (!m.left_out.empty()) { w.key("left_out").begin_array(); for (const char* name : m.left_out) w.string(name); w.end_array(); }
       if (!m.temperatures_c.empty()) { w.key("temperatures_c").begin_array(); for (double v : m.temperatures_c) w.number(v, 1); w.end_array(); }
     }
     w.end_object();
