@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A web request that does not end is said:** when the panel's server has been on the same request for 20 seconds, one error line names it, with the internal memory at that moment, and the health report takes it to the server although the panel does not answer. A request that took 5 seconds or more is a warning in the log. The firmware upload and the core dump download are left out. Tested on a computer; not tried on a board.
+- **No answer of the panel is sent while the sessions are locked** (a refused sign-in, a changed password): a slow browser could hold up the requests of everybody who was signed in. Tested on a computer; not tried on a board.
+
 ## [0.7.3] - An unreadable port and a silent battery module say why
 
 - **A port that hears bytes and reads nothing says why:** the *Ports* page tells whether only zeros arrive (nothing drives the line), whether it is the node's own question coming back, unreadable bytes (speed, level or polarity), readable text of another equipment or never a whole frame, with the speed, the pins, the polarity, the byte count and the last bytes. The same goes as one error line to the log, which the health report takes to the server. The question shown in the diagnosis of a battery port is no longer empty. Tested on a computer; not tried on a board.
