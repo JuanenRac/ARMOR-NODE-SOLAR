@@ -893,6 +893,39 @@ static void test_port_diagnosis() {
     CHECK(bad.unreadable_cause(at) == which.second);
   }
 
+  // the console of a battery that is not the first of its stack (invented figures): it is said so, and it is not read as a stack of one
+  const std::string slave_sheet =
+      "pwr\n\r@\r\r\n ----------------------------\r\r\n Power  4\r\r\n\r\r\n Voltage         : 50100       mV\r\r\n Current         : -1500       mA\r\r\n Temperature     : 21000       mC\r\r\n"
+      " Coulomb         : 77          %\r\r\n Total Coulomb   : 50000       mAH\r\r\n Basic Status    : Dischg  \r\r\n ----------------------------\r\n\rCommand completed successfully\r\n\r$$\r\n\rpylon>";
+  CHECK(armor::solar::pylontech::parse_pwr_slave(slave_sheet) == 4);
+  CHECK(armor::solar::pylontech::parse_pwr_slave("Power 4\r\nBattery Voltage SOHCount SOHStatus\r\n0 3300 0 Normal\r\n") == 0);
+  CHECK(armor::solar::pylontech::parse_pwr_slave("Power 99\r\nVoltage : 50000 mV\r\n") == 0 && armor::solar::pylontech::parse_pwr_slave("Voltage : 50000 mV\r\n") == 0 && armor::solar::pylontech::parse_pwr_slave("") == 0);
+  {
+    Poller slave(armor::config::Kind::kPylontech, "solar-1", "battery-6", 5, 0);
+    std::uint64_t at = 1000;
+    std::string answer = slave_sheet, topic, payload;
+    const auto run = [&](std::uint32_t bad) {
+      for (int turn = 0; turn < 2000 && slave.stats().replies_bad < bad; ++turn) {
+        const std::vector<std::uint8_t> tx = slave.next_tx(at);
+        at += 40;
+        if (!tx.empty()) slave.on_rx(reinterpret_cast<const std::uint8_t*>(answer.data()), answer.size(), at);
+      }
+    };
+    run(1);
+    CHECK(slave.unreadable_cause(at) == "slave" && slave.slave_module() == 4 && slave.state(at) == "garbled" && !slave.take_message(at, topic, payload));
+    // the cable moved to the first battery: the table comes back and the notice goes
+    at += 6000;
+    std::string table = sheet_answer("pwr", 0, false);
+    for (int turn = 0; turn < 50 && slave.slave_module() != 0; ++turn) {
+      const std::vector<std::uint8_t> tx = slave.next_tx(at);
+      at += 40;
+      if (!tx.empty()) slave.on_rx(reinterpret_cast<const std::uint8_t*>(table.data()), table.size(), at);
+    }
+    CHECK(slave.slave_module() == 0 && slave.unreadable_cause(at).empty());
+  }
+  CHECK(diag::log_line(6, "slave", 115200, 2, 1, false, 900, "", 4) == "port 6 unreadable slave 115200bd rx2 tx1 mod4 n900 []");
+  CHECK(std::string("armor-ports: ").size() + diag::log_line(10, "slave", 1000000, 48, 47, true, 4294967295u, "", 16).size() <= 96);
+
   // a battery port that hears only zeros
   Poller poller(armor::config::Kind::kPylontech, "solar-1", "battery-3", 10, 0);
   std::uint64_t now = 1000;

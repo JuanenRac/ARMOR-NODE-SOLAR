@@ -115,7 +115,7 @@ void tell_unreadable(const PortStatus& s, std::uint64_t now_ms) {
     if (s.readings > 0 && s.state == "reporting") g_unreadable.clear(port);
     if (s.cause.empty() || !g_unreadable.take(port, now_ms)) return;
   }
-  ESP_LOGE(kTag, "%s", solar::portdiag::log_line(s.number, s.cause, s.baud, s.rx, s.tx, s.invert, s.bytes_rx, s.sample).c_str());
+  ESP_LOGE(kTag, "%s", solar::portdiag::log_line(s.number, s.cause, s.baud, s.rx, s.tx, s.invert, s.bytes_rx, s.cause == "slave" ? std::string() : s.sample, s.slave_module).c_str());
 }
 
 // The capture of the exchanges of the polling: off until the settings turn it on. The flag is read first so that a node with the capture off takes no lock for it.
@@ -295,6 +295,7 @@ void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::
     PortStatus& s = slot.status;
     s.cause = cause;
     s.sample = sample;
+    s.slave_module = poller.slave_module();
     s.state = poller.state(now);
     s.error = stats.last_error;
     s.detail = poller.detail();

@@ -92,6 +92,7 @@ void write_port(json::Writer& w, std::size_t index) {
   if (s.group >= 0) w.field("group", std::string(1, static_cast<char>('A' + s.group))).field("channel", s.channel + 1);
   if (!s.detail.empty()) w.field("detail", s.detail);
   if (!s.cause.empty()) w.field("cause", s.cause).field("sample", s.sample);
+  if (s.slave_module > 0) w.field("slave_module", s.slave_module);
   w.end_object();
 }
 

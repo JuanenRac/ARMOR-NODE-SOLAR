@@ -292,7 +292,7 @@ function psPill(state) {
 }
 const portErrorText = s => (s.state === "error" && L["pe_" + s.error] ? t("pe_" + s.error) : s.error && L["le_" + s.error] ? t("le_" + s.error) : s.error || "");
 // Why a port that hears bytes reads nothing, as the node says it (core/port_diag.hpp).
-const CAUSES = ["flat", "echo", "noise", "text", "frames"];
+const CAUSES = ["flat", "echo", "noise", "text", "frames", "slave"];
 const portLiveText = s => t("portCounters", s.bytes_rx, s.bytes_tx, s.replies_ok, s.replies_bad, s.timeouts, s.readings);
 
 const BOARD_NAMES = { "s3-wifi": "ESP32-S3-WROOM-1 N16R8", "s3-eth": "Waveshare ESP32-S3-ETH" };
@@ -748,7 +748,7 @@ function portCard(index) {
       st.enabled ? el("div", { class: "actions" }, psPill(st.state), el("span", { class: "muted", id: "port-live-" + index }, portLiveText(st))) : null,
       st.enabled && st.detail ? el("p", { class: "muted" }, t("portDetail") + ": " + st.detail) : null,
       st.enabled && (st.error || st.state === "error") ? el("p", { class: "err" }, portErrorText(st)) : null,
-      st.state === "silent" || st.state === "garbled" || st.state === "waiting" ? el("p", { class: "hint" }, t(st.state === "silent" && cfg.kind === "pylontech" ? "hint_silent_pylontech" : st.state === "silent" && cfg.kind === "voltronic" ? "hint_silent_inverter" : st.state === "garbled" && CAUSES.includes(st.cause) ? "hint_cause_" + st.cause : "hint_" + st.state)) : null,
+      st.state === "silent" || st.state === "garbled" || st.state === "waiting" ? el("p", { class: "hint" }, t(st.state === "silent" && cfg.kind === "pylontech" ? "hint_silent_pylontech" : st.state === "silent" && cfg.kind === "voltronic" ? "hint_silent_inverter" : st.state === "garbled" && CAUSES.includes(st.cause) ? "hint_cause_" + st.cause : "hint_" + st.state), st.slave_module) : null,
       st.state === "garbled" && st.cause ? el("p", { class: "muted mono" }, t("portLine", st.baud, st.rx, st.tx, st.bytes_rx, st.sample) + " · " + t(st.invert ? "portInverted" : "portNormal")) : null,
       st.enabled ? el("div", { class: "actions" }, el("button", { class: "b", onclick: () => showRaw(index) }, t(S.rawOpen === index ? "hideRaw" : "showRaw")),
         S.rawOpen === index && isAdmin() ? el("button", { class: "b", onclick: () => downloadRaw(index) }, t("downloadRaw")) : null,

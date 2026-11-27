@@ -6,7 +6,8 @@
 //   echo    what was sent comes back: transmit and receive are joined, or the cable mirrors them;
 //   noise   a text protocol hears mostly unprintable bytes: the speed, the level or the polarity is wrong;
 //   text    readable text that is not the expected answer: another kind of equipment, or another mode of it;
-//   frames  a binary protocol hears bytes that never make a whole frame: speed, polarity or another protocol.
+//   frames  a binary protocol hears bytes that never make a whole frame: speed, polarity or another protocol;
+//   slave   (decided by the poller) the console of a Pylontech battery that is not the first of its stack: it tells only itself.
 // The log line is short on purpose: the node's health report carries the last error line in 96 characters, and the server reads this one back (ARMOR-SERVER, node_health.ts).
 // It touches no hardware, so it is tested on a computer. Nothing here has run on a board.
 #pragma once
@@ -48,9 +49,9 @@ inline std::string sample_hex(const std::vector<std::uint8_t>& heard) {
   return out;
 }
 
-// "port 3 unreadable flat 115200bd rx16 tx15 inv n230 [00 00 00 00 00 00]" ("inv" only when the line is inverted).
-inline std::string log_line(int port, const std::string& cause, int baud, int rx, int tx, bool invert, std::uint32_t bytes_rx, const std::string& sample) {
-  return "port " + std::to_string(port) + " unreadable " + cause + " " + std::to_string(baud) + "bd rx" + std::to_string(rx) + " tx" + std::to_string(tx) + (invert ? " inv" : "") + " n" +
+// "port 3 unreadable flat 115200bd rx16 tx15 inv n230 [00 00 00 00 00 00]" ("inv" only when the line is inverted; "mod<n>" only for a slave battery, its place in the stack).
+inline std::string log_line(int port, const std::string& cause, int baud, int rx, int tx, bool invert, std::uint32_t bytes_rx, const std::string& sample, int module = 0) {
+  return "port " + std::to_string(port) + " unreadable " + cause + " " + std::to_string(baud) + "bd rx" + std::to_string(rx) + " tx" + std::to_string(tx) + (invert ? " inv" : "") + (module > 0 ? " mod" + std::to_string(module) : std::string()) + " n" +
          std::to_string(bytes_rx) + " [" + sample + "]";
 }
 

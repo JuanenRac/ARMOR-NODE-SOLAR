@@ -93,7 +93,8 @@ never looks like "no warnings".
 **Why a port is garbled.** After a few unanswered questions the card also says what the bytes look like, with the speed, the pins, the polarity, how many bytes were heard and the
 last six of them (`core/port_diag.hpp`; `cause` and `sample` in `GET /api/v1/ports`): *flat* (only `00` or `FF`: nothing drives the receive line, so a loose wire, no level converter or
 the equipment off), *echo* (what was sent comes back: TX and RX joined), *noise* (unreadable bytes on a text protocol: speed, level or polarity), *text* (readable but not the expected
-answer: another equipment or mode) and *frames* (a binary protocol that never gets a whole frame). The node also writes one line in its log, such as
+answer: another equipment or mode), *frames* (a binary protocol that never gets a whole frame) and *slave* (the console of a Pylontech battery that is not the first of its stack:
+it answers `pwr` with a sheet of itself alone, `Power <n>`; the node has to be on the console of the first one. It is not read as a battery of its own, which would count it twice). The node also writes one line in its log, such as
 `port 3 unreadable flat 115200bd rx16 tx15 n230 [00 00 00 00 00 00]`, one port at a time and again every five minutes; the health report carries the last error line, so the server
 and the console can tell it too. Tested on a computer only.
 

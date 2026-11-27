@@ -59,6 +59,7 @@ struct PortStatus {
   std::string error;          // why the port did not open, or the last error of an exchange
   std::string detail;   // what the equipment said besides the readings (an ANT-BMS: the protocol and its MOSFET codes)
   std::string cause, sample;   // a port that is "garbled": what its bytes look like (core/port_diag.hpp) and the last ones, in hexadecimal
+  int slave_module = 0;        // cause "slave": the place of that battery in its stack
   std::uint32_t bytes_rx = 0, bytes_tx = 0, replies_ok = 0, replies_bad = 0, timeouts = 0, readings = 0, overruns = 0, framing_errors = 0;
 };
 PortStatus status(std::size_t index);

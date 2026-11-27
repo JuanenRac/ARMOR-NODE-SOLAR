@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 - **A port that hears bytes and reads nothing says why:** the *Ports* page tells whether only zeros arrive (nothing drives the line), whether it is the node's own question coming back, unreadable bytes (speed, level or polarity), readable text of another equipment or never a whole frame, with the speed, the pins, the polarity, the byte count and the last bytes. The same goes as one error line to the log, which the health report takes to the server. The question shown in the diagnosis of a battery port is no longer empty. Tested on a computer; not tried on a board.
+- **A port on the console of a slave battery is said so:** a Pylontech battery that is not the first of its stack answers with its own sheet alone, which was shown as a garbled port. The panel now says which battery of the stack it is and to connect the node to the first one. Tested on a computer with invented figures.
 - **A battery module that does not answer its data sheet is said so** on the *Readings* page, instead of showing empty fields.
 - **A missing sheet is given more time once:** the first time a module's `info` and `stat` are asked again they wait ten seconds instead of three, in case the first battery of the stack takes longer to pass the answer on. Not tried against the batteries.
 
