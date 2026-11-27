@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
   <img src="https://img.shields.io/badge/Tests-36%20host%20programs-2ea44f.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Version-0.7.2-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.7.3-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -36,7 +36,7 @@
 
 | | |
 |---|---|
-| Version | `0.7.2` |
+| Version | `0.7.3` |
 | Maturity | Functional |
 | Role | Solar field node for ESP32-S3: inverters and batteries (family: Field Nodes, parent: ARMOR-COMMON) |
 | Stack | C++17, ESP-IDF 5.5.5, ESP32-S3 |
@@ -76,6 +76,7 @@ Each line is one part of this repository and the light says how far it is today.
 * **Voltronic / MPP Solar inverters** (Axpert, PIP, InfiniSolar and clones), RS232 at 2400 baud: the frames and their CRC, and the readings `QPIGS` (grid, output, battery, PV, status bits), `QMOD` (mode), `QPIWS` (warnings and faults by name) and `QPIRI` (ratings). Only reading commands can be built: a setting changes how the house is fed. Three dialects, chosen on the port or found by it (*auto*): PI30, REVO (another `QPIGS`, checksum replies) and PI18 (`^P005GS`: InfiniSolar V, LV5048, SunGoldPower), read only.
 * **Other protocols, one catalogue:** Modbus inverters and chargers (EASun SMG II, SRNE), DALY, JBD and JK battery boards, Victron VE.Direct and the PI41 and PI34 variants of the Voltronic family, each a port type of its own ([protocols](docs/PROTOCOLS.md)). Written from the public documents and tried on a computer only. An inverter that never answers its mode or warnings is still read, and the raw view of a port shows what was sent and the last error.
 * **Probe a silent port:** a diagnosis launched from the panel that sweeps speeds, formats and polarities with reading questions only (never an order that writes), keeps every byte sent and received, and tells an echo from an answer and from silence. Not tried on a board.
+* **An unreadable port says why:** the *Ports* page tells whether only zeros arrive, the node's own question comes back, the bytes are unreadable (speed, level or polarity), another equipment writes readable text or a frame is never whole, with the speed, pins, polarity, byte count and last bytes; the console of a slave Pylontech battery is said so, and a module that does not answer its data sheet is marked on the *Readings* page. Tested on a computer; not tried on a board.
 * **Battery limits and system charge:** the limits that mark a cell, the spread between cells and the temperature are settings of the node (defaults 2.80 / 3.00 / 3.55 / 3.65 V, 50 / 100 mV, 0 / 50 °C), and the state of charge of the whole system is weighted by capacity, with no figure when a stack does not say its own.
 * **Pylontech batteries** (US2000, US3000, US5000): the console's `pwr` table (every module's voltage, current, temperatures and state of charge), `bat <n>` (the voltage and temperature of every cell) and `info <n>` (model, remaining and full capacity, cycles), summarised as one stack with its total capacity and energy, and the RS485 frame with its two checks. The formats are written from memory of the public console and may differ between firmwares. The columns are found by the header's names (the US5000 V2.3 layout with its Id columns, MosTempr and SysAlarm.St included), the remaining charge and the balancing come from `bat`, and the model, rated capacity and cycles from `info` and `stat`, asked once and kept for half an hour.
 * **What a Pylontech module tells about itself:** its model and the versions of its board and software, its cells and the current it allows, the counters of its life (`stat`), the health of each cell (`soh`, the abnormal one marked) and the newest entry of its event log, with the protection names exactly as the console prints them. The console only reads, and an administrator can download what a port heard as a text file.
@@ -168,7 +169,7 @@ No frame has been read from a real inverter or battery; the formats are written 
 | MQTT | `armor/solar/<node>/<device>/state` (one message per inverter or battery stack, kind `inverter` or `battery` of the ARMOR-COMMON contract), `armor/solar/<node>/maintenance/{command,result}`, `armor/health/<node>` (last will), `armor/control/<id>/{command,result,maintenance}` and `armor/control/all/command` |
 | Ports | 10 serial ports (3 hardware UARTs and 7 emulated, up to 19200 baud when emulated); per port a type: `voltronic` (2400 baud, every 5 s), `pylontech` (115200, every 10 s), `ant` (19200, every 5 s) or `raw` (9600, listen only, publishes nothing); inverter dialects `auto`, `pi30`, `revo`, `pi18`; the mux profile has 3 groups of ports |
 | Queries | Voltronic: `QPIGS`, `QMOD`, `QPIWS`, `QPIRI` (and `QPIGS2`, `QPGS` on a standard inverter with the mux); Pylontech console: `pwr`, `bat <n>`, `info <n>`, `stat`, `soh`, event log, up to 16 modules asked cell by cell |
-| Panel | The family routes (`tests/check_routes.py` checks that every route the panel calls exists) plus the ports and readings pages; 51 error codes with a text in eight languages (839 rows in `panel/text.js`); see [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) for the menus of Studio |
+| Panel | The family routes (`tests/check_routes.py` checks that every route the panel calls exists) plus the ports and readings pages; 52 error codes with a text in eight languages (891 rows in `panel/text.js`); see [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) for the menus of Studio |
 
 ## ⚙️ Configuration
 
