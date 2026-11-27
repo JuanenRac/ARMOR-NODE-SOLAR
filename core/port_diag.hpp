@@ -55,27 +55,38 @@ inline std::string log_line(int port, const std::string& cause, int baud, int rx
 }
 
 // When to say it. The health report only carries the LAST error line, once a minute, so the ports take turns: never two lines closer than kGapMs (each one stays the last
-// long enough to be reported), and one port again every kRepeatMs while it stays unreadable.
+// long enough to be reported), and one port again no sooner than kRepeatMs while it stays unreadable. With many ports unreadable the turn goes to the one that has waited
+// longest (one never said goes first), so none is left out: a port asks again and again while it fails, and a request older than kWantMs no longer holds the turn.
 class LogSchedule {
  public:
   static constexpr std::uint64_t kGapMs = 90'000;
   static constexpr std::uint64_t kRepeatMs = 5ULL * 60ULL * 1000ULL;
+  static constexpr std::uint64_t kWantMs = 2ULL * 60ULL * 1000ULL;
   static constexpr std::size_t kPorts = 16;
 
+  // Asks for the turn of `port`, which is unreadable now. True: say it.
   bool take(std::size_t port, std::uint64_t now_ms) {
     if (port >= kPorts) return false;
+    wants_[port] = true;
+    wanted_ms_[port] = now_ms;
     if (any_ && now_ms - any_ms_ < kGapMs) return false;
-    if (said_[port] && now_ms - at_ms_[port] < kRepeatMs) return false;
+    if (!eligible(port, now_ms)) return false;
+    for (std::size_t other = 0; other < kPorts; ++other) {
+      if (other != port && wants_[other] && now_ms - wanted_ms_[other] < kWantMs && eligible(other, now_ms) && waited_since(other) < waited_since(port)) return false;
+    }
     said_[port] = any_ = true;
     at_ms_[port] = any_ms_ = now_ms;
     return true;
   }
   // The port reads again: if it fails once more, that is said as soon as the gap allows.
-  void clear(std::size_t port) { if (port < kPorts) said_[port] = false; }
+  void clear(std::size_t port) { if (port < kPorts) said_[port] = wants_[port] = false; }
 
  private:
-  std::array<bool, kPorts> said_{};
-  std::array<std::uint64_t, kPorts> at_ms_{};
+  bool eligible(std::size_t port, std::uint64_t now_ms) const { return !said_[port] || now_ms - at_ms_[port] >= kRepeatMs; }
+  std::uint64_t waited_since(std::size_t port) const { return said_[port] ? at_ms_[port] + 1 : 0; }   // 0: never said
+
+  std::array<bool, kPorts> said_{}, wants_{};
+  std::array<std::uint64_t, kPorts> at_ms_{}, wanted_ms_{};
   bool any_ = false;
   std::uint64_t any_ms_ = 0;
 };
