@@ -60,6 +60,8 @@ class Link {
     in_.clear();
     ++counters.connects;
   }
+  // Something is plugged in that has not been taken (yet): only for the diagnosis. Nothing changes once a HID device was taken.
+  void seen(const DeviceInfo& info) { if (!ready()) info_ = info; }
   void disconnected() {
     if (info_.present) ++counters.disconnects;
     info_ = DeviceInfo();

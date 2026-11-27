@@ -126,12 +126,14 @@ static void disconnection() {
   CHECK(link.waiting() == 0);
   link.connected(cypress());
   CHECK(link.ready() && link.waiting() == 0 && link.counters.connects == 2);
+  link.disconnected();
   usbhid::DeviceInfo serial;   // something that is not HID: seen, never used
   serial.present = true;
   serial.vid = 0x1a86;
   serial.pid = 0x7523;
   serial.interface_class = 0xFF;
-  link.connected(serial);
+  link.seen(serial);
+  CHECK(link.counters.connects == 2);
   CHECK(!link.ready() && !link.transmit(one, 1, yes));
   CHECK(link.diagnosis().find("1a86:7523") != std::string::npos);
   CHECK(link.diagnosis().find("hid=no") != std::string::npos);

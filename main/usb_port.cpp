@@ -57,7 +57,7 @@ void library_task(void* argument) {
 // ---- looking at whatever is plugged in (HID or not) ---------------------------------------------------------------------------
 
 usb_host_client_handle_t g_client = nullptr;
-std::uint8_t g_seen_address = 0;
+usb_device_handle_t g_seen = nullptr;   // kept open so that its unplugging is told to this client
 std::uint8_t g_new_address = 0;
 bool g_gone = false;
 
@@ -68,7 +68,7 @@ void client_event(const usb_host_client_event_msg_t* message, void*) {
 
 void look_at(std::uint8_t address) {
   usb_device_handle_t device = nullptr;
-  if (usb_host_device_open(g_client, address, &device) != ESP_OK) return;
+  if (g_seen != nullptr || usb_host_device_open(g_client, address, &device) != ESP_OK) return;
   usbhid::DeviceInfo info;
   info.present = true;
   const usb_device_desc_t* description = nullptr;
@@ -89,11 +89,10 @@ void look_at(std::uint8_t address) {
       break;
     }
   }
-  usb_host_device_close(g_client, device);
+  g_seen = device;
   ESP_LOGW(kTag, "a device was plugged in: %04x:%04x, class %02x, interface class %02x", info.vid, info.pid, info.device_class, info.interface_class);
-  g_seen_address = address;
   std::lock_guard<std::mutex> guard(g_lock);
-  if (!g_link.ready()) g_link.connected(info);   // the HID side may already have taken it
+  g_link.seen(info);   // the HID side may already have taken it
 }
 
 void watch_task(void*) {
@@ -106,7 +105,7 @@ void watch_task(void*) {
     usb_host_client_handle_events(g_client, pdMS_TO_TICKS(500));
     if (g_gone) {
       g_gone = false;
-      g_seen_address = 0;
+      if (g_seen != nullptr) { usb_host_device_close(g_client, g_seen); g_seen = nullptr; }
       std::lock_guard<std::mutex> guard(g_lock);
       if (g_handle == nullptr) g_link.disconnected();
     }
