@@ -35,7 +35,7 @@ Optional, when the port asks for them (see PROTOCOLS.md): `pv2_v`, `pv2_a` and `
 ```
 
 A module may also carry `cells_v` (the voltage of each cell, in order), `temperatures_c` (each temperature sensor), `capacity_ah` and `full_capacity_ah` (what is left
-and what the module holds when full), and `cycles`; and, when the console tells them, `model`, `board_version`, `main_soft_version` and `soft_version` of the module, `cell_count`, `max_charge_a` and `max_discharge_a` (the current the module says it allows,
+and what the module holds when full), and `cycles`; and, when the console tells them, `model`, `board_version`, `main_soft_version` and `soft_version` of the module, its `serial` number (private data, see below), `board`, `chip`, `specification`, `boot_version`, `comm_version` and `release_date`, `cell_count`, `max_charge_a` and `max_discharge_a` (the current the module says it allows,
 positive), `console_baud`, `soh_counts` and `soh_abnormal` (the health of each cell, and the cells counted from 0 that are not `Normal`), `counters` (the life counters of `stat`) and `last_event` (the newest entry of the module's event log, as printed); the stack carries `model`, `capacity_ah`, `full_capacity_ah` (the sums of its modules, each left out unless every present module told it; a module that has not told its full capacity counts in `full_capacity_ah` as the others when they all told the same one and name no different model, and then the total is an estimate: it is there while a present module has no `full_capacity_ah`), `energy_kwh` (the remaining
 energy at the mean voltage) and `cycles` (the highest of its modules). A field the battery did not report is left out.
 
@@ -74,3 +74,7 @@ Everything is **off** by default. The settings (the `summary` block of the confi
 | `summary.temperature_low_c` | 0 (-40-60) | `temperature_low` when the coldest module is at or below this; it must stay under the high limit. |
 
 Nothing of this has run on a board: the host tests (`tests/test_system.cpp`) drive the poller against a simulated RS-485 line with a Pylontech stack (`tests/pylontech_rs485_sim.hpp`: noise, a silent stack, a reply in small pieces, a line cut in the middle of a reply, a module that disappears) and the messages are accepted by the contract of ARMOR-COMMON (`tests/check_samples.py`).
+
+## The serial number and the chip of a battery module
+
+They come from one answer of the console's `info` and are kept together. `chip` is `older` or `newer` only when the model, the `Board` line and the 8th and 9th characters of the serial number agree (US2000C, US3000C and UP5000: `E2` or `C3` with Board `NF4.E2` is newer; US5000: `C5` with Board `NF4.E3`); a serial number that cannot be read, a Board that does not agree with it or a model with no rule give `unknown`. The field is absent while `info` has not been read. The serial number is private data: the message is not retained, the broker asks every client for its account, and the node's panel and the server show it only to signed-in users. A module that is reported absent loses what it had said; a module swapped between two readings of the table keeps the old plate until `info` is asked again (half an hour at most).
