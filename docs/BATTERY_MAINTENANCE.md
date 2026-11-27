@@ -47,7 +47,7 @@ Studio / phone -> server -> armor/solar/<node>/maintenance/command -> node -> co
 | Three wrong tokens in ten minutes lock every order for five | `locked` |
 | The node knows the time (for the operations that write it) | `clock_not_set` |
 | For firmware: the model, the chip and the image agree (below). Nothing forces it | `chip_unknown`, `image_mismatch`, `unsupported_model`, `image_missing` |
-| The battery is not sitting in its bootloader | `bootloader`, `nothing_to_resume` |
+| The battery is not sitting in its bootloader | `preflight_failed` with the code `bootloader` or `nothing_to_resume` |
 
 An operation that is **atomic** (the reset of the charge level, writing the serial number, erasing the memory, firmware, the board-replacement procedure) cannot be cancelled once its first line has
 been sent; the others can be stopped between two lines.
@@ -109,8 +109,8 @@ number fails the battery is left without one: write it again with `write_barcode
 ## A battery left in its bootloader
 
 A refused transfer can leave the battery in its bootloader: it prints `Updata error!`, `Please updata again!` and `Updata is ready!` again and again, answers no command and cannot say who it
-is. The node says so (`bootloader`) and sends no image to it as to a battery just read. The only thing it accepts is **the same try again**: `firmware_update` with `resume: true`, the same image
-and the same serial number as the try that failed on that port, which the node keeps in memory. It listens for the bootloader (`nothing_to_resume` when it is not there), sends no `updata`,
+is. The node says so (refusal `preflight_failed`, code `bootloader`) and sends no image to it as to a battery just read. The only thing it accepts is **the same try again**: `firmware_update` with `resume: true`, the same image
+and the same serial number as the try that failed on that port, which the node keeps in memory. It listens for the bootloader (code `nothing_to_resume` when it is not there), sends no `updata`,
 waits up to 90 s for `Program start`, transfers, and never erases the external memory. It can be insisted on up to 10 times (a real battery took its image after several tries). A node that
 restarted has forgotten the failed try (`nothing_to_resume`): the maker's tool is then the way. **Do not switch the battery off and do not send it a different image.**
 

@@ -106,6 +106,7 @@ struct Reply {
   bool has_battery = false;
   bat::Identity battery;
   std::string before;
+  std::string code;                  // why a preflight failed, when it says more than the refusal
   bool has_result = false;
   bat::RunResult result;
   std::size_t received = 0;
@@ -118,6 +119,7 @@ void say(const Reply& r) {
   w.field("command_id", r.ctx.command_id).field("port", r.ctx.port).field("action", r.ctx.action);
   if (!r.ctx.op.empty()) w.field("op", r.ctx.op);
   w.field("stage", r.stage).field("accepted", r.accepted).field("refusal", r.refusal);
+  if (!r.code.empty() && !r.has_result) w.field("code", r.code);
   if (!r.token.empty()) w.field("token", r.token);
   if (!r.canonical.empty()) w.field("canonical", r.canonical);
   if (!r.summary.empty()) w.field("summary", r.summary);
@@ -149,6 +151,9 @@ void say(const Reply& r) {
 void reject(const Context& ctx, const char* why) {
   Reply r;
   r.ctx = ctx; r.stage = "rejected"; r.accepted = false; r.refusal = why;
+  // The two answers about the bootloader are not refusals of the shared contract: they travel as the code of a failed preflight.
+  const std::string said = why;
+  if (said == bat::refusal::kBootloader || said == bat::refusal::kNothingToResume) { r.refusal = bat::refusal::kPreflightFailed; r.code = said; }
   ESP_LOGW(kTag, "port %d: %s refused (%s)", ctx.port, ctx.action.c_str(), why);
   say(r);
 }
