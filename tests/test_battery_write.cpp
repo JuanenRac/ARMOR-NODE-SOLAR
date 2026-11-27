@@ -816,6 +816,9 @@ static void test_a_battery_left_in_its_bootloader() {
   CHECK(resume_check(tired, resume, before.serial) == refusal::kLocked);
   // the second try is refused again, the third is taken
   run_plan(resume, b, r, &image);
+  std::printf("DBG1 %s %s left=%d stuck=%d pk=%d
+%s
+", r.outcome.c_str(), r.code.c_str(), b.refuse_transfers, b.stuck ? 1 : 0, b.packets_accepted, r.transcript.c_str());
   CHECK(r.outcome == "partial" && b.stuck);
   run_plan(resume, b, r, &image);
   CHECK(r.outcome == "ok" && !b.stuck && b.soft == "V3.0" && b.serial == before.serial);
