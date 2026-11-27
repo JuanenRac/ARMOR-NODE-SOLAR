@@ -595,7 +595,7 @@ struct Stack {
   int health_percent = -1;            // the mean of the modules that know theirs
   std::string model;                  // the first module's
   std::string state;                  // "charging", "discharging", "idle"
-  bool alarm = false;                 // any state column that is not Normal, Idle, Charge or Dischg
+  bool alarm = false;                 // a protection, an alarm or a word that is not known in a state column (see state_alarms)
   bool has_power = false; double power_w = 0;   // the sum of the power the modules measured themselves
   int balancing = -1;                 // cells being balanced in all (-1 when no module says)
   bool protecting = false;            // any module is protecting
@@ -619,6 +619,23 @@ inline double shared_capacity(const std::vector<Module>& modules) {
     capacity = m.full_capacity_ah;
   }
   return capacity;
+}
+
+// Whether the word of a state column is an alarm. "Normal", "Idle", "Charge" and "Dischg" are the normal ones; a plain "High" or "Low" is a warning level (a full battery at the
+// end of a charge reads "High") and is not an alarm, except in the system alarm column. Everything else, a word never seen included, is taken for an alarm: nothing a BMS declares
+// as a protection is hidden.
+inline bool state_alarms(const std::string& word, bool system_column) {
+  if (word.empty() || word == "Normal" || word == "Idle" || word == "Charge" || word == "Dischg") return false;
+  return system_column || (word != "High" && word != "Low");
+}
+
+// Whether a `bat` table agrees with what `pwr` said of the same module a moment before (its lowest and highest cell). A table with bytes lost on the line, or read while the battery
+// restarts, is far from it; a cell that really is out is in both. A module whose row gave no extremes is not judged.
+inline bool cells_match_row(const Module& m, const std::vector<double>& cells) {
+  if (cells.empty() || m.cell_low_v <= 0 || m.cell_high_v <= 0) return true;
+  constexpr double kMargin = 0.25;
+  for (const double v : cells) if (v < m.cell_low_v - kMargin || v > m.cell_high_v + kMargin) return false;
+  return true;
 }
 
 inline Stack summarise(const std::vector<Module>& modules) {
@@ -658,8 +675,9 @@ inline Stack summarise(const std::vector<Module>& modules) {
     if (m.protecting) s.protecting = true;
     if (s.charge_mos < 0) s.charge_mos = m.charge_mos;
     if (s.discharge_mos < 0) s.discharge_mos = m.discharge_mos;
-    for (const std::string* state : {&m.voltage_state, &m.current_state, &m.temperature_state, &m.cell_voltage_state, &m.cell_temperature_state, &m.mosfet_temperature_state, &m.system_alarm_state})
-      if (*state != "Normal" && !state->empty()) s.alarm = true;
+    for (const std::string* state : {&m.voltage_state, &m.current_state, &m.temperature_state, &m.cell_voltage_state, &m.cell_temperature_state, &m.mosfet_temperature_state})
+      if (state_alarms(*state, false)) s.alarm = true;
+    if (state_alarms(m.system_alarm_state, true)) s.alarm = true;
   }
   // A total is the whole stack's or it is not told: the sum of only some modules reads as a half empty (or a small) bank. In the full capacity a module without its sheet counts as
   // the others when they are all alike: the message then has a total while that module has no full_capacity_ah, which is how a reader knows it is an estimate.

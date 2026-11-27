@@ -758,7 +758,11 @@ class Poller {
       stats_.last_error.clear();
       modules_ = found;
       // A module that is not there any more takes what it told with it: the one that comes in its place is another battery, with its own serial number.
-      for (const pylontech::Module& m : modules_) if (!m.present && m.number >= 1 && m.number <= 16) extras_[static_cast<std::size_t>(m.number)] = Extras{};
+      for (const pylontech::Module& m : modules_) {
+        if (m.present || m.number < 1 || m.number > 16) continue;
+        extras_[static_cast<std::size_t>(m.number)] = Extras{};
+        cells_cache_[static_cast<std::size_t>(m.number)] = CellsCache{};   // nor are the cells of the one before shown as those of the one that comes back
+      }
       module_at_ = 0;
       choose_cells_to_read();
       ask_next_module(now_ms);
@@ -766,7 +770,15 @@ class Poller {
       std::vector<double> cells;
       double remaining_ah = -1;
       int balancing = 0;
-      if (pylontech::parse_bat(buffer_, cells, &remaining_ah, &balancing) > 0) {
+      const bool read = pylontech::parse_bat(buffer_, cells, &remaining_ah, &balancing) > 0;
+      if (read && !pylontech::cells_match_row(modules_[module_at_], cells)) {
+        // a table that does not agree with the module's own row is not published: the module keeps the cells of its last good turn
+        stats_.last_error = "bat table does not match pwr";
+        const CellsCache& kept = cells_cache_[static_cast<std::size_t>(modules_[module_at_].number)];
+        pylontech::attach_cells(modules_, modules_[module_at_].number, kept.cells);
+        if (kept.remaining_ah >= 0) modules_[module_at_].capacity_ah = kept.remaining_ah;
+        modules_[module_at_].balancing = kept.balancing;
+      } else if (read) {
         pylontech::attach_cells(modules_, modules_[module_at_].number, cells);
         if (remaining_ah >= 0) modules_[module_at_].capacity_ah = remaining_ah;
         modules_[module_at_].balancing = balancing;
