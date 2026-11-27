@@ -582,6 +582,23 @@ static void test_pylontech_late_answer() {
   CHECK(next() == "stat 1\r");
 }
 
+// End of charge ("High") is not an alarm; a protection, the system alarm column and a word never seen are. A `bat` table that lost bytes on the line is not taken.
+static void test_pylontech_alarm_levels() {
+  CHECK(!pylontech::state_alarms("High", false) && !pylontech::state_alarms("Low", false) && !pylontech::state_alarms("Dischg", false) && !pylontech::state_alarms("", false));
+  CHECK(pylontech::state_alarms("OV", false) && pylontech::state_alarms("UnderVol", false) && pylontech::state_alarms("Protect", false) && pylontech::state_alarms("Whatever", false) && pylontech::state_alarms("High", true));
+  std::vector<pylontech::Module> modules;
+  pylontech::parse_pwr(kPwr, modules);
+  modules[0].voltage_state = "High";
+  CHECK(!pylontech::summarise(modules).alarm);
+  modules[0].voltage_state = "OverVol";
+  CHECK(pylontech::summarise(modules).alarm);
+  modules[0].voltage_state = "Normal";
+  // the lowest and highest cell of this row are 3.330 and 3.348 V: a cell read as 1.497 V comes from a spoiled table, a real weak cell would be in the row too
+  CHECK(pylontech::cells_match_row(modules[0], {3.330, 3.348, 3.340}) && !pylontech::cells_match_row(modules[0], {3.348, 1.497}) && !pylontech::cells_match_row(modules[0], {3.348, 0.0}));
+  modules[0].cell_low_v = 1.497;
+  CHECK(pylontech::cells_match_row(modules[0], {3.348, 1.497}));
+}
+
 static void test_messages() {
   CHECK(topic("perimetro-1", "axpert-1") == "armor/solar/perimetro-1/axpert-1/state");
   CHECK(topic("Bad", "x").empty() && topic("a", "").empty() && topic("a", "b/c").empty() && topic("-a", "b").empty() && topic("a", std::string(33, 'x')).empty());
@@ -1011,6 +1028,7 @@ int main() {
   test_pylontech_real_logs();
   test_pylontech_port_speeds();
   test_messages();
+  test_pylontech_alarm_levels();
   std::printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }
