@@ -761,7 +761,7 @@ function portCard(index) {
         cfg.kind === "ant" ? el("button", { class: "b", disabled: !isAdmin() || (S.bms && S.bms.port === index && S.bms.state === "running"), onclick: () => readBmsSettings(index) }, t("antRead")) : null) : null,
       cfg.kind === "ant" ? bmsSettingsView(index) : null,
       cfg.kind === "pylontech" && st.enabled ? consoleView(index) : null,
-      st.enabled && isAdmin() ? probeView(index) : null,
+      st.enabled && !st.usb && isAdmin() ? probeView(index) : null,
       S.rawOpen === index ? el("pre", { class: "log", id: "port-raw" }, S.raw || t("rawEmpty")) : null] : null);
 }
 
@@ -792,8 +792,18 @@ function limitsCard() {
     el("div", { class: "row" }, Object.keys(LIMIT_DEFAULTS).map(key => field("limit_" + key, "cell_limits." + key, { type: "number" }))));
 }
 
+// The native USB as host for an inverter (off by default; the s3-wifi board only).
+function usbCard() {
+  const usb = S.cfg.usb_host;
+  if (!usb || (S.status && S.status.network && S.status.network.board === "s3-eth")) return null;
+  return card(t("usbTitle"), note(t("usbWarn")), field("usbEnabled", "usb_host.enabled", { type: "checkbox", rerender: true }),
+    usb.enabled ? el("div", { class: "row" }, field("usbPort", "usb_host.port", { type: "select", number: true, options: Array.from({ length: 10 }, (_, i) => [i + 1, t("portN", i + 1)]) }),
+      field("usbVid", "usb_host.vid", { max: 4, placeholder: "0665" }), field("usbPid", "usb_host.pid", { max: 4, placeholder: "5161" })) : null,
+    el("p", { class: "hint" }, t("usbHint")), el("p", { class: "hint" }, t("usbRecover")));
+}
+
 function portsPage() {
-  return el("div", {}, note(t("portsWarn")), el("p", { class: "muted" }, t("portsIntro")), note(t("portsRestart"), "info"), captureCard(), limitsCard(),
+  return el("div", {}, note(t("portsWarn")), el("p", { class: "muted" }, t("portsIntro")), note(t("portsRestart"), "info"), captureCard(), limitsCard(), usbCard(),
     el("div", { class: "grid wide" }, [boardCard()].concat(Array.from({ length: S.cfg.profile === "mux" ? Math.min(10, muxPortCount()) : 10 }, (_, i) => i).map(portCard))));
 }
 
@@ -819,6 +829,7 @@ const cellLevel = (v, limits) => (v < limits[0] || v > limits[3] ? 2 : v < limit
 // is not known: it is shown as it is), 3 a fault of the battery's own electronics (SysError, cells it does not read). The words are the battery's.
 const flagLevel = f => (f.word === "SysError" ? 3 : /^(High|Low|COCAlm|DOCAlm)$/.test(f.word) && f.column !== "system" ? 1 : 2);
 const unreadCells = x => x.cells_unread || [];
+const leftOut = x => x.left_out || [];
 const readCells = x => (x.cells_v || []).filter((v, i) => !unreadCells(x).includes(i));
 const bmsFault = x => unreadCells(x).length > 0 || (x.flags || []).some(f => flagLevel(f) === 3) || x.state === "SysError";
 const flagText = f => (f.cell === undefined ? "" : t("rv_cell", f.cell + 1) + " · ") + t("rv_col_" + f.column) + " · " + f.word;
@@ -830,6 +841,7 @@ function moduleHealth(x, limits) {
   const add = (level, key, arg) => problems.push([level, key, arg]);
   if (unreadCells(x).length) add(2, "rv_unread", unreadCells(x).map(i => i + 1).join(", "));
   (x.flags || []).forEach(f => add(flagLevel(f) === 1 ? 1 : 2, "rv_lvl" + flagLevel(f), flagText(f)));
+  if (leftOut(x).length) add(1, "rv_leftOut", leftOut(x).join(", "));
   const cells = readCells(x);
   if (cells.length) {
     const low = Math.min(...cells), high = Math.max(...cells), delta = Math.round((high - low) * 1000);

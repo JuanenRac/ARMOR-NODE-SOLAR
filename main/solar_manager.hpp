@@ -56,6 +56,7 @@ struct PortStatus {
   int group = -1;             // the mux profile: the group of ports this one belongs to (0 to 2: A, B, C), or -1 when the port has pins of its own
   int channel = 0;            // ... and its channel on the group's multiplexer
   bool invert = false;        // the port's line is flipped
+  bool usb = false;           // read through the chip's native USB, not through pins (core/usb_hid_link.hpp)
   std::string state;          // disabled, starting, error, waiting, reporting, silent, garbled, listening, probing
   std::string error;          // why the port did not open, or the last error of an exchange
   std::string detail;   // what the equipment said besides the readings (an ANT-BMS: the protocol and its MOSFET codes)

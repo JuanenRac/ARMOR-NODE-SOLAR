@@ -90,6 +90,7 @@ void write_port(json::Writer& w, std::size_t index) {
       .field("replies_ok", static_cast<long long>(s.replies_ok)).field("replies_bad", static_cast<long long>(s.replies_bad)).field("timeouts", static_cast<long long>(s.timeouts))
       .field("readings", static_cast<long long>(s.readings)).field("overruns", static_cast<long long>(s.overruns)).field("framing_errors", static_cast<long long>(s.framing_errors))
       .field("invert", s.invert);
+  if (s.usb) w.field("usb", true);
   if (s.group >= 0) w.field("group", std::string(1, static_cast<char>('A' + s.group))).field("channel", s.channel + 1);
   if (!s.detail.empty()) w.field("detail", s.detail);
   if (!s.cause.empty()) w.field("cause", s.cause).field("sample", s.sample);

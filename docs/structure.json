@@ -20,14 +20,14 @@
       "rows": [
         {
           "desc": {
-            "en": "solar_manager, uart_ports, mux_board, port_leds_hw: the ports and their tasks",
-            "es": "solar_manager, uart_ports, mux_board, port_leds_hw: los puertos y sus tareas",
-            "de": "solar_manager, uart_ports, mux_board, port_leds_hw: die Ports und ihre Tasks",
-            "fr": "solar_manager, uart_ports, mux_board, port_leds_hw : les ports et leurs tâches",
-            "it": "solar_manager, uart_ports, mux_board, port_leds_hw: le porte e i loro task",
-            "ja": "solar_manager、uart_ports、mux_board、port_leds_hw：ポートとタスク",
-            "zh": "solar_manager、uart_ports、mux_board、port_leds_hw：端口及其任务",
-            "pt": "solar_manager, uart_ports, mux_board, port_leds_hw: as portas e as suas tarefas"
+            "en": "solar_manager, uart_ports, usb_port, mux_board, port_leds_hw: the ports and their tasks",
+            "es": "solar_manager, uart_ports, usb_port, mux_board, port_leds_hw: los puertos y sus tareas",
+            "de": "solar_manager, uart_ports, usb_port, mux_board, port_leds_hw: die Ports und ihre Tasks",
+            "fr": "solar_manager, uart_ports, usb_port, mux_board, port_leds_hw : les ports et leurs tâches",
+            "it": "solar_manager, uart_ports, usb_port, mux_board, port_leds_hw: le porte e i loro task",
+            "ja": "solar_manager、uart_ports、usb_port、mux_board、port_leds_hw：ポートとタスク",
+            "zh": "solar_manager、uart_ports、usb_port、mux_board、port_leds_hw：端口及其任务",
+            "pt": "solar_manager, uart_ports, usb_port, mux_board, port_leds_hw: as portas e as suas tarefas"
           }
         },
         {

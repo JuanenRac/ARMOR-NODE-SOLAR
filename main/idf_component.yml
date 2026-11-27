@@ -1,0 +1,6 @@
+## The only component taken from Espressif's registry: the HID class of the USB host (an inverter on the native USB, main/usb_port.cpp).
+dependencies:
+  espressif/usb_host_hid:
+    version: "1.0.4"
+  idf:
+    version: ">=5.4"

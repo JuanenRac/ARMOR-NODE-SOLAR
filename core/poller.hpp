@@ -289,7 +289,7 @@ class Poller {
   std::uint64_t last_rx_ms() const { return last_rx_ms_; }
 
  private:
-  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kPs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt, kDriver };
+  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kPs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kSheet, kAnt, kDriver };
   enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34, kPi00, kPi17 };
   // What `info`, `stat`, `data event` and `soh` said of one module. at_ms: the last full round; tried_ms and misses: the tries while something is still missing.
   struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; pylontech::DataPlate plate; std::string manufacturer; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0, tried_ms = 0; int misses = 0; bool valid = false; };
@@ -773,6 +773,7 @@ class Poller {
         cells_cache_[static_cast<std::size_t>(m.number)] = CellsCache{};   // nor are the cells of the one before shown as those of the one that comes back
       }
       module_at_ = 0;
+      sheet_asked_ = false;
       choose_cells_to_read();
       ask_next_module(now_ms);
     } else if (step_ == Step::kBat) {
@@ -825,6 +826,10 @@ class Poller {
     } else if (step_ == Step::kSoh) {
       if (pylontech::parse_soh(buffer_, modules_[module_at_]) > 0) ++stats_.replies_ok;
       end_extras(now_ms);
+    } else if (step_ == Step::kSheet) {
+      modules_[module_at_].fault_code = pylontech::parse_system_fault(buffer_, modules_[module_at_].number);
+      if (!modules_[module_at_].fault_code.empty()) ++stats_.replies_ok;
+      after_bat(now_ms);
     }
   }
 
@@ -833,6 +838,15 @@ class Poller {
   // five minutes, so a whole stack gets its sheets in a few minutes and no cycle grows by more than one module's questions.
   void after_bat(std::uint64_t now_ms) {
     pylontech::Module& m = modules_[module_at_];
+    // A module whose electronics report a fault is asked for its own sheet every turn: the code of the fault is there, and only there.
+    if (!sheet_asked_ && faulty(m)) {
+      sheet_asked_ = true;
+      step_ = Step::kSheet;
+      buffer_.clear();
+      send("pwr " + std::to_string(m.number) + "\r", now_ms, kConsoleExtraTimeoutMs);
+      return;
+    }
+    sheet_asked_ = false;
     const Extras& e = extras_[static_cast<std::size_t>(m.number)];
     catching_up_ = false;
     if (e.valid && now_ms - e.at_ms < kExtrasRefreshMs) {
@@ -852,6 +866,7 @@ class Poller {
     buffer_.clear();
     send("info " + std::to_string(m.number) + "\r", now_ms, slow_sheet_ ? kConsoleSlowTimeoutMs : kConsoleExtraTimeoutMs);
   }
+  static bool faulty(const pylontech::Module& m) { return m.base_state == "SysError" || !m.cells_unread.empty() || pylontech::state_word_matters(m.system_alarm_state); }
   void ask_stat(std::uint64_t now_ms) {
     step_ = Step::kStat;
     buffer_.clear();
@@ -954,6 +969,7 @@ class Poller {
     if (step_ == Step::kStat) { ask_event_or_end(now_ms); return; }
     if (step_ == Step::kEvent) { ask_soh(now_ms); return; }
     if (step_ == Step::kSoh) { end_extras(now_ms); return; }
+    if (step_ == Step::kSheet) { after_bat(now_ms); return; }   // no sheet: the reading goes without the code
     stats_.last_error = "timeout";
     if (kind_ == config::Kind::kPylontech) { wake_ = true; slave_module_ = 0; slave_sheet_ = {}; }   // the console did not answer: the next try starts with a bare Enter
     if (kind_ == config::Kind::kVoltronic && auto_) {
@@ -982,6 +998,7 @@ class Poller {
   int bat_cursor_ = 1;                // the module whose cells come next in the rotation
   std::uint32_t cells_wanted_ = 0;    // bit n: this cycle asks the cells of module n
   // zeros: the cells that read 0 V in the last table of the module, published or not (see rx_pylontech)
+  bool sheet_asked_ = false;   // the sheet of the module in turn has been asked (or given up on)
   struct CellsCache { std::vector<double> cells; double remaining_ah = -1; int balancing = -1; std::vector<pylontech::CellFlag> flags; std::vector<int> unread; std::uint32_t zeros = 0; };
   std::array<CellsCache, 17> cells_cache_;   // by module number: the cells and remaining charge of the module's last turn
   Step step_ = Step::kIdle;

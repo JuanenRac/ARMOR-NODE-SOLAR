@@ -19,7 +19,7 @@ the nodes that see the router well and the PoE one for the rest. A stack of batt
 
 ## What connects to what
 
-- **Voltronic / MPP Solar inverter:** its **RS232** port (a DB9 or an RJ45, depending on the model) at 2400 baud. The USB port cannot be used: it is HID.
+- **Voltronic / MPP Solar inverter:** its **RS232** port (a DB9 or an RJ45, depending on the model) at 2400 baud. Or its **USB** port, with the node as USB host (`s3-wifi` board only, off by default): see *Inverter by USB* below.
 - **Pylontech US2000 / US3000 / US5000:** the **console** RJ45 (RS232 levels, 115200 baud; an old unit may say 19200) for the `pwr` table; the other RJ45 is RS485 for the
   battery link to the inverter. Do not put the node on the RS485 bus the inverter is using unless a capture shows what is safe to share.
 - **ANT-BMS:** the 4-pin JST 1.25 mm connector: **TX, RX, ground and 3.3 V VCC** (it does not start on TX, RX and ground alone). It is 3.3 V TTL, so it goes straight to the
@@ -131,3 +131,11 @@ battery console. It publishes one message per device (see SOLAR_MESSAGES.md), an
 ## The emulated ports and their limit
 
 Seven of the ten ports are serial lines made in software (a timer and the pins, no UART of the chip). At 19200 baud a bit lasts 52 microseconds, and with Wi-Fi on, an interrupt can be late by 10 to 50 microseconds; on the Ethernet board the interrupt service of the pins is not kept in the chip's fast memory (the W5500 driver needs the normal one), so while the flash is being written the edges can be delayed. The effect is a frame with an error now and then: the checks of the frame (CRC or checksum) catch it, and the reading is lost, not wrong. A port that matters (a battery bank that must be read every time) should be one of the three hardware ones; the statistics of each port in the panel (frames with errors, answers that did not come) tell how a cable and a port behave. This has not been measured on a board with equipment connected.
+
+## Inverter by USB (`s3-wifi` board only, off by default)
+
+- **Socket:** the **USB & OTG** one (the chip's native USB, GPIO 19 and 20). The inverter plugs straight in, without a hub.
+- **Power:** do not count on the board to put 5 V (VBUS) on that socket. Espressif's user guide of the ESP32-S3-DevKitC-1 describes its USB connectors as ways to power the board, not as an output, and copies of that board differ. The inverter's USB side normally needs that 5 V to appear. Use a USB OTG cable or adapter **with its own 5 V input** (a "Y" cable), fed from a USB supply that shares ground through the cable, and keep the board powered through the **USB to serial** socket or its supply. Measure with a multimeter before assuming anything, and never join two 5 V supplies on a socket whose schematic you have not read.
+- **Cable:** the inverter usually has a square USB-B socket: OTG adapter with power input (USB-C plug, USB-A socket) and then the inverter's own USB-A to USB-B cable. A USB-C to USB-B cable alone carries no 5 V from a board that does not supply it.
+- **Not supported:** inverters or adapters whose USB is a serial chip (CH340, CP210x, FTDI, CDC) instead of HID; the panel shows their VID, PID and class (*Show raw data* of the port).
+- **The `s3-eth` board is left out:** it has a single socket, on the native USB, and no second way to flash it.
