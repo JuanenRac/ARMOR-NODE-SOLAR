@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
   <img src="https://img.shields.io/badge/Tests-36%20host%20programs-2ea44f.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Version-0.7.2-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.7.3-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -36,7 +36,7 @@
 
 | | |
 |---|---|
-| バージョン | `0.7.2` |
+| バージョン | `0.7.3` |
 | 成熟度 | 機能する |
 | 役割 | ESP32-S3 用ソーラーフィールドノード：インバーターとバッテリー（ファミリー：Field Nodes、親：ARMOR-COMMON） |
 | 技術 | C++17, ESP-IDF 5.5.5, ESP32-S3 |
@@ -76,6 +76,7 @@
 * **Voltronic / MPP Solar インバーター**（Axpert、PIP、InfiniSolar とその互換機）、RS232 2400 ボー：フレームとその CRC、および読み取り値 `QPIGS`（系統、出力、バッテリー、PV、状態ビット）、`QMOD`（モード）、`QPIWS`（名前付きの警告と故障）、`QPIRI`（定格）。組み立てられるのは読み取りコマンドだけです。設定は家への給電方法を変えてしまうからです。3 つの方言（ポートで選ぶか、ポート自身が見つけます＝*auto*）：PI30、REVO（別の配置の `QPIGS`、チェックサムで終わる応答）、PI18（`^P005GS`：InfiniSolar V、LV5048、SunGoldPower）。読み取り専用。
 * **その他のプロトコルと一つのカタログ:** Modbus のインバーター／充電器（EASun SMG II、SRNE）、DALY・JBD・JK のバッテリー基板、Victron VE.Direct、Voltronic 系の PI41・PI34。それぞれ専用のポート種類を持ちます（[プロトコル](docs/PROTOCOLS.md)）。公開資料に基づいて作成し、コンピューター上でのみ確認しています。モードや警告に一度も応答しないインバーターも読み取り、ポートの生データ表示には送信内容と直近のエラーが出ます。
 * **応答のないポートの診断:** パネルから開始し、読み取りの問い合わせだけで速度・形式・極性を総当たりします（書き込み命令は送りません）。送受信した全バイトを記録し、エコー・応答・無応答を区別します。基板では未検証です。
+* **読めないポートは理由を示します：** *ポート*ページは、ゼロしか届かない、ノード自身の問い合わせが戻る、バイトが解読不能（速度・レベル・極性）、別の機器が読める文字列を送る、フレームが完結しない、のいずれかを、速度、ピン、極性、バイト数、最後のバイト列とともに表示します。Pylontech のスレーブ電池のコンソールはそう示し、仕様情報に応答しないモジュールは*測定値*ページに表示します。コンピューター上で試験済みで、基板では未試験です。
 * **バッテリーのしきい値とシステム全体の充電率:** セル電圧、セル間の差、温度のしきい値はノードの設定です（既定値 2.80／3.00／3.55／3.65 V、50／100 mV、0／50 °C）。システム全体の充電率は容量で重み付けし、容量を示さないスタックがある場合は値を出しません。
 * **Pylontech バッテリー**（US2000、US3000、US5000）：コンソールの `pwr` 表（各モジュールの電圧、電流、温度、充電状態）、`bat <n>`（各セルの電圧と温度）、`info <n>`（型式、残容量と満容量、サイクル数）を、総容量と総エネルギーを持つ 1 つのスタックとして要約し、2 つのチェックを持つ RS485 フレームも扱います。書式は公開されているコンソールの記憶から書いたもので、ファームウェアによって異なる可能性があります。列はヘッダーの名前で見つけます（Id 列、MosTempr、SysAlarm.St を持つ US5000 V2.3 の形式を含みます）。残りの充電量とバランス状態は `bat` から、型式・定格容量・サイクル数は `info` と `stat` から得て、1 回だけ問い合わせて 30 分間保持します。
 * **Pylontech モジュールが自分について伝える内容：** モデル、基板とソフトウェアのバージョン、セルと許容電流、寿命のカウンター（`stat`）、各セルの健康状態（`soh`、異常なものに印）、およびイベントログの最新項目を、保護名をコンソールが出力するとおりに表示します。コンソールは読み取り専用で、管理者はポートが受信した内容をテキストファイルとしてダウンロードできます。
@@ -168,7 +169,7 @@ ARMOR-NODE-SOLAR は家のソーラー機器とファミリーをつなぐゲー
 | MQTT | `armor/solar/<ノード>/<機器>/state`（インバーターまたはバッテリースタックごとに 1 メッセージ、ARMOR-COMMON のコントラクトの種別 `inverter` または `battery`）、`armor/solar/<ノード>/maintenance/{command,result}`、`armor/health/<ノード>`（遺言）、`armor/control/<id>/{command,result,maintenance}`、`armor/control/all/command` |
 | ポート | シリアルポート 10 本（ハードウェア UART 3 本とエミュレート 7 本、エミュレート時は最大 19200 ボー）。ポートごとの種別：`voltronic`（2400 ボー、5 秒ごと）、`pylontech`（115200、10 秒ごと）、`ant`（19200、5 秒ごと）、`raw`（9600、受信のみで何も発行しない）。インバーターの方言は `auto`、`pi30`、`revo`、`pi18`。mux プロファイルにはポートのグループが 3 つあります |
 | 問い合わせ | Voltronic：`QPIGS`、`QMOD`、`QPIWS`、`QPIRI`（mux 付きの標準インバーターでは `QPIGS2`、`QPGS` も）。Pylontech コンソール：`pwr`、`bat <n>`、`info <n>`、`stat`、`soh`、イベントログ。最大 16 モジュールをセル単位で問い合わせます |
-| パネル | ファミリー共通のルート（`tests/check_routes.py` がパネルの呼ぶルートの存在を検査）に加え、ポートと測定値のページ。8 言語の文言つきエラーコード 51 個（`panel/text.js` に 839 行）。Studio のメニューは [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) |
+| パネル | ファミリー共通のルート（`tests/check_routes.py` がパネルの呼ぶルートの存在を検査）に加え、ポートと測定値のページ。8 言語の文言つきエラーコード 52 個（`panel/text.js` に 891 行）。Studio のメニューは [docs/STUDIO_MENUS.md](docs/STUDIO_MENUS.md) |
 
 ## ⚙️ 設定
 
