@@ -10,6 +10,10 @@ All notable changes to this project are documented here.
   server's way: off by default, the password asked again, the serial number typed twice, arm and execute with a one-time token that stays in the node, one operation per port, rate limits, a
   record kept in flash and no way to force a doubtful chip or image. A firmware image is uploaded into the external memory only. Nothing here has been tried on a real battery.
 - The node refuses to restart, reset or change its firmware while a battery operation is under way.
+- **A battery says what is wrong with it, in three levels:** the message carries each state that is not normal with the module, the cell, the column and the battery's own word (`flags`), and the Readings page tells a notice (High, Low) from a protection or alarm (OV, UV, OC, temperature) and from a fault of the battery's management system (SysError, cells it does not read), which stands out in red without blinking. A cell at 0 V two turns in a row is a reading fault (`cells_unread`): it is no longer taken for the lowest cell of the stack; a single table with a 0 V cell is still held back as a spoiled line.
+- **A cell of poor health blinks in red** on the Readings page, bar included, once every 1.6 s (still and red when the browser asks for less movement), with a mark beside its number and a title that says it.
+- **The maker of each battery and inverter is shown and published** (`manufacturer`, `manufacturer_source`): what the equipment says, or what its protocol or model leaves no doubt about, marked as deduced; unknown is left out.
+- **An impossible figure no longer loses the whole reading:** a cell voltage, current, temperature or rating beyond the contract's limits is left out and the rest is published.
 
 ## [0.7.6] - Update a stack module by module, quieter battery alarms and ordered equipment lists
 

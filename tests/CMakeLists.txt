@@ -100,6 +100,8 @@ add_test(NAME memory COMMAND test_memory)
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_FOUND)
   add_test(NAME panel_text COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_panel_text.py)
+  # the three levels of a battery's states, and the blink of a cell of poor health
+  add_test(NAME battery_levels COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_battery_levels.py)
   add_test(NAME equipment_options COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_equipment_options.py)
   # the protocol table of the node is the shared catalogue (skipped without ARMOR-COMMON next to it)
   add_test(NAME protocol_catalogue COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_protocols.py)
