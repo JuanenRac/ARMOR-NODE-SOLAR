@@ -1127,6 +1127,14 @@ esp_err_t redirect_handler(httpd_req_t* r) {
   return httpd_resp_send(r, nullptr, 0);
 }
 
+// A client that vanishes without closing (a phone out of range, a computer asleep) used to keep its place and its memory until another client pushed it out: TCP keep-alive finds it gone.
+void keep_connections_checked(httpd_config_t& config) {
+  config.keep_alive_enable = true;
+  config.keep_alive_idle = 60;
+  config.keep_alive_interval = 10;
+  config.keep_alive_count = 3;
+}
+
 void register_handlers(httpd_handle_t server, bool redirect_only) {
   const httpd_method_t methods[] = {HTTP_GET, HTTP_POST, HTTP_PUT, HTTP_DELETE};
   if (redirect_only) {
@@ -1194,6 +1202,7 @@ bool start(const config::Settings& settings) {
       ssl.httpd.max_uri_handlers = 12;
       ssl.httpd.max_open_sockets = 4;
       ssl.httpd.lru_purge_enable = true;
+      keep_connections_checked(ssl.httpd);
       ssl.httpd.open_fn = nodeguard::http_open_gate;   // no new connection while the internal memory is short (the guard)
       ssl.httpd.recv_wait_timeout = 10;
       ssl.httpd.send_wait_timeout = 10;
@@ -1218,6 +1227,7 @@ bool start(const config::Settings& settings) {
   config.max_uri_handlers = 12;
   config.max_open_sockets = 4;
   config.lru_purge_enable = true;
+  keep_connections_checked(config);
   config.open_fn = nodeguard::http_open_gate;   // no new connection while the internal memory is short (the guard)
   config.recv_wait_timeout = 10;
   config.send_wait_timeout = 10;
