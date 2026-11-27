@@ -190,7 +190,9 @@ static void polling() {
 }
 
 static void setting() {
-  const config::Settings base = config::default_settings("a1b2c3");
+  config::Settings base = config::default_settings("a1b2c3");
+  base.sta.enabled = true;   // a node that is in use has a way in
+  base.sta.ssid = "bench";
   CHECK(!base.usb.enabled);   // off until the owner turns it on
   config::Settings out;
   config::Problems problems;
