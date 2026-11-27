@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Language">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
   <img src="https://img.shields.io/badge/Tests-36%20host%20programs-2ea44f.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Version-0.7.3-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.7.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -36,7 +36,7 @@
 
 | | |
 |---|---|
-| Versão | `0.7.3` |
+| Versão | `0.7.4` |
 | Maturidade | Funcional |
 | Função | Nó de campo solar para ESP32-S3: inversores e baterias (família: Field Nodes, pai: ARMOR-COMMON) |
 | Tecnologia | C++17, ESP-IDF 5.5.5, ESP32-S3 |
@@ -77,6 +77,7 @@ Cada linha é uma parte deste repositório e a luz diz até onde chega hoje. É 
 * **Outros protocolos, um só catálogo:** inversores e carregadores Modbus (EASun SMG II, SRNE), placas de bateria DALY, JBD e JK, Victron VE.Direct e as variantes PI41 e PI34 da família Voltronic, cada um com o seu tipo de porta ([protocolos](docs/PROTOCOLS.md)). Escritos a partir dos documentos públicos e experimentados apenas num computador. Um inversor que nunca responde ao modo ou aos avisos é lido na mesma, e a vista em bruto de uma porta mostra o que foi enviado e o último erro.
 * **Sondar uma porta muda:** um diagnóstico lançado no painel que percorre velocidades, formatos e polaridades só com perguntas de leitura (nunca uma ordem de escrita), guarda cada byte enviado e recebido e distingue um eco de uma resposta e do silêncio. Não experimentado numa placa.
 * **Uma porta ilegível diz porquê:** a página *Portas* indica se só chegam zeros, se volta a própria pergunta do nó, se os bytes são ilegíveis (velocidade, nível ou polaridade), se outro equipamento escreve texto legível ou se nunca chega uma trama inteira, com a velocidade, os pinos, a polaridade, o número de bytes e os últimos; a consola de uma bateria Pylontech escrava é assinalada como tal, e um módulo que não responde à sua ficha fica marcado na página *Leituras*. Testado num computador; não numa placa.
+* **Um pedido web que não termina é assinalado:** após 20 segundos no mesmo pedido, o registo indica-o, com a memória interna nesse momento, e o relatório de estado leva-o ao servidor mesmo que o painel não responda; um pedido de 5 segundos ou mais é um aviso. Testado num computador; não numa placa.
 * **Limites da bateria e carga do sistema:** os limites de célula, de diferença entre células e de temperatura são definições do nó (por omissão 2,80 / 3,00 / 3,55 / 3,65 V, 50 / 100 mV, 0 / 50 °C), e o estado de carga de todo o sistema é ponderado pela capacidade, sem valor quando um conjunto não indica a sua.
 * **Baterias Pylontech** (US2000, US3000, US5000): a tabela `pwr` da consola (tensão, corrente, temperaturas e estado de carga de cada módulo), `bat <n>` (a tensão e temperatura de cada célula) e `info <n>` (modelo, capacidade restante e total, ciclos), resumidas como um só conjunto com a sua capacidade e energia totais, e a trama RS485 com as suas duas verificações. Os formatos estão escritos de memória da consola pública e podem diferir entre firmwares. As colunas encontram-se pelos nomes do cabeçalho (o formato do US5000 V2.3 com as suas colunas Id, MosTempr e SysAlarm.St incluídas), a carga restante e o equilíbrio vêm de `bat`, e o modelo, a capacidade nominal e os ciclos de `info` e `stat`, pedidos uma vez e guardados durante meia hora.
 * **O que um módulo Pylontech diz de si mesmo:** o seu modelo e as versões da sua placa e do seu software, as suas células e a corrente que admite, os contadores da sua vida (`stat`), a saúde de cada célula (`soh`, marcando a anormal) e a entrada mais recente do seu registo de eventos, com os nomes das proteções tal como a consola os imprime. A consola só lê, e um administrador pode descarregar como ficheiro de texto o que uma porta ouviu.
