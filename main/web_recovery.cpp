@@ -2,6 +2,7 @@
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #include "web_recovery.hpp"
 
+#include <cerrno>
 #include <cstring>
 #include <string>
 
