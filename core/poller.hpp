@@ -716,6 +716,8 @@ class Poller {
       // not this module's turn: it keeps the cells of its last one
       const CellsCache& cache = cells_cache_[static_cast<std::size_t>(number)];
       pylontech::attach_cells(modules_, number, cache.cells);
+      modules_[module_at_].cell_flags = cache.flags;
+      modules_[module_at_].cells_unread = cache.unread;
       if (cache.remaining_ah >= 0) modules_[module_at_].capacity_ah = cache.remaining_ah;
       modules_[module_at_].balancing = cache.balancing;
       after_bat(now_ms);
@@ -778,11 +780,20 @@ class Poller {
       double remaining_ah = -1;
       int balancing = 0;
       const bool read = pylontech::parse_bat(buffer_, cells, &remaining_ah, &balancing) > 0;
-      if (read && !pylontech::cells_match_row(modules_[module_at_], cells)) {
+      std::vector<pylontech::CellFlag> flags;
+      pylontech::parse_cell_flags(buffer_, flags);
+      // A cell that reads 0 V for the first time may be bytes lost on the line: that table waits. Read as 0 V again, it is the battery that does not read the cell, and it is told.
+      const std::uint32_t zeros = read ? pylontech::unread_mask(cells) : 0;
+      CellsCache& seen = cells_cache_[static_cast<std::size_t>(modules_[module_at_].number)];
+      const bool unconfirmed = (zeros & ~seen.zeros) != 0;
+      if (read) seen.zeros = zeros;
+      if (read && (unconfirmed || !pylontech::cells_match_row(modules_[module_at_], cells))) {
         // a table that does not agree with the module's own row is not published: the module keeps the cells of its last good turn
-        stats_.last_error = "bat table does not match pwr";
+        stats_.last_error = unconfirmed ? "bat table with a cell at 0 V, to be read again" : "bat table does not match pwr";
         const CellsCache& kept = cells_cache_[static_cast<std::size_t>(modules_[module_at_].number)];
         pylontech::attach_cells(modules_, modules_[module_at_].number, kept.cells);
+        modules_[module_at_].cell_flags = kept.flags;
+        modules_[module_at_].cells_unread = kept.unread;
         if (kept.remaining_ah >= 0) modules_[module_at_].capacity_ah = kept.remaining_ah;
         modules_[module_at_].balancing = kept.balancing;
       } else if (read) {
@@ -790,6 +801,10 @@ class Poller {
         if (remaining_ah >= 0) modules_[module_at_].capacity_ah = remaining_ah;
         modules_[module_at_].balancing = balancing;
         CellsCache& cache = cells_cache_[static_cast<std::size_t>(modules_[module_at_].number)];
+        std::vector<int> unread;
+        for (int i = 0; i < 32; ++i) if (zeros & (1u << i)) unread.push_back(i);
+        modules_[module_at_].cell_flags = cache.flags = flags;
+        modules_[module_at_].cells_unread = cache.unread = unread;
         cache.cells = cells;
         cache.remaining_ah = remaining_ah;
         cache.balancing = balancing;
@@ -914,6 +929,8 @@ class Poller {
       const int number = modules_[module_at_].number;
       const CellsCache& cache = cells_cache_[static_cast<std::size_t>(number)];
       if (!cache.cells.empty()) pylontech::attach_cells(modules_, number, cache.cells);
+      modules_[module_at_].cell_flags = cache.flags;
+      modules_[module_at_].cells_unread = cache.unread;
       if (cache.remaining_ah >= 0) modules_[module_at_].capacity_ah = cache.remaining_ah;
       modules_[module_at_].balancing = cache.balancing;
       after_bat(now_ms);
@@ -964,7 +981,8 @@ class Poller {
   int cells_per_cycle_ = 0;
   int bat_cursor_ = 1;                // the module whose cells come next in the rotation
   std::uint32_t cells_wanted_ = 0;    // bit n: this cycle asks the cells of module n
-  struct CellsCache { std::vector<double> cells; double remaining_ah = -1; int balancing = -1; };
+  // zeros: the cells that read 0 V in the last table of the module, published or not (see rx_pylontech)
+  struct CellsCache { std::vector<double> cells; double remaining_ah = -1; int balancing = -1; std::vector<pylontech::CellFlag> flags; std::vector<int> unread; std::uint32_t zeros = 0; };
   std::array<CellsCache, 17> cells_cache_;   // by module number: the cells and remaining charge of the module's last turn
   Step step_ = Step::kIdle;
   std::uint64_t deadline_ms_ = 0, next_cycle_ms_ = 0, cycle_started_ms_ = 0, last_rx_ms_ = 0, last_reading_ms_ = 0;

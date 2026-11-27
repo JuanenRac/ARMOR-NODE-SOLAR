@@ -119,6 +119,31 @@ inline int last_present(const std::vector<pylontech::Module>& modules) {
   return last;
 }
 
+// What the battery says is not well: each state column that is not normal and each cell's own, with the console's word, and the cells it does not read.
+inline void write_flags(json::Writer& w, const pylontech::Module& m) {
+  struct Column { const char* name; const std::string* word; };
+  const Column columns[] = {{"base", &m.base_state}, {"voltage", &m.voltage_state}, {"current", &m.current_state}, {"temperature", &m.temperature_state},
+                            {"cell_voltage", &m.cell_voltage_state}, {"cell_temperature", &m.cell_temperature_state}, {"mosfet_temperature", &m.mosfet_temperature_state},
+                            {"system", &m.system_alarm_state}};
+  int written = 0;
+  const auto one = [&](const char* column, const std::string& word, int cell) {
+    if (word.empty() || word.size() > 16 || written >= 48) return;
+    if (written++ == 0) w.key("flags").begin_array();
+    w.begin_object().field("column", column).field("word", word);
+    if (cell >= 0 && cell <= 31) w.field("cell", cell);
+    w.end_object();
+  };
+  for (const Column& c : columns)
+    if (c.name[0] == 'b' ? pylontech::base_word_matters(*c.word) : pylontech::state_word_matters(*c.word)) one(c.name, *c.word, -1);
+  for (const pylontech::CellFlag& f : m.cell_flags) one(f.column, f.word, f.cell);
+  if (written > 0) w.end_array();
+  if (!m.cells_unread.empty()) {
+    w.key("cells_unread").begin_array();
+    for (const int cell : m.cells_unread) if (cell >= 0 && cell <= 31) w.integer(cell);
+    w.end_array();
+  }
+}
+
 // A battery stack's message from the console's table. The console lists sixteen places whatever is connected: the empty ones after the last battery are not sent. An empty place
 // between two batteries is, and so is one up to `keep_up_to` (a battery seen before that is not there now).
 inline std::string battery_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, const std::vector<pylontech::Module>& read, int keep_up_to = 0) {
@@ -211,6 +236,7 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
         w.end_object();
       }
       if (!m.cells_v.empty()) { w.key("cells_v").begin_array(); for (double v : m.cells_v) w.number(v, 3); w.end_array(); }
+      write_flags(w, m);
       if (!m.temperatures_c.empty()) { w.key("temperatures_c").begin_array(); for (double v : m.temperatures_c) w.number(v, 1); w.end_array(); }
     }
     w.end_object();

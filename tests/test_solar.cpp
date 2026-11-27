@@ -788,6 +788,9 @@ static void test_pylontech_real_us2000() {
   pylontech::Module health;
   CHECK(pylontech::parse_soh(kUs2000Soh, health) == 15 && health.soh_counts.size() == 15);
   CHECK(health.soh_counts[6] == 13 && health.soh_counts[10] == 12 && health.soh_counts[0] == 0 && health.soh_abnormal.size() == 1 && health.soh_abnormal[0] == 6);
+  // the numbering is the console's, from 0, the same as the `bat` table's: the cell the battery calls abnormal here is cells_v[6], the lowest of the pack, which a person calls cell 7
+  std::vector<double> pack;
+  CHECK(pylontech::parse_bat(kUs2000Bat, pack) == 15 && std::min_element(pack.begin(), pack.end()) - pack.begin() == health.soh_abnormal[0]);
   pylontech::Module health_doc;
   CHECK(pylontech::parse_soh(kRealSoh, health_doc) == 15 && health_doc.soh_abnormal.empty());   // the documentation's table, printed with dashes
   pylontech::Module none;
@@ -1010,7 +1013,82 @@ static void test_port_diagnosis() {
   CHECK(silent.unreadable_cause(60000).empty() && silent.heard_sample().empty());
 }
 
+// A `bat` table of fifteen cells, all well but the ones given: those read 0 V (invented figures).
+static std::string bat_with_dead(std::uint32_t dead) {
+  std::string out = "@\r\nBattery  Volt     Curr     Tempr    Base State   Volt. State  Curr. State  Temp. State  Coulomb\r\n";
+  for (int i = 0; i < 15; ++i)
+    out += std::to_string(i) + ((dead & (1u << i)) ? " 0 0 36000 Charge UV Normal Normal 60%\r\n" : " 3425 0 36000 Charge Normal Normal Normal 60%\r\n");
+  return out + "Command completed successfully\r\n$$\r\npylon>";
+}
+static bool has_flag(const armor::json::Value& module, const char* column, const char* word, int cell) {
+  const armor::json::Value* flags = module.get("flags");
+  if (flags == nullptr) return false;
+  for (const armor::json::Value& f : flags->items)
+    if (f.string_or("column", "") == column && f.string_or("word", "") == word && (cell < 0 ? f.get("cell") == nullptr : f.get("cell") != nullptr && f.get("cell")->number == cell)) return true;
+  return false;
+}
+static void test_pylontech_cells_not_read() {
+  const std::uint32_t three = 0x38u;   // cells 3, 4 and 5 (from 0)
+  armor::json::Value document;
+  Poller poller(armor::config::Kind::kPylontech, "solar-1", "battery-1", 5, 0);
+  std::uint64_t now = 1000;
+  CHECK(armor::json::parse(us_cycle(poller, now, 1, bat_with_dead(0), true), document) && document.get("stack")->items[0].get("cells_unread") == nullptr);
+  CHECK(document.get("alarm")->boolean == false);
+  // the maker the model tells, when `info` names none
+  CHECK(document.string_or("manufacturer", "") == "Pylon" && document.string_or("manufacturer_source", "") == "deduced");
+  // one table with cells at 0 V may be a spoiled line: it is not published
+  now += 6000;
+  CHECK(armor::json::parse(us_cycle(poller, now, 1, bat_with_dead(three), true), document));
+  CHECK(document.get("stack")->items[0].get("cells_unread") == nullptr && document.get("stack")->items[0].get("cells_v")->items[3].number > 3.4);
+  now += 6000;
+  CHECK(armor::json::parse(us_cycle(poller, now, 1, bat_with_dead(0), true), document) && document.get("stack")->items[0].get("cells_unread") == nullptr);
+  // read as 0 V twice in a row: the cells are told as not read, the cells' own states with them, and the stack's lowest cell is not a silent 0
+  now += 6000;
+  us_cycle(poller, now, 1, bat_with_dead(three), true);
+  now += 6000;
+  CHECK(armor::json::parse(us_cycle(poller, now, 1, bat_with_dead(three), true), document));
+  const armor::json::Value& module = document.get("stack")->items[0];
+  CHECK(module.get("cells_unread") != nullptr && module.get("cells_unread")->items.size() == 3 && module.get("cells_unread")->items[0].number == 3 && module.get("cells_unread")->items[2].number == 5);
+  CHECK(module.get("cells_v")->items.size() == 15 && module.get("cells_v")->items[4].number == 0);
+  CHECK(has_flag(module, "voltage", "UV", 3) && has_flag(module, "voltage", "UV", 5) && !has_flag(module, "voltage", "UV", 6));
+  CHECK(document.get("alarm")->boolean == true && std::fabs(document.get("cell_min_v")->number - 3.425) < 0.001);
+  // and when the cells are read again the fault ends
+  now += 6000;
+  CHECK(armor::json::parse(us_cycle(poller, now, 1, bat_with_dead(0), true), document) && document.get("stack")->items[0].get("cells_unread") == nullptr);
+}
+static void test_pylontech_impossible_figures() {
+  // a row whose last cell column ran into the next one, a temperature and a current beyond the contract: those figures are left out, the rest of the reading goes
+  std::vector<pylontech::Module> modules;
+  const std::string header = "Power Volt Curr Tempr Tlow Thigh Vlow Vhigh Base.St Volt.St Curr.St Temp.St Coulomb\r\n";
+  pylontech::parse_pwr(header + "1 49872 -1280 22000 20000 25000 3330 33483350 SysError Normal Normal Normal 88%\r\n2 49872 -9999999 999000 20000 25000 3330 3348 Dischg High OV Normal 88%\r\n2 49000 0 22000 20000 25000 3330 3348 Idle Normal Normal Normal 88%\r\n", modules);
+  CHECK(modules.size() == 2 && modules[0].cell_high_v == 0 && modules[0].cell_low_v == 0 && modules[0].has_voltage && modules[1].has_voltage && !modules[1].has_current && !modules[1].has_temperature);
+  armor::json::Value document;
+  CHECK(armor::json::parse(battery_json("solar-1", "battery-1", 5, modules), document));
+  CHECK(document.get("cell_max_v") != nullptr && std::fabs(document.get("cell_max_v")->number - 3.348) < 0.001 && document.get("current_a") == nullptr && document.get("state") == nullptr);
+  CHECK(document.get("alarm")->boolean == true && has_flag(document.get("stack")->items[0], "base", "SysError", -1));
+  CHECK(has_flag(document.get("stack")->items[1], "voltage", "High", -1) && has_flag(document.get("stack")->items[1], "current", "OV", -1));
+  CHECK(document.get("stack")->items[1].get("current_a") == nullptr && document.get("stack")->items[1].get("temperature_c") == nullptr && document.get("stack")->items[1].get("voltage_v") != nullptr);
+  // whatever protocol: a cell beyond 10 V or a figure that is not a number never reaches the message
+  pylontech::Module odd;
+  odd.number = 1; odd.present = true; odd.cell_low_v = 3.3; odd.cell_high_v = 33.4; odd.cells_v = {3.3, 33.4}; odd.voltage_v = std::nan(""); odd.current_a = 1; odd.base_state = "Idle";
+  odd.manufacturer = "Daly"; odd.manufacturer_deduced = true;
+  const std::string message = battery_json("solar-1", "battery-2", 5, {odd});
+  CHECK(armor::json::parse(message, document) && message.find("null") == std::string::npos);
+  CHECK(document.get("cell_max_v") == nullptr && document.get("voltage_v") == nullptr && document.get("stack")->items[0].get("cells_v") == nullptr);
+  CHECK(document.string_or("manufacturer", "") == "Daly" && document.string_or("manufacturer_source", "") == "deduced");
+  // the maker `info` says is told as said
+  pylontech::Module told;
+  CHECK(pylontech::parse_info("Manufacturer        : Pylon\r\nDevice name         : US3000C\r\n", told) == 1 && told.manufacturer == "Pylon" && !told.manufacturer_deduced);
+  pylontech::Module blank;
+  pylontech::parse_info("Manufacturer        : \r\nDevice name         : XY100\r\n", blank);
+  blank.present = true;
+  pylontech::deduce_maker(blank);
+  CHECK(blank.manufacturer.empty());   // a model that tells nothing: no maker is made up
+}
+
 int main() {
+  test_pylontech_cells_not_read();
+  test_pylontech_impossible_figures();
   test_voltronic_commands();
   test_voltronic_replies();
   test_voltronic_frames();

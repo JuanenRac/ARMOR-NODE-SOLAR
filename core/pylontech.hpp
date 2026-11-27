@@ -84,6 +84,16 @@ struct DataPlate {
   std::string serial, board, specification, boot_version, comm_version, release_date;
 };
 
+// A state of one cell that is not the normal one, as the console's `bat` table prints it: the cell (from 0, like cells_v), the column and the word.
+struct CellFlag {
+  int cell = 0;
+  const char* column = "";   // "base", "voltage", "current" or "temperature"
+  std::string word;
+};
+
+// A cell the monitoring chip does not read comes out as 0 V.
+constexpr double kUnreadCellV = 0.1;
+
 struct Module {
   int number = 0;
   bool present = false;
@@ -116,6 +126,8 @@ struct Module {
   int charge_mos = -1, discharge_mos = -1;   // the status codes of the MOSFETs of a battery management system (ANT-BMS); -1 when the equipment does not say
   bool protecting = false;            // a protection has switched a MOSFET off
   bool has_temperature = true;        // false: the equipment has no temperature sensor to read (its temperatures are then not published)
+  std::vector<CellFlag> cell_flags;   // the states of the cells that are not normal
+  std::vector<int> cells_unread;      // the cells (from 0) that read 0 V two turns in a row: a reading fault of the battery, not a voltage
 };
 
 namespace detail {
@@ -280,6 +292,39 @@ inline SlaveSheet read_slave_sheet(const std::string& text) {
   for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
   handle(line);
   return sheet;
+}
+
+// Whether a word of the base state column is trouble: the others (Idle, Charge, Dischg, Balance...) say what the battery is doing.
+inline bool base_word_matters(const std::string& word) { return word == "SysError" || word == "Protect" || word == "Alarm"; }
+// Whether a word of any other state column says anything but "all is well".
+inline bool state_word_matters(const std::string& word) { return !word.empty() && word != "Normal" && word != "Idle" && word != "Charge" && word != "Dischg" && word != "Absent"; }
+
+// The states of the cells of a `bat` table that are not normal, in the order of the table (at most 32).
+inline void parse_cell_flags(const std::string& text, std::vector<CellFlag>& flags) {
+  flags.clear();
+  std::string line;
+  const auto word_like = [](const std::string& w) { if (w.empty() || w.size() > 16) return false; for (const char c : w) if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) return false; return true; };
+  const auto handle = [&](const std::string& row) {
+    std::vector<std::string> t = detail::tokens(row);
+    t.erase(std::remove(t.begin(), t.end(), std::string("-")), t.end());
+    long index = 0, millivolts = 0;
+    if (t.size() < 8 || !detail::integer(t[0], index) || index < 0 || index > 31 || !detail::integer(t[1], millivolts)) return;
+    for (std::size_t i = 4; i < 8; ++i) if (!word_like(t[i])) return;   // a table with other columns is not guessed at
+    static const char* const kColumns[4] = {"base", "voltage", "current", "temperature"};
+    for (std::size_t i = 0; i < 4 && flags.size() < 32; ++i) {
+      const std::string& w = t[4 + i];
+      if (i == 0 ? base_word_matters(w) : state_word_matters(w)) flags.push_back(CellFlag{static_cast<int>(index), kColumns[i], w});
+    }
+  };
+  for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
+  handle(line);
+}
+
+// The cells that read 0 V, one bit each.
+inline std::uint32_t unread_mask(const std::vector<double>& cells) {
+  std::uint32_t mask = 0;
+  for (std::size_t i = 0; i < cells.size() && i < 32; ++i) if (cells[i] < kUnreadCellV) mask |= 1u << i;
+  return mask;
 }
 
 // The cells of a module from the text a `bat <module>` command printed: one row per cell with the index, the voltage (mV), the current (mA), the temperature
@@ -692,7 +737,7 @@ inline bool state_alarms(const std::string& word, bool system_column) {
 inline bool cells_match_row(const Module& m, const std::vector<double>& cells) {
   if (cells.empty() || m.cell_low_v <= 0 || m.cell_high_v <= 0) return true;
   constexpr double kMargin = 0.25;
-  for (const double v : cells) if (v < m.cell_low_v - kMargin || v > m.cell_high_v + kMargin) return false;
+  for (const double v : cells) if (v >= kUnreadCellV && (v < m.cell_low_v - kMargin || v > m.cell_high_v + kMargin)) return false;   // a cell at 0 V has its own rule (see the poller)
   return true;
 }
 
@@ -715,9 +760,17 @@ inline Stack summarise(const std::vector<Module>& modules) {
     if (m.soc_percent >= 0) { soc += m.soc_percent; ++with_soc; }
     double cell_low = m.cell_low_v, cell_high = m.cell_high_v;
     if (!m.cells_v.empty()) {   // the cells' own extremes are truer than the module's Vlow and Vhigh columns
-      cell_low = m.cells_v[0]; cell_high = m.cells_v[0];
-      for (double v : m.cells_v) { if (v < cell_low) cell_low = v; if (v > cell_high) cell_high = v; }
+      cell_low = 0; cell_high = 0;
+      bool any = false;
+      for (std::size_t i = 0; i < m.cells_v.size(); ++i) {   // a cell that is not read has no voltage: it is told as such (cells_unread), not as the lowest of the stack
+        if (std::find(m.cells_unread.begin(), m.cells_unread.end(), static_cast<int>(i)) != m.cells_unread.end()) continue;
+        const double v = m.cells_v[i];
+        if (!any) { cell_low = cell_high = v; any = true; }
+        else { if (v < cell_low) cell_low = v; if (v > cell_high) cell_high = v; }
+      }
     }
+    if (!m.cells_unread.empty() || base_word_matters(m.base_state)) s.alarm = true;
+    for (const CellFlag& flag : m.cell_flags) if (flag.column[0] == 'b' || state_alarms(flag.word, false)) s.alarm = true;
     if (m.has_temperature) {
       if (!s.has_temperature || m.temperature_low_c < s.temperature_min_c) s.temperature_min_c = m.temperature_low_c;
       if (!s.has_temperature || m.temperature_high_c > s.temperature_max_c) s.temperature_max_c = m.temperature_high_c;
