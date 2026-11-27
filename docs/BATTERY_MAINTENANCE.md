@@ -67,7 +67,7 @@ been sent; the others can be stopped between two lines.
 | `protections_set` | `prot <name> en|dis` | Disabling one needs `accept_risk` |
 | `output_set` | `ctrl cfet|dfet|buzz|heat on|off`, read back with `ctrl <name>` | Can be put back from the state read before |
 | `fault_clear` | `ctrl afuse off` | |
-| `write_barcode` | `tbar <serial>` | The serial number tells the chip, so a wrong one can lead to a wrong firmware later |
+| `write_barcode` | `tbar <serial>` | Changes which firmware image is considered valid for the battery: the serial number tells the chip, and a wrong one can let a wrong image through and destroy it. To read the serial number nothing has to be written: the readings carry it |
 | `eeprom_erase` | `eepe 0`, `trst`, `login`, `tbar <serial>` | By default the serial number is written back |
 | `firmware_update` | `updata`, XMODEM-1K, `tbar <serial>`, optionally `eepe 0` | See below |
 | `expert_command` | one line, at most 48 characters | The words `updata`, `eepe`, `eepw`, `eepr`, `tbar`, `tmbar`, `flaw`, `flae`, `mm`, `login`, `logout`, `re`, `m2s`, `save`, `rtcw`, `socw`, `soccfg`, `socclr`, `urates`, `setprt` and a few more are blocked: they have a typed operation or must never be sent. With the default `battery.expert_mode` = `blocklist` the words `setlowcfg`, `shut`, `trst`, `statc`, `logc`, `datac`, `totalcoul`, `config`, `prot` and the outputs `cfet` and `dfet` are blocked too, and any line that is not a plain reading (`pwr`, `bat`, `info`, `soh`, `stat`, `help`, `datalist`) needs `accept_risk`; `strict` takes the plain readings only; `off` refuses only the first list |

@@ -150,6 +150,15 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
       if (!m.board_version.empty()) w.field("board_version", m.board_version);
       if (!m.main_soft_version.empty()) w.field("main_soft_version", m.main_soft_version);
       if (!m.soft_version.empty()) w.field("soft_version", m.soft_version);
+      if (m.plate.chip != nullptr) {   // the serial number is private: this message is never retained, and only signed-in people are shown it
+        w.field("chip", m.plate.chip);
+        if (!m.plate.serial.empty()) w.field("serial", m.plate.serial);
+        if (!m.plate.board.empty()) w.field("board", m.plate.board);
+        if (!m.plate.specification.empty()) w.field("specification", m.plate.specification);
+        if (!m.plate.boot_version.empty()) w.field("boot_version", m.plate.boot_version);
+        if (!m.plate.comm_version.empty()) w.field("comm_version", m.plate.comm_version);
+        if (!m.plate.release_date.empty()) w.field("release_date", m.plate.release_date);
+      }
       if (m.max_charge_a >= 0) w.key("max_charge_a").number(m.max_charge_a, 1);
       if (m.max_discharge_a >= 0) w.key("max_discharge_a").number(m.max_discharge_a, 1);
       if (m.console_baud >= 0) w.field("console_baud", m.console_baud);

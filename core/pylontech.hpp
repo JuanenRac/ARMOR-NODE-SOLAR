@@ -26,6 +26,8 @@
 #include <string_view>
 #include <vector>
 
+#include "battery_info.hpp"
+
 namespace armor::solar::pylontech {
 
 // ---- the console ---------------------------------------------------------------------------------------------------------------------
@@ -75,6 +77,13 @@ struct Event {
   bool valid = false;
 };
 
+// What names a module, from one answer of its console's `info`: the serial number (PRIVATE data), the Board, the chip those two and the model tell (battery_info.hpp's rules, the same that
+// decide which firmware image fits), the specification and the versions as printed. Kept together: a serial number is never put beside the Board of another answer.
+struct DataPlate {
+  const char* chip = nullptr;   // "older", "newer" or "unknown"; nullptr while `info` has not been read (the rest is then empty too)
+  std::string serial, board, specification, boot_version, comm_version, release_date;
+};
+
 struct Module {
   int number = 0;
   bool present = false;
@@ -92,6 +101,7 @@ struct Module {
   int console_baud = -1;              // `info`: Console Port rate (an old unit says 19200), -1 when not told
   std::vector<int> soh_counts;        // `soh`: the SOH count of each cell, in cell order (empty when it was not read)
   std::vector<int> soh_abnormal;      // the cells (0-based, like cells_v) whose SOH status is not Normal
+  DataPlate plate;                    // `info`: serial number, Board, chip and the rest of what names the module
   Event last_event;                   // the newest entry of the battery's event log (`data event`); valid = false when it was not read
   std::vector<double> cells_v;        // the voltage of each cell, in volts, from the console's `bat` table; empty when it was not read
   std::vector<double> temperatures_c;  // every temperature sensor of the module (a BMS that lists them); empty when the equipment does not
@@ -229,6 +239,37 @@ inline std::size_t parse_bat(const std::string& text, std::vector<double>& cells
 // the charge left is that share of it, which is how the units that do print it count it (US2000: 52 % of 50 Ah is its 26,039 mAh). Nothing is made up without both figures.
 inline void estimate_remaining(Module& m) {
   if (m.present && m.capacity_ah < 0 && m.full_capacity_ah >= 0 && m.soc_percent >= 0) m.capacity_ah = m.full_capacity_ah * m.soc_percent / 100.0;
+}
+
+namespace detail {
+// A text of the console that may be carried in a message: at most `limit` characters, all printable ASCII (only letters, digits, - and _ when `name`, and . too when `dots`); else "".
+inline std::string carried(const std::string& text, std::size_t limit, bool name = false, bool dots = false) {
+  if (text.empty() || text.size() > limit) return "";
+  for (const char c : text) {
+    const bool word = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '-' || c == '_' || (dots && c == '.');
+    if (name ? !word : (c < 0x20 || c > 0x7E)) return "";
+  }
+  return text;
+}
+}  // namespace detail
+
+// Reads the data plate of a module from the text of `info <module>`. False (and `plate` untouched) when the text names no device: a refusal or a silence. A serial number that is blank
+// or not of its characters is left out, and the chip is then "unknown": nothing is guessed.
+inline bool read_plate(const std::string& text, DataPlate& plate) {
+  const battery::Identity id = battery::parse_info(text);
+  if (!id.valid) return false;
+  DataPlate read;
+  const battery::Chip chip = battery::chip_of(id);
+  read.chip = chip == battery::Chip::kOlder ? "older" : chip == battery::Chip::kNewer ? "newer" : "unknown";
+  read.serial = detail::carried(id.serial, 24, true);
+  read.board = detail::carried(id.board, 16, true, true);
+  read.specification = detail::carried(id.specification, 24);
+  std::string value;
+  if (battery::detail::line_value(text, "Boot version", value)) read.boot_version = detail::carried(value, 24);
+  if (battery::detail::line_value(text, "Comm version", value)) read.comm_version = detail::carried(value, 24);
+  if (battery::detail::line_value(text, "Release Date", value)) read.release_date = detail::carried(value, 24);
+  plate = read;
+  return true;
 }
 
 // What a module says about itself in the text of the console's `info <module>` command: lines of "Name : value". Read: the device name, the remaining and the total

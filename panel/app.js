@@ -879,7 +879,10 @@ function moduleCard(x, limits, key, console_) {
   const details = [x.health_percent === undefined ? null : [t("rv_health"), x.health_percent + " %"], x.cycles === undefined ? null : [t("rd_cycles"), x.cycles],
     x.capacity_ah === undefined ? null : [t("rd_capacity"), num(x.capacity_ah, 1) + " / " + num(x.full_capacity_ah, 1) + " Ah"],
     x.temperatures_c ? [t("rd_temp"), x.temperatures_c.map(c => num(c, 1)).join(" · ") + " °C"] : null, x.state ? [t("rd_state"), x.state] : null,
-    x.model ? [t("rv_model"), x.model] : null, x.soft_version ? [t("firmware"), x.soft_version] : null,
+    x.model ? [t("rv_model"), x.model] : null, x.serial ? [t("rv_serial"), x.serial] : null, x.chip ? [t("rv_chip"), t("rv_chip_" + x.chip)] : null, x.board ? [t("rv_board"), x.board] : null,
+    x.specification ? [t("rv_spec"), x.specification] : null, x.soft_version ? [t("firmware"), x.soft_version] : null, x.main_soft_version ? [t("rv_mainSoft"), x.main_soft_version] : null,
+    x.boot_version ? [t("rv_boot"), x.boot_version] : null, x.comm_version ? [t("rv_comm"), x.comm_version] : null, x.board_version ? [t("rv_boardVersion"), x.board_version] : null,
+    x.release_date ? [t("rv_released"), x.release_date] : null,
     x.soh_abnormal && x.soh_abnormal.length ? [t("rv_soh"), x.soh_abnormal.map(i => i + 1).join(", ")] : null,
     x.last_event ? [t("rv_event"), [x.last_event.time, x.last_event.voltage_state, x.last_event.current_state, x.last_event.temperature_state, x.last_event.power_events, x.last_event.battery_events].filter(Boolean).join(" · ")] : null].filter(Boolean);
   const box = el("div", { class: "rv-module " + levelClass(health.level) },

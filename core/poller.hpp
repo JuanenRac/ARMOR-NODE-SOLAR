@@ -291,7 +291,7 @@ class Poller {
   enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kPs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt, kDriver };
   enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34, kPi00, kPi17 };
   // What `info`, `stat`, `data event` and `soh` said of one module. at_ms: the last full round; tried_ms and misses: the tries while something is still missing.
-  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0, tried_ms = 0; int misses = 0; bool valid = false; };
+  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; pylontech::DataPlate plate; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0, tried_ms = 0; int misses = 0; bool valid = false; };
 
   // Whether the sheet of a module is still missing: its rated capacity (`info`) or its history (`stat`).
   static bool incomplete(const Extras& e) { return e.full_capacity_ah < 0 || (e.cycles < 0 && e.counters.empty()); }
@@ -303,6 +303,7 @@ class Poller {
     if (m.health_percent < 0) m.health_percent = e.health_percent;
     if (m.counters.empty()) m.counters = e.counters;
     if (!m.last_event.valid) m.last_event = e.last_event;
+    if (m.plate.chip == nullptr) m.plate = e.plate;   // all of it or none: a serial number is not mixed with another answer
     if (m.cell_count < 0) m.cell_count = e.cell_count;
     if (m.board_version.empty()) m.board_version = e.board_version;
     if (m.main_soft_version.empty()) m.main_soft_version = e.main_soft_version;
@@ -754,6 +755,8 @@ class Poller {
       ++stats_.replies_ok;
       stats_.last_error.clear();
       modules_ = found;
+      // A module that is not there any more takes what it told with it: the one that comes in its place is another battery, with its own serial number.
+      for (const pylontech::Module& m : modules_) if (!m.present && m.number >= 1 && m.number <= 16) extras_[static_cast<std::size_t>(m.number)] = Extras{};
       module_at_ = 0;
       choose_cells_to_read();
       ask_next_module(now_ms);
@@ -774,6 +777,7 @@ class Poller {
       after_bat(now_ms);
     } else if (step_ == Step::kInfo) {
       if (pylontech::parse_info(buffer_, modules_[module_at_]) > 0) ++stats_.replies_ok;
+      pylontech::read_plate(buffer_, modules_[module_at_].plate);
       ask_stat(now_ms);
     } else if (step_ == Step::kStat) {
       if (pylontech::parse_info(buffer_, modules_[module_at_]) > 0) ++stats_.replies_ok;
@@ -844,7 +848,7 @@ class Poller {
     pylontech::Module& m = modules_[module_at_];
     Extras& e = extras_[static_cast<std::size_t>(m.number)];
     fill_from_kept(m, e);   // a question that got no answer this time does not take away what the module told before
-    e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.counters = m.counters; if (m.last_event.valid) e.last_event = m.last_event; e.cell_count = m.cell_count; e.board_version = m.board_version; e.main_soft_version = m.main_soft_version; e.soft_version = m.soft_version; e.max_charge_a = m.max_charge_a; e.max_discharge_a = m.max_discharge_a; e.console_baud = m.console_baud; e.soh_counts = m.soh_counts; e.soh_abnormal = m.soh_abnormal;
+    e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.counters = m.counters; e.plate = m.plate; if (m.last_event.valid) e.last_event = m.last_event; e.cell_count = m.cell_count; e.board_version = m.board_version; e.main_soft_version = m.main_soft_version; e.soft_version = m.soft_version; e.max_charge_a = m.max_charge_a; e.max_discharge_a = m.max_discharge_a; e.console_baud = m.console_baud; e.soh_counts = m.soh_counts; e.soh_abnormal = m.soh_abnormal;
     if (!catching_up_) e.at_ms = now_ms;
     e.tried_ms = now_ms;
     e.misses = !incomplete(e) ? 0 : e.misses < kExtrasQuickTries ? e.misses + 1 : e.misses;
