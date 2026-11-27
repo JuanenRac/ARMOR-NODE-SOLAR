@@ -32,6 +32,7 @@ struct BatteryJob {
 struct BatteryPortFacts {
   bool pylontech = false;
   bool present = false;
+  bool slave = false;          // the console answered with the sheet of one battery of a stack
   bool critical_alarm = false;
   long current_ma = 0;
 };

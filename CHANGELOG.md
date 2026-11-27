@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Updating a stack one module at a time:** on the console of a battery that is not the first of its stack the node now accepts a firmware update and writing back its serial number (everything else is still refused there). Off by default like every write. Tested on a computer; not tried on a battery.
+- **After a firmware update the battery is checked and its capacity written again:** the node writes the capacity and runs the MOSFET test as the maker's tool does, and the result says if the serial number, the version or the capacity differ (a capacity of 0 is its own answer). A blank serial number, or a word of another line read in its place, is no serial number. The Board `ST1` is accepted for the US2000C only.
+- **A battery left in its bootloader is recognised:** it is no longer an unknown battery or a silent one. The same failed update (same image, same serial number) can be tried again up to 10 times without erasing anything; no other image is sent to it. Tested on a computer against a simulated console; not tried on a battery.
+
 ## [0.7.5] - A silent panel can restart the node, and each battery module says its serial number and chip
 
 - **The shared tools read the output of processes as UTF-8:** `tools/status_lights.py`, `tools/sync_manifests.py` and `tools/universal_readme_check.py` are the current copies; on Windows a character outside the code page no longer breaks a check.

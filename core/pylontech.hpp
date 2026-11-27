@@ -207,6 +207,31 @@ inline int parse_pwr_slave(const std::string& text) {
   return voltage && place >= 2 ? place : 0;
 }
 
+// The same sheet read for what a write needs to know: the current, and whether "Basic Status" is one of the quiet ones. A status that is missing or is any other word counts as an
+// alarm: what the sheet says in a fault has not been seen.
+struct SlaveSheet {
+  int place = 0;
+  long current_ma = 0;
+  bool current_known = false;
+  bool quiet = false;
+};
+
+inline SlaveSheet read_slave_sheet(const std::string& text) {
+  SlaveSheet sheet;
+  sheet.place = parse_pwr_slave(text);
+  if (sheet.place == 0) return sheet;
+  std::string line;
+  const auto handle = [&](const std::string& row) {
+    const std::vector<std::string> t = detail::tokens(row);
+    long n = 0;
+    if (t.size() >= 4 && t[0] == "Current" && t[1] == ":" && detail::integer(t[2], n) && t[3] == "mA") { sheet.current_ma = n; sheet.current_known = true; }
+    if (t.size() >= 4 && t[0] == "Basic" && t[1] == "Status" && t[2] == ":") sheet.quiet = t[3] == "Idle" || t[3] == "Charge" || t[3] == "Dischg";
+  };
+  for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
+  handle(line);
+  return sheet;
+}
+
 // The cells of a module from the text a `bat <module>` command printed: one row per cell with the index, the voltage (mV), the current (mA), the temperature
 // (m°C), the four states and the charge (a percentage; the newer firmwares then give the charge in mAH and a Y or N for the cell being balanced). Returns how many cells were
 // read; a row that is not one is skipped, and a cell voltage out of 0 to 10 V refuses the whole table. `remaining_ah` gets the module's charge in ampere-hours when the rows have it (-1

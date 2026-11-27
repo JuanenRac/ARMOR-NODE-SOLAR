@@ -286,6 +286,17 @@ void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::
       facts.critical_alarm = solar::pylontech::summarise(modules).alarm;
     }
   }
+  // The console of another battery of a stack gives no reading, but a firmware update has to be able to start on it.
+  bool slave = false;
+  if (poller.kind() == config::Kind::kPylontech && poller.slave_sheet().place > 0) {
+    const solar::pylontech::SlaveSheet& sheet = poller.slave_sheet();
+    slave = true;
+    facts = BatteryPortFacts{};
+    facts.present = sheet.current_known;
+    facts.slave = true;
+    facts.current_ma = sheet.current_ma;
+    facts.critical_alarm = !sheet.quiet;
+  }
   const std::uint64_t now = uptime_ms();
   const std::string cause = poller.unreadable_cause(now);
   const std::string sample = cause.empty() ? std::string() : poller.heard_sample();
@@ -302,7 +313,8 @@ void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::
     s.bytes_rx = stats.bytes_rx; s.bytes_tx = stats.bytes_tx; s.replies_ok = stats.replies_ok; s.replies_bad = stats.replies_bad; s.timeouts = stats.timeouts; s.readings = stats.readings;
     s.overruns = overruns;
     s.framing_errors = framing_errors;
-    if (whole) { slot.reading = std::move(whole); slot.facts = facts; }
+    if (whole) slot.reading = std::move(whole);
+    if (whole || slave) slot.facts = facts;
     slot.ant_new_protocol = poller.ant_new_protocol();
     said = s;
   }

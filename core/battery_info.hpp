@@ -74,7 +74,8 @@ inline Identity parse_info(const std::string& text) {
   if (detail::line_value(text, "Board version", v)) id.board_version = v;
   if (detail::line_value(text, "Soft version", v)) id.soft_version = v;
   if (detail::line_value(text, "Main Soft version", v)) id.main_soft_version = v;
-  if (detail::line_value(text, "Barcode", v)) id.serial = v;
+  // A blank barcode (a firmware update can leave it so) and a word that is the label of another line both mean "no serial number": every real one has a digit in it.
+  if (detail::line_value(text, "Barcode", v) && v.find_first_of("0123456789") != std::string::npos) id.serial = v;
   if (detail::line_value(text, "Specification", v)) {
     id.specification = v;
     const std::size_t slash = v.find('/');
@@ -103,11 +104,20 @@ inline long parse_total_coul_mah(const std::string& text) {
   return i == 0 ? -1 : n;
 }
 
+// What the console of a battery says while it is in its bootloader (a transfer failed and the application is not there): it prints these over and over and answers no command.
+inline bool bootloader_text(const std::string& text) {
+  return text.find("Please updata again") != std::string::npos || text.find("Updata is ready") != std::string::npos || text.find("Updata error") != std::string::npos;
+}
+
 // A serial number as the maker's tool takes it: letters and digits (and - _), 10 to 24 characters.
 inline bool valid_serial(std::string_view serial) {
   if (serial.size() < 10 || serial.size() > 24) return false;
-  for (char c : serial) if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '-' || c == '_')) return false;
-  return true;
+  bool digit = false;
+  for (char c : serial) {
+    if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '-' || c == '_')) return false;
+    if (c >= '0' && c <= '9') digit = true;
+  }
+  return digit;
 }
 
 enum class Chip { kOlder, kNewer, kUnknown };
@@ -120,7 +130,8 @@ inline Chip chip_of(const Identity& id) {
   if (c_family) {
     const bool marker_new = marker == "E2" || marker == "C3";
     if (id.board == "NF4.E2") return marker_new ? Chip::kNewer : Chip::kUnknown;
-    if (id.board.empty() || id.board == "ST1") return marker_new ? Chip::kUnknown : Chip::kOlder;
+    // The maker's table gives the Board "ST1" for the US2000C only.
+    if (id.board.empty() || (id.board == "ST1" && id.model == "US2000C")) return marker_new ? Chip::kUnknown : Chip::kOlder;
     return Chip::kUnknown;
   }
   if (id.model == "US5000") {

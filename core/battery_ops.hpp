@@ -145,7 +145,7 @@ inline bool protection_known(std::string_view name) {
 
 // ---- plans --------------------------------------------------------------------------------------------------------------------------------
 
-enum class StepKind { kSend, kUpdata };
+enum class StepKind { kSend, kUpdata, kBootloader };   // kBootloader only listens: it is done when the bootloader's words arrive
 constexpr int kPhasePreflight = 0, kPhaseWrite = 1, kPhaseVerify = 2;
 
 struct Step {
@@ -157,6 +157,7 @@ struct Step {
   std::vector<std::string> must_contain;   // every one must be in the answer
   bool write = false;                      // changes something
   bool tolerate_unknown = false;           // "Unknown command" is not a failure (an older firmware)
+  bool no_command = false;                 // an update that is resumed: the battery is already in its bootloader, so `updata` is not sent
   bool tolerate_invalid = false;           // "Invalid command or fail to excute." is not a failure
   bool no_reply_ok = false;                // silence is the expected answer (the battery switched itself off)
   bool secret_in_send = false;
@@ -202,6 +203,8 @@ constexpr const char* kNotArmed = "not_armed";
 constexpr const char* kBadToken = "bad_token";
 constexpr const char* kExpired = "expired";
 constexpr const char* kChipUnknown = "chip_unknown";
+constexpr const char* kBootloader = "bootloader";                  // the battery is in its bootloader: no image is sent to it as if it were a battery just read
+constexpr const char* kNothingToResume = "nothing_to_resume";      // no failed update of this port is kept, or the battery is not in its bootloader
 constexpr const char* kImageMissing = "image_missing";
 constexpr const char* kImageMismatch = "image_mismatch";
 constexpr const char* kUnsupportedModel = "unsupported_model";
@@ -294,6 +297,7 @@ struct Request {
   Identity identity;                       // what the arm step read
   ExpertMode expert_mode = ExpertMode::kBlocklist;   // battery.expert_mode of the node
   int local_year = 0, local_month = 0, local_day = 0, local_hour = 0, local_minute = 0, local_second = 0;   // the time to write, for set_clock / pcb_setup
+  bool resume = false;                     // firmware_update only: the battery is in its bootloader after a failed try (see FailedUpdate)
 };
 
 // Words that change what the battery keeps or what it does: they have typed operations (with their checks and read-backs), so the console of the "blocklist" and "strict" modes does not take them.
@@ -629,9 +633,11 @@ inline bool build_plan(const Request& request, Plan& plan, std::string& why) {
       const double crc = p.number_or("image_crc32", -1);
       const std::string ver = p.string_or("image_version", "");
       if (size < static_cast<long>(kImageMinBytes) || size > static_cast<long>(kImageMaxBytes) || crc < 0 || crc > 4294967295.0 || ver.empty() || ver.size() > 12) return bad(refusal::kInvalidParams);
-      const bool clear_eeprom = p.bool_or("clear_eeprom", false);
+      // A resumed try never erases the external memory.
+      const bool clear_eeprom = !request.resume && p.bool_or("clear_eeprom", false);
       Step up;
       up.kind = StepKind::kUpdata; up.phase = kPhaseWrite; up.label = "updata"; up.send = "updata"; up.write = true; up.timeout_ms = 600'000;
+      up.no_command = request.resume;
       steps.push_back(up);
       Step after; after.phase = kPhaseWrite; after.label = "restart"; after.listen = true; after.prompt = "pylon>"; after.timeout_ms = 30'000; after.settle_ms = 1'500;
       steps.push_back(after);
@@ -639,18 +645,31 @@ inline bool build_plan(const Request& request, Plan& plan, std::string& why) {
       steps.push_back(read_step("info", "info", kPhaseWrite));
       steps.push_back(write_step("barcode", "tbar " + serial, {"Test result:pass"}));
       if (clear_eeprom) { steps.push_back(write_step("eeprom", "eepe 0")); steps.push_back(restart_step()); steps.push_back(login_step()); steps.push_back(write_step("barcode", "tbar " + serial, {"Test result:pass"})); }
+      // The maker's tool writes the capacity again and runs the MOSFET test after an update (seen in its console logs). Only for the models whose capacity the maker states.
+      const int official = profile->capacity_ah;
+      if (official > 0) {
+        steps.push_back(write_step("capacity", "totalcoul " + std::to_string(official)));
+        steps.push_back(write_step("mostest", "ctrl mostest on"));
+      }
       steps.push_back(read_step("info", "info", kPhaseVerify));
+      steps.push_back(read_step("totalcoul", "totalcoul", kPhaseVerify, true));
       plan.uses_image = true;
       plan.image_size = static_cast<std::size_t>(size);
       plan.image_crc32 = static_cast<std::uint32_t>(crc);
       plan.canonical = "firmware_update " + ver + " " + std::to_string(size) + " " + std::to_string(static_cast<unsigned long>(crc)) + (clear_eeprom ? " clear_eeprom " : " ") + serial;
       plan.summary = "send firmware " + ver + " to the battery" + std::string(clear_eeprom ? ", then erase the external memory" : "") + " and write the serial number again";
-      plan.verify = [serial](const std::vector<Capture>& caps) {
+      plan.verify = [serial, ver, official](const std::vector<Capture>& caps) {
         const Capture* i = find_capture(caps, "info", kPhaseVerify);
         if (i == nullptr) return std::string("no_readback");
         const Identity now = parse_info(i->text);
         if (!now.valid) return std::string("battery_not_answering");
-        return now.serial == serial ? std::string() : std::string("barcode_differs");
+        if (now.serial != serial) return std::string("barcode_differs");
+        if (now.soft_version != "V" + ver) return std::string("version_differs");
+        const Capture* c = find_capture(caps, "totalcoul", kPhaseVerify);
+        const long mah = c == nullptr ? -1 : parse_total_coul_mah(c->text);
+        if (mah == 0) return std::string("capacity_zero");
+        if (official > 0 && mah != official * 1000L) return std::string("capacity_differs");
+        return std::string();
       };
       break;
     }
@@ -682,6 +701,39 @@ inline std::string check_firmware_request(const Plan& plan, const std::vector<st
   return refusal::kImageMismatch;
 }
 
+// The plan that only listens: whether the console is in its bootloader. Nothing is sent. What the arm of a resumed update runs.
+inline Plan bootloader_listen_plan() {
+  Plan plan;
+  plan.op = Op::kPreflight;
+  plan.canonical = "listen_bootloader";
+  plan.summary = "listen for the battery's bootloader";
+  Step s;
+  s.kind = StepKind::kBootloader; s.phase = kPhasePreflight; s.label = "bootloader"; s.listen = true; s.timeout_ms = 60'000;
+  plan.steps.push_back(s);
+  return plan;
+}
+
+// A firmware update that did not end well, kept (in memory) by the node: the only thing that may be tried again on a battery that stayed in its bootloader and can no longer say who it is.
+struct FailedUpdate {
+  bool valid = false;
+  Identity identity;               // as read before the first try
+  std::size_t image_size = 0;
+  std::uint32_t image_crc32 = 0;
+  int resumes = 0;                 // how many times it has been tried again
+};
+
+// A bootloader that refused a try has taken the image after several more (seen on a real battery), so it may be insisted on, by hand and not for ever.
+constexpr int kMaxResumes = 10;
+
+// "" when the update of this plan may be resumed: the same serial number typed and the same image as the one that failed on this port.
+inline std::string resume_check(const FailedUpdate& failed, const Plan& plan, const std::string& typed_serial) {
+  if (!failed.valid) return refusal::kNothingToResume;
+  if (failed.resumes >= kMaxResumes) return refusal::kLocked;
+  if (typed_serial != failed.identity.serial) return refusal::kSerialMismatch;
+  if (!plan.uses_image || plan.image_size != failed.image_size || plan.image_crc32 != failed.image_crc32) return refusal::kImageMismatch;
+  return refusal::kNone;
+}
+
 // The plan that reads: logs in and reads what a decision needs. What the arm step runs.
 inline Plan preflight_plan() {
   using namespace detail;
@@ -703,6 +755,7 @@ inline Plan preflight_plan() {
 struct Facts {
   bool pylontech_port = false;
   bool present = false;
+  bool slave = false;              // the console answered `pwr` with the sheet of one battery of a stack
   long current_ma = 0;
   bool critical_alarm = false;
   Identity identity;               // from the preflight
@@ -717,6 +770,8 @@ inline std::string preconditions(Op op, const Facts& f, const json::Value& param
   if (info == nullptr) return refusal::kUnknownOp;
   if (!f.pylontech_port) return refusal::kNotPylontech;
   if (!f.present) return refusal::kNoBattery;
+  // On the console of another battery of a stack only the firmware and the serial number (to put back one that an update left blank) go on.
+  if (f.slave && op != Op::kFirmwareUpdate && op != Op::kWriteBarcode) return refusal::kNoBattery;
   if (!f.identity.valid || model_profile(f.identity.model) == nullptr) return refusal::kUnknownModel;
   if (f.identity.soft_version.empty()) return refusal::kUnknownFirmware;
   const bool writes_serial = op == Op::kWriteBarcode || op == Op::kPcbSetup;

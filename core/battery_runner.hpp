@@ -88,7 +88,7 @@ class Runner {
         if (now_ms - step_started_ms_ > step().timeout_ms) { if (step().no_reply_ok) step_ok(now_ms); else fail("timeout"); }
         return {};
       case State::kUpdWaitProgram:
-        if (now_ms - step_started_ms_ > 15'000) fail("firmware:bootloader_not_ready");
+        if (now_ms - step_started_ms_ > (step().no_command ? 90'000u : 15'000u)) fail("firmware:bootloader_not_ready");
         return {};
       case State::kUpdXfer: {
         std::vector<std::uint8_t> out = sender_->next_tx(now_ms);
@@ -116,9 +116,18 @@ class Runner {
       return;
     }
     for (std::size_t i = 0; i < length; ++i) append_rx(static_cast<char>(data[i]));
+    if (state_ == State::kWaitReply && step().phase == kPhasePreflight && bootloader_text(rx_)) seen_bootloader_ = true;
     switch (state_) {
-      case State::kWaitReply: check_reply(now_ms); break;
+      case State::kWaitReply:
+        if (step().kind == StepKind::kBootloader) {
+          if (bootloader_text(rx_)) { note("< the bootloader is there"); step_ok(now_ms); }
+          break;
+        }
+        check_reply(now_ms);
+        break;
       case State::kUpdWaitProgram:
+        // A resumed update starts in a bootloader that may still be saying why the last try failed: only what follows the next "Program start" counts.
+        if (step().no_command) { const std::size_t at = rx_.rfind("Program start"); if (at == std::string::npos) break; rx_.erase(0, at); }
         if (has_update_error()) { fail("firmware:battery_reported_error"); break; }
         if (contains(rx_, "Program start")) {
           note("< bootloader ready");
@@ -168,6 +177,7 @@ class Runner {
     if (s.kind == StepKind::kUpdata) {
       result_.wrote = true;
       state_ = State::kUpdWaitProgram;
+      if (s.no_command) { note("> (waiting for the bootloader)"); return {}; }
       note("> updata");
       return {'u', 'p', 'd', 'a', 't', 'a', '\r'};
     }
@@ -231,7 +241,7 @@ class Runner {
     state_ = s.settle_ms > 0 ? State::kSettle : State::kNext;
   }
 
-  bool has_update_error() const { return contains(rx_, "Updata error last time") || contains(rx_, "Please updata again") || contains(rx_, "Update Error"); }
+  bool has_update_error() const { return contains(rx_, "Updata error") || contains(rx_, "Please updata again") || contains(rx_, "Update Error"); }
 
   void check_update_text(std::uint64_t now_ms) {
     if (has_update_error()) { fail("firmware:battery_reported_error"); return; }
@@ -281,6 +291,8 @@ class Runner {
     const Step* s = index_ < plan_.steps.size() ? &plan_.steps[index_] : nullptr;
     const bool verifying = s != nullptr && s->phase == kPhaseVerify;
     std::string shown = code;
+    // A battery in its bootloader answers no command: say that, not that nobody answered.
+    if (seen_bootloader_ && !result_.wrote && s != nullptr && s->phase == kPhasePreflight) { result_.outcome = "failed"; result_.code = refusal::kBootloader; state_ = State::kDone; return; }
     if (code == "cancelled") result_.outcome = result_.writes_done > 0 ? "partial" : "failed";
     else if (code.rfind("firmware:", 0) == 0) result_.outcome = "partial";
     else if (!verifying && result_.writes_done > 0) result_.outcome = "partial";
@@ -300,6 +312,7 @@ class Runner {
   std::vector<Capture> captures_;
   RunResult result_;
   bool cancel_requested_ = false;
+  bool seen_bootloader_ = false;
   std::unique_ptr<xmodem::Sender> sender_;
 };
 

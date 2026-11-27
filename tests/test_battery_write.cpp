@@ -729,8 +729,97 @@ static void test_the_rest_of_the_writes() {
 // ---- the firmware ------------------------------------------------------------------------------------------------------------------------------------
 
 static Plan firmware_plan(const bench::Battery& b, const std::vector<std::uint8_t>& image, bool clear_eeprom = false) {
-  const std::string params = "{\"image_size\":" + std::to_string(image.size()) + ",\"image_crc32\":" + std::to_string(crc32(image.data(), image.size())) + ",\"image_version\":\"2.4\"" + (clear_eeprom ? ",\"clear_eeprom\":true" : "") + "}";
+  const std::string params = "{\"image_size\":" + std::to_string(image.size()) + ",\"image_crc32\":" + std::to_string(crc32(image.data(), image.size())) + ",\"image_version\":\"" + std::to_string(image[0x401]) + "." + std::to_string(image[0x400]) + "\"" + (clear_eeprom ? ",\"clear_eeprom\":true" : "") + "}";
   return plan_of(Op::kFirmwareUpdate, params, b);
+}
+
+// ---- the update of a real stack: chip, slave console, bootloader and capacity ------------------------------------------------------------------
+
+static void test_update_rules_from_the_real_logs() {
+  Identity id;
+  id.valid = true; id.model = "US3000C"; id.serial = "H000000C30000001"; id.soft_version = "V2.6";
+  CHECK(chip_of(id) == Chip::kUnknown);                                    // the serial says newer, no Board: blocked
+  id.serial = "PPTBH00000000001"; id.board = "ST1";
+  CHECK(chip_of(id) == Chip::kUnknown);                                    // "ST1" is only in the maker's table for the US2000C
+  id.model = "US2000C"; CHECK(chip_of(id) == Chip::kOlder);
+  CHECK(!valid_serial("Specification") && parse_info("Device name : US2000C\nBarcode : Specification\n").serial.empty());
+  CHECK(parse_info("Device name : US2000C\nBarcode :                 \nSpecification : 48V/50AH\n").serial.empty());
+  // a US2000 Plus has no rule in the maker's table: blocked whatever its image says
+  Identity plus;
+  plus.valid = true; plus.model = "US2KBPL"; plus.serial = "PPTBH00000000001"; plus.soft_version = "V2.3";
+  CHECK(chip_of(plus) == Chip::kUnknown && check_image(bench::make_image("US2KBPL", 3, 4), plus).code == "unsupported_model");
+  Request r = request(Op::kFirmwareUpdate, "{\"image_size\":200000,\"image_crc32\":1,\"image_version\":\"3.4\"}", plus);
+  Plan plan;
+  std::string why;
+  CHECK(!build_plan(r, plan, why) && why == refusal::kUnsupportedModel);
+  // on the console of another battery of a stack: the firmware and the serial number only
+  Facts f;
+  f.pylontech_port = true; f.present = true; f.slave = true; f.identity.valid = true; f.identity.model = "US3000C"; f.identity.soft_version = "V2.6";
+  f.identity.serial = "PPTBH00000000001"; f.typed_serial = "PPTBH00000000001";
+  CHECK(preconditions(Op::kFirmwareUpdate, f, J("{}")) == refusal::kNone && preconditions(Op::kWriteBarcode, f, J("{}")) == refusal::kNone);
+  CHECK(preconditions(Op::kSocReset, f, J("{}")) == refusal::kNoBattery && preconditions(Op::kRestart, f, J("{}")) == refusal::kNoBattery);
+  f.typed_serial = "PPTBH00000000002";
+  CHECK(preconditions(Op::kFirmwareUpdate, f, J("{}")) == refusal::kSerialMismatch);   // the cable is on another battery
+}
+
+static void test_capacity_and_version_after_an_update() {
+  const std::vector<std::uint8_t> image = bench::make_image("US2000C", 3, 0);
+  bench::Battery b;
+  RunResult r;
+  run_plan(firmware_plan(b, image), b, r, &image);
+  CHECK(r.outcome == "ok" && b.soft == "V3.0" && b.serial == "PPTBH00000000001" && b.total_coul_mah == 74000);
+  CHECK(wrote_line(b, "totalcoul 74") && wrote_line(b, "ctrl mostest on") && wrote_line(b, "tbar PPTBH00000000001"));
+  bench::Battery zero;
+  zero.lose_capacity = true;
+  run_plan(firmware_plan(zero, image), zero, r, &image);
+  CHECK(r.outcome == "failed" && r.code == "verify:capacity_zero");
+  bench::Battery tbar;
+  tbar.fail_tbar = true;
+  run_plan(firmware_plan(tbar, image), tbar, r, &image);
+  CHECK(r.outcome == "partial" && r.code == "step_failed:barcode" && tbar.serial.empty());
+}
+
+static void test_a_battery_left_in_its_bootloader() {
+  const std::vector<std::uint8_t> image = bench::make_image("US2000C", 3, 0);
+  bench::Battery b;
+  b.refuse_transfers = 2;
+  const Plan first = firmware_plan(b, image);
+  const Identity before = identity_of(b);
+  RunResult r;
+  run_plan(first, b, r, &image);
+  CHECK(r.outcome == "partial" && r.code == "firmware:battery_reported_error" && b.stuck);
+  // an ordinary arm says what it is, and sends no image
+  const int packets = b.packets_accepted;
+  run_plan(preflight_plan(), b, r);
+  CHECK(r.outcome == "failed" && r.code == refusal::kBootloader && b.packets_accepted == packets);
+  // listening tells the bootloader apart from silence
+  run_plan(bootloader_listen_plan(), b, r);
+  CHECK(r.outcome == "ok");
+  bench::Battery silent;
+  silent.silent = true;
+  run_plan(bootloader_listen_plan(), silent, r);
+  CHECK(r.outcome != "ok");
+  // only the same image and the same serial number may be tried again
+  Request again = request(Op::kFirmwareUpdate, "{\"image_size\":200000,\"image_crc32\":" + std::to_string(first.image_crc32) + ",\"image_version\":\"3.0\",\"clear_eeprom\":true}", before);
+  again.resume = true;
+  Plan resume;
+  std::string why;
+  CHECK(build_plan(again, resume, why));
+  CHECK(resume.canonical.find("clear_eeprom") == std::string::npos);        // a resumed try never erases the external memory
+  FailedUpdate failed{true, before, first.image_size, first.image_crc32, 0};
+  CHECK(resume_check(failed, resume, before.serial) == refusal::kNone);
+  CHECK(resume_check(failed, resume, "PPTBH00000000002") == refusal::kSerialMismatch);
+  CHECK(resume_check(FailedUpdate{}, resume, before.serial) == refusal::kNothingToResume);
+  FailedUpdate other = failed; other.image_crc32 ^= 1;
+  CHECK(resume_check(other, resume, before.serial) == refusal::kImageMismatch);
+  FailedUpdate tired = failed; tired.resumes = kMaxResumes;
+  CHECK(resume_check(tired, resume, before.serial) == refusal::kLocked);
+  // the second try is refused again, the third is taken
+  run_plan(resume, b, r, &image);
+  CHECK(r.outcome == "partial" && b.stuck);
+  run_plan(resume, b, r, &image);
+  CHECK(r.outcome == "ok" && !b.stuck && b.soft == "V3.0" && b.serial == before.serial);
+  CHECK(!wrote_line(b, "eepe 0"));
 }
 
 static void test_firmware() {
@@ -933,6 +1022,9 @@ int main() {
   test_cancel_rules();
   test_the_rest_of_the_writes();
   test_firmware();
+  test_update_rules_from_the_real_logs();
+  test_capacity_and_version_after_an_update();
+  test_a_battery_left_in_its_bootloader();
   test_the_catalog();
   test_the_shared_table();
   test_the_staged_image();
