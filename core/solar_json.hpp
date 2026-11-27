@@ -40,7 +40,19 @@ struct InverterExtras {
   bool has_energy = false;             // QET: the energy the panels have made in all, in Wh
   double energy_total_wh = 0;
   bool warnings_unknown = false;       // the dialect cannot ask for the warnings (REVO): an empty list means "unknown", and the message says so
+  std::string manufacturer;            // who made it, "" when not known
+  bool manufacturer_deduced = false;
 };
+
+// The maker and how it is known; nothing at all when it is not known.
+inline void write_maker(json::Writer& w, const std::string& maker, bool deduced) {
+  if (maker.empty() || maker.size() > 32) return;
+  w.field("manufacturer", maker).field("manufacturer_source", deduced ? "deduced" : "reported");
+}
+// A number only when it is one the contract takes: one beyond it would make the server refuse the whole message.
+inline void write_within(json::Writer& w, const char* name, double value, double low, double high, int decimals) {
+  if (pylontech::within(value, low, high)) w.key(name).number(value, decimals);
+}
 
 inline std::string inverter_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, char mode, const voltronic::Status& s,
                                  const std::vector<std::string>& warnings, const InverterExtras* extras = nullptr) {
@@ -51,7 +63,7 @@ inline std::string inverter_json(const std::string& node_id, const std::string& 
   w.key("grid_v").number(s.grid_v, 1).key("grid_hz").number(s.grid_hz, 1).key("out_v").number(s.out_v, 1).key("out_hz").number(s.out_hz, 1);
   w.key("out_va").number(s.out_va, 0).key("out_w").number(s.out_w, 0).key("load_percent").number(s.load_percent, 0);
   w.key("battery_v").number(s.battery_v, 2).key("battery_a").number(s.battery_a(), 1).key("battery_percent").number(s.battery_percent, 0);
-  if (s.bus_v > 0) w.key("bus_v").number(s.bus_v, 1);   // when the dialect says it
+  if (s.bus_v > 0 && s.bus_v <= 1500) w.key("bus_v").number(s.bus_v, 1);   // when the dialect says it
   w.key("pv_v").number(s.pv_v, 1).key("pv_a").number(s.pv_a, 1).key("pv_w").number(pv2 ? s.pv_w + extras->pv2.power_w : s.pv_w, 0).key("heatsink_c").number(s.heatsink_c, 0);
   w.field("ac_charging", s.ac_charging).field("pv_charging", s.scc_charging).field("load_on", s.load_on);
   w.key("warnings").begin_array();
@@ -77,17 +89,18 @@ inline std::string inverter_json(const std::string& node_id, const std::string& 
     w.end_array();
   }
   if (extras != nullptr) {
+    write_maker(w, extras->manufacturer, extras->manufacturer_deduced);
     if (!extras->serial.empty()) w.field("serial", extras->serial);
     if (!extras->firmware.empty()) w.field("firmware", extras->firmware);
-    if (extras->has_energy) w.key("pv_energy_total_wh").number(extras->energy_total_wh, 0);
+    if (extras->has_energy) write_within(w, "pv_energy_total_wh", extras->energy_total_wh, 0, 1e12, 0);
     if (extras->has_ratings) {
       const voltronic::Ratings& r = extras->ratings;
       w.key("ratings").begin_object();
-      w.key("grid_rating_v").number(r.grid_rating_v, 1).key("out_rating_v").number(r.out_rating_v, 1).key("out_rating_hz").number(r.out_rating_hz, 1);
-      w.key("out_rating_va").number(r.out_rating_va, 0).key("out_rating_w").number(r.out_rating_w, 0);
-      w.key("battery_rating_v").number(r.battery_rating_v, 1).key("battery_recharge_v").number(r.battery_recharge_v, 1).key("battery_under_v").number(r.battery_under_v, 1);
-      w.key("battery_bulk_v").number(r.battery_bulk_v, 1).key("battery_float_v").number(r.battery_float_v, 1);
-      w.key("max_charge_a").number(r.max_charge_a, 0).key("max_ac_charge_a").number(r.max_ac_charge_a, 0);
+      write_within(w, "grid_rating_v", r.grid_rating_v, 0, 600, 1); write_within(w, "out_rating_v", r.out_rating_v, 0, 600, 1); write_within(w, "out_rating_hz", r.out_rating_hz, 0, 100, 1);
+      write_within(w, "out_rating_va", r.out_rating_va, 0, 1000000, 0); write_within(w, "out_rating_w", r.out_rating_w, 0, 1000000, 0);
+      write_within(w, "battery_rating_v", r.battery_rating_v, 0, 600, 1); write_within(w, "battery_recharge_v", r.battery_recharge_v, 0, 600, 1); write_within(w, "battery_under_v", r.battery_under_v, 0, 600, 1);
+      write_within(w, "battery_bulk_v", r.battery_bulk_v, 0, 600, 1); write_within(w, "battery_float_v", r.battery_float_v, 0, 600, 1);
+      write_within(w, "max_charge_a", r.max_charge_a, 0, 2000, 0); write_within(w, "max_ac_charge_a", r.max_ac_charge_a, 0, 2000, 0);
       if (*voltronic::battery_type_name(r.battery_type) != 0) w.field("battery_type", voltronic::battery_type_name(r.battery_type));
       if (*voltronic::input_range_name(r.input_range) != 0) w.field("input_range", voltronic::input_range_name(r.input_range));
       if (*voltronic::output_priority_name(r.output_priority) != 0) w.field("output_priority", voltronic::output_priority_name(r.output_priority));
@@ -106,16 +119,46 @@ inline int last_present(const std::vector<pylontech::Module>& modules) {
   return last;
 }
 
+// What the battery says is not well: each state column that is not normal and each cell's own, with the console's word, and the cells it does not read.
+inline void write_flags(json::Writer& w, const pylontech::Module& m) {
+  struct Column { const char* name; const std::string* word; };
+  const Column columns[] = {{"base", &m.base_state}, {"voltage", &m.voltage_state}, {"current", &m.current_state}, {"temperature", &m.temperature_state},
+                            {"cell_voltage", &m.cell_voltage_state}, {"cell_temperature", &m.cell_temperature_state}, {"mosfet_temperature", &m.mosfet_temperature_state},
+                            {"system", &m.system_alarm_state}};
+  int written = 0;
+  const auto one = [&](const char* column, const std::string& word, int cell) {
+    if (word.empty() || word.size() > 16 || written >= 48) return;
+    if (written++ == 0) w.key("flags").begin_array();
+    w.begin_object().field("column", column).field("word", word);
+    if (cell >= 0 && cell <= 31) w.field("cell", cell);
+    w.end_object();
+  };
+  for (const Column& c : columns)
+    if (c.name[0] == 'b' ? pylontech::base_word_matters(*c.word) : pylontech::state_word_matters(*c.word)) one(c.name, *c.word, -1);
+  for (const pylontech::CellFlag& f : m.cell_flags) one(f.column, f.word, f.cell);
+  if (written > 0) w.end_array();
+  if (!m.cells_unread.empty()) {
+    w.key("cells_unread").begin_array();
+    for (const int cell : m.cells_unread) if (cell >= 0 && cell <= 31) w.integer(cell);
+    w.end_array();
+  }
+}
+
 // A battery stack's message from the console's table. The console lists sixteen places whatever is connected: the empty ones after the last battery are not sent. An empty place
 // between two batteries is, and so is one up to `keep_up_to` (a battery seen before that is not there now).
-inline std::string battery_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, const std::vector<pylontech::Module>& modules, int keep_up_to = 0) {
+inline std::string battery_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, const std::vector<pylontech::Module>& read, int keep_up_to = 0) {
+  std::vector<pylontech::Module> modules = read;   // whatever protocol they came by: no figure beyond the contract goes out
+  for (pylontech::Module& m : modules) pylontech::keep_plausible(m);
   const pylontech::Stack s = pylontech::summarise(modules);
   json::Writer w;
   w.begin_object().field("kind", "battery").field("node_id", node_id).field("device", device).key("timestamp_ms").integer(static_cast<long long>(timestamp_ms));
   w.field("modules", s.modules);
   if (s.modules > 0 && !s.model.empty()) w.field("model", s.model);
   if (s.modules > 0) {
-    w.field("state", s.state).key("voltage_v").number(s.voltage_v, 2).key("current_a").number(s.current_a, 2);
+    write_maker(w, s.manufacturer, s.manufacturer_deduced);
+    if (!s.state.empty()) w.field("state", s.state);
+    if (s.has_voltage) w.key("voltage_v").number(s.voltage_v, 2);
+    if (s.has_current) write_within(w, "current_a", s.current_a, -16000, 16000, 2);
     // a value the equipment does not give is left out: a zero would read as a measurement
     if (s.has_temperature) w.key("temperature_min_c").number(s.temperature_min_c, 1).key("temperature_max_c").number(s.temperature_max_c, 1);
     if (s.cell_high_v > 0) w.key("cell_min_v").number(s.cell_low_v, 3).key("cell_max_v").number(s.cell_high_v, 3);
@@ -138,10 +181,12 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
     w.begin_object().field("n", m.number).field("present", m.present);
     if (m.present) {
       if (!m.model.empty()) w.field("model", m.model);
-      w.key("voltage_v").number(m.voltage_v, 3).key("current_a").number(m.current_a, 3);
+      write_maker(w, m.manufacturer, m.manufacturer_deduced);
+      if (m.has_voltage) w.key("voltage_v").number(m.voltage_v, 3);
+      if (m.has_current) w.key("current_a").number(m.current_a, 3);
       if (m.has_temperature) w.key("temperature_c").number(m.temperature_c, 1);
       if (m.soc_percent >= 0) w.field("soc_percent", m.soc_percent);
-      w.field("state", m.base_state);
+      if (!m.base_state.empty()) w.field("state", m.base_state);
       if (m.capacity_ah >= 0) w.key("capacity_ah").number(m.capacity_ah, 2);
       if (m.full_capacity_ah >= 0) w.key("full_capacity_ah").number(m.full_capacity_ah, 2);
       if (m.cycles >= 0) w.field("cycles", m.cycles);
@@ -170,12 +215,16 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
         for (int cell : m.soh_abnormal) w.integer(cell);
         w.end_array();
       }
-      if (!m.counters.empty()) { w.key("counters").begin_object(); for (const auto& counter : m.counters) w.key(counter.first).integer(counter.second); w.end_object(); }
-      if (m.last_event.valid) {
+      if (!m.counters.empty()) {
+        w.key("counters").begin_object();
+        for (const auto& counter : m.counters) if (counter.second >= 0 && counter.second <= 9999999999LL) w.key(counter.first).integer(counter.second);
+        w.end_object();
+      }
+      if (m.last_event.valid && m.last_event.index >= 0 && m.last_event.index <= 1000000 && !m.last_event.time.empty() && m.last_event.time.size() <= 40) {
         const pylontech::Event& ev = m.last_event;
         w.key("last_event").begin_object().field("index", ev.index).field("time", ev.time);
-        w.key("voltage_v").number(ev.voltage_v, 3).key("current_a").number(ev.current_a, 3).key("temperature_c").number(ev.temperature_c, 1);
-        if (ev.percent >= 0) w.field("percent", ev.percent);
+        write_within(w, "voltage_v", ev.voltage_v, 0, 1000, 3); write_within(w, "current_a", ev.current_a, -1000, 1000, 3); write_within(w, "temperature_c", ev.temperature_c, -50, 200, 1);
+        if (ev.percent >= 0 && ev.percent <= 100) w.field("percent", ev.percent);
         if (!ev.base_state.empty()) w.field("base_state", ev.base_state);
         if (!ev.voltage_state.empty()) w.field("voltage_state", ev.voltage_state);
         if (!ev.current_state.empty()) w.field("current_state", ev.current_state);
@@ -187,6 +236,7 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
         w.end_object();
       }
       if (!m.cells_v.empty()) { w.key("cells_v").begin_array(); for (double v : m.cells_v) w.number(v, 3); w.end_array(); }
+      write_flags(w, m);
       if (!m.temperatures_c.empty()) { w.key("temperatures_c").begin_array(); for (double v : m.temperatures_c) w.number(v, 1); w.end_array(); }
     }
     w.end_object();

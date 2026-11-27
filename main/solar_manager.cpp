@@ -285,7 +285,7 @@ void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::
     // the console answers for the module it is connected to (the first of the stack)
     const std::vector<solar::pylontech::Module>& modules = poller.modules();
     if (poller.kind() == config::Kind::kPylontech && !modules.empty()) {
-      facts.present = modules.front().present;
+      facts.present = modules.front().present && modules.front().has_current;   // a current that is not known is not taken for an idle battery
       facts.current_ma = static_cast<long>(modules.front().current_a * 1000.0);
       facts.critical_alarm = solar::pylontech::summarise(modules).alarm;
     }

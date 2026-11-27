@@ -4,6 +4,9 @@
 // An order arrives as a JSON message on the broker. Writing is two steps, like the switching of the electrical node: `arm` reads the battery (identity, state), checks every precondition and
 // answers with a one-time token and the exact operation it will do; `execute` carries the token and the same operation, and only then is anything written. The service password is the node's
 // own setting: it never appears in an answer, a log or a message. Everything is refused while the setting is off. Nothing here has run on a board.
+//
+// The node's own panel takes the same way (panel_arm, panel_execute ...): the same checks, guard and runner, with the answers kept for the panel instead of published, the one-time token kept in
+// the node (the browser never sees it) and a record of who did what in flash. Its rules are in core/battery_panel.hpp. With the writes off nothing of it is allocated.
 #include "battery_maintenance.hpp"
 
 #include <ctime>
@@ -20,17 +23,22 @@ extern "C" {
 #include "freertos/task.h"
 }
 #include "core/battery_ops.hpp"
+#include "core/battery_panel.hpp"
 #include "core/command_sig.hpp"
 #include "core/battery_stage.hpp"
 #include "core/json.hpp"
 #include "entropy.hpp"
 #include "mqtt_link.hpp"
 #include "node_control.hpp"
+#include "node_store.hpp"
+#include "psram_new.hpp"
 #include "solar_manager.hpp"
 
 namespace armor::maintenance {
 namespace {
 namespace bat = armor::solar::battery;
+namespace bp = armor::solar::battery::panel;
+constexpr char kAuditKey[] = "bataudit", kCampaignKey[] = "batcamp";
 constexpr char kTag[] = "armor-battery";
 
 std::mutex g_lock;
@@ -93,6 +101,8 @@ std::string token_hex() {
 struct Context {
   std::string command_id, action, op;
   int port = 0;
+  bool panel = false;           // asked by the node's own panel: the answer is kept for it, not published
+  std::string user, serial;     // who, and the serial number typed (for the record)
 };
 
 // One answer. The fields that do not apply are left out.
@@ -112,7 +122,7 @@ struct Reply {
   std::size_t received = 0;
 };
 
-void say(const Reply& r) {
+std::string reply_json(const Reply& r, bool with_token) {
   json::Writer w;
   w.begin_object().field("kind", "solar_battery_result").field("node_id", g_node);
   w.key("timestamp_ms").integer(static_cast<long long>(mqtt_link::clock_is_set() ? mqtt_link::wall_clock_ms() : uptime_ms()));
@@ -120,7 +130,7 @@ void say(const Reply& r) {
   if (!r.ctx.op.empty()) w.field("op", r.ctx.op);
   w.field("stage", r.stage).field("accepted", r.accepted).field("refusal", r.refusal);
   if (!r.code.empty() && !r.has_result) w.field("code", r.code);
-  if (!r.token.empty()) w.field("token", r.token);
+  if (with_token && !r.token.empty()) w.field("token", r.token);
   if (!r.canonical.empty()) w.field("canonical", r.canonical);
   if (!r.summary.empty()) w.field("summary", r.summary);
   if (!r.risk.empty()) w.field("risk", r.risk).field("atomic", r.atomic);
@@ -145,7 +155,88 @@ void say(const Reply& r) {
   }
   if (r.stage == "staged") w.field("received", static_cast<unsigned>(r.received));
   w.end_object();
-  mqtt_link::publish("armor/solar/" + g_node + "/maintenance/result", w.str());
+  return w.str();
+}
+
+// ---- what is kept for the panel ---------------------------------------------------------------------------------------------------------------
+// g_panel_lock is only ever taken after g_lock (or alone), never the other way round: an answer is sometimes given with g_lock held.
+
+struct PanelPort {
+  std::string session, user, op, serial, command_id, stage, reply, token;
+  json::Value params;
+  std::uint64_t armed_ms = 0;
+  bool campaign = false;         // a step of the campaign
+};
+struct PanelState {
+  PanelPort ports[bat::Guard::kPorts];
+  bp::OrderLimit orders;
+  bp::Campaign campaign;
+};
+std::mutex g_panel_lock;
+std::unique_ptr<PanelState> g_panel;   // made only when the panel is first used with the writes on, in the external memory
+
+// Call with g_panel_lock held.
+PanelState& panel_data() {
+  if (!g_panel) {
+    std::string kept;
+    const bool has = store::blob_read(kCampaignKey, kept);
+    const memory::ExternalScope in_psram;
+    g_panel = std::make_unique<PanelState>();
+    if (has && g_panel->campaign.from_json(kept)) g_panel->campaign.restarted();
+  }
+  return *g_panel;
+}
+
+// The record and the campaign are written to the flash by the worker, never under a lock somebody waits for.
+void note(const std::string& user, int port, const char* event, const std::string& op, const std::string& detail, const std::string& serial) {
+  bp::AuditEntry entry;
+  entry.at_s = mqtt_link::clock_is_set() ? static_cast<std::uint64_t>(mqtt_link::wall_clock_ms() / 1000) : 0;
+  entry.user = user; entry.port = port; entry.event = event; entry.op = op; entry.detail = detail; entry.serial = serial;
+  post([entry] {
+    std::string text;
+    store::blob_read(kAuditKey, text);
+    bp::Audit audit;
+    audit.from_json(text);
+    audit.add(entry);
+    if (!store::blob_write(kAuditKey, audit.to_json())) ESP_LOGW(kTag, "the record of the battery operations could not be written");
+  });
+}
+
+// Call with g_panel_lock held.
+void keep_campaign() {
+  const std::string text = g_panel->campaign.to_json();
+  post([text] { if (!store::blob_write(kCampaignKey, text)) ESP_LOGW(kTag, "the campaign could not be written"); });
+}
+
+void record(const Reply& r) {
+  const std::string serial = r.has_battery && !r.battery.serial.empty() ? r.battery.serial : r.ctx.serial;
+  const std::string user = r.ctx.panel ? r.ctx.user : std::string("server");
+  if (r.stage == "started") note(user, r.ctx.port, "started", r.ctx.op, "", serial);
+  else if (r.stage == "final") note(user, r.ctx.port, "ended", r.ctx.op, r.result.outcome + " " + r.result.code, serial);
+  else if (r.ctx.panel && r.stage == "armed") note(user, r.ctx.port, "armed", r.ctx.op, "", serial);
+  else if (r.ctx.panel && r.stage == "rejected") note(user, r.ctx.port, "refused", r.ctx.op, r.code.empty() ? r.refusal : r.code, serial);
+}
+
+void say(const Reply& r) {
+  record(r);
+  if (!r.ctx.panel) { mqtt_link::publish("armor/solar/" + g_node + "/maintenance/result", reply_json(r, true)); return; }
+  std::lock_guard<std::mutex> guard(g_panel_lock);
+  if (!g_panel || r.ctx.port < 1 || r.ctx.port > bat::Guard::kPorts) return;
+  PanelPort& kept = g_panel->ports[r.ctx.port - 1];
+  if (kept.command_id != r.ctx.command_id) return;   // an older order of this port
+  const memory::ExternalScope in_psram;
+  kept.stage = r.stage == "progress" ? std::string("running") : r.stage;
+  kept.reply = reply_json(r, false);
+  if (r.stage == "armed") { kept.token = r.token; kept.armed_ms = uptime_ms(); }
+  bp::Campaign& campaign = g_panel->campaign;
+  if (!kept.campaign || campaign.port != r.ctx.port) return;
+  if (r.stage == "armed") {
+    campaign.armed(r.battery);
+    if (campaign.state != "active") kept.token.clear();   // another battery than the module's: the arm cannot be executed
+  } else if (r.stage == "rejected") campaign.refused(r.code.empty() ? r.refusal : r.code);
+  else if (r.stage == "final") campaign.ended(r.result.outcome, r.result.code);
+  else return;
+  keep_campaign();
 }
 
 void reject(const Context& ctx, const char* why) {
@@ -191,7 +282,12 @@ void finish_job(const Context& ctx, bool uses_image, const bat::Plan& plan, cons
       }
     }
     g_guard.finish(ctx.port, result.wrote, uptime_ms());
-    if (uses_image) g_stage.clear();   // an image is used once
+    bool campaign_goes_on = false;
+    {
+      std::lock_guard<std::mutex> panel(g_panel_lock);
+      campaign_goes_on = ctx.panel && g_panel && g_panel->campaign.state == "active" && g_panel->campaign.port == ctx.port;
+    }
+    if (uses_image && !campaign_goes_on) g_stage.clear();   // an image is used once, except along the modules of a campaign of the panel
   }
   Reply r;
   r.ctx = ctx; r.stage = "final"; r.accepted = true; r.refusal = "none"; r.has_result = true; r.result = result;
@@ -427,11 +523,149 @@ void handle(const std::string& received) {
     say(r);
     return;
   }
-  bat::Op op;
+  bat::Op op = bat::Op::kPreflight;
   if (!bat::op_from_name(ctx.op, op)) { reject(ctx, bat::refusal::kUnknownOp); return; }
   if (ctx.action == "arm") arm(ctx, op, in);
   else if (ctx.action == "execute") execute(ctx, op, in);
   else reject(ctx, bat::refusal::kUnknownOp);
+}
+
+// ---- the orders of the node's own panel --------------------------------------------------------------------------------------------------------
+
+json::Value text_value(const std::string& text) { json::Value v; v.type = json::Type::kString; v.text = text; return v; }
+json::Value number_value(double number) { json::Value v; v.type = json::Type::kNumber; v.number = number; return v; }
+json::Value flag_value(bool on) { json::Value v; v.type = json::Type::kBool; v.boolean = on; return v; }
+void add_member(json::Value& object, const char* name, json::Value value) { object.names.emplace_back(name); object.items.push_back(std::move(value)); }
+
+// The order as the broker would bring it.
+json::Value order_of(const std::string& serial, const json::Value& params, const std::string& token) {
+  json::Value in;
+  in.type = json::Type::kObject;
+  add_member(in, "serial", text_value(serial));
+  add_member(in, "params", params);
+  if (!token.empty()) add_member(in, "token", text_value(token));
+  return in;
+}
+
+bool writes_on() {
+  std::lock_guard<std::mutex> guard(g_lock);
+  return g_enabled && g_ready != nullptr;
+}
+
+bool under_way(const std::string& stage) { return stage == "arming" || stage == "starting" || stage == "started" || stage == "running"; }
+
+// An arm that waited too long is over. Call with g_panel_lock held.
+void lapse(PanelState& state, int port) {
+  PanelPort& kept = state.ports[port - 1];
+  if (kept.stage != "armed" || uptime_ms() - kept.armed_ms <= bat::Guard::kArmWindowMs) return;
+  kept.stage = "expired";
+  kept.token.clear();
+  if (kept.campaign && state.campaign.port == port) { state.campaign.lapsed("expired"); keep_campaign(); }
+}
+
+std::string arm_from_panel(const std::string& user, const std::string& session, int port, const std::string& op_name, const json::Value& given, const std::string& serial, bool campaign) {
+  bat::Op op = bat::Op::kPreflight;
+  if (!bat::op_from_name(op_name, op)) return bat::refusal::kUnknownOp;
+  if (port < 1 || port > bat::Guard::kPorts) return "invalid_request";
+  json::Value params;
+  params.type = json::Type::kObject;
+  {
+    std::lock_guard<std::mutex> guard(g_lock);
+    if (!g_enabled || g_ready == nullptr) return "battery_write_disabled";
+    if (g_guard.busy(port)) return bat::refusal::kBusy;
+    if (op == bat::Op::kFirmwareUpdate) {
+      // the image's figures are the node's own, never values from the browser
+      g_stage.expire(uptime_ms());
+      const auto image = g_stage.image();
+      if (!image) return bat::refusal::kImageMissing;
+      g_stage.touch(uptime_ms());
+      add_member(params, "image_size", number_value(static_cast<double>(image->size())));
+      add_member(params, "image_crc32", number_value(static_cast<double>(g_stage.crc32())));
+      add_member(params, "image_version", text_value(bp::image_version(*image)));
+      if (given.bool_or("clear_eeprom", false)) add_member(params, "clear_eeprom", flag_value(true));
+      if (given.bool_or("resume", false)) add_member(params, "resume", flag_value(true));
+    } else if (given.is_object()) {
+      params = given;
+    }
+  }
+  Context ctx;
+  ctx.command_id = token_hex().substr(0, 16);
+  ctx.action = "arm"; ctx.op = op_name; ctx.port = port; ctx.panel = true; ctx.user = user; ctx.serial = serial;
+  {
+    std::lock_guard<std::mutex> guard(g_panel_lock);
+    PanelState& state = panel_data();
+    lapse(state, port);
+    PanelPort& kept = state.ports[port - 1];
+    if (under_way(kept.stage)) return bat::refusal::kBusy;
+    if (!state.orders.allow(uptime_ms())) return "too_many_orders";
+    const memory::ExternalScope in_psram;
+    kept = PanelPort();
+    kept.session = session; kept.user = user; kept.op = op_name; kept.serial = serial; kept.command_id = ctx.command_id; kept.stage = "arming"; kept.params = params; kept.campaign = campaign;
+    if (campaign) { state.campaign.checking(); keep_campaign(); }
+  }
+  post([ctx, op, serial, params] { arm(ctx, op, order_of(serial, params, "")); });
+  return "";
+}
+
+std::string execute_from_panel(const std::string& user, const std::string& session, int port, const std::string& serial) {
+  if (port < 1 || port > bat::Guard::kPorts) return "invalid_request";
+  if (!writes_on()) return "battery_write_disabled";
+  Context ctx;
+  std::string token;
+  json::Value params;
+  bat::Op op = bat::Op::kPreflight;
+  {
+    std::lock_guard<std::mutex> guard(g_panel_lock);
+    PanelState& state = panel_data();
+    lapse(state, port);
+    PanelPort& kept = state.ports[port - 1];
+    if (kept.stage == "expired") return bat::refusal::kExpired;
+    // only the session that armed may execute: the token never left the node
+    if (kept.stage != "armed" || kept.token.empty() || kept.session != session || !bat::op_from_name(kept.op, op)) return bat::refusal::kNotArmed;
+    if (!state.orders.allow(uptime_ms())) return "too_many_orders";
+    if (kept.campaign) {
+      const std::string why = state.campaign.can_execute(serial);
+      if (!why.empty()) return why;
+      state.campaign.updating();
+      keep_campaign();
+    }
+    ctx.command_id = kept.command_id; ctx.action = "execute"; ctx.op = kept.op; ctx.port = port; ctx.panel = true; ctx.user = user; ctx.serial = serial;
+    token = kept.token;
+    params = kept.params;
+    kept.token.clear();          // one try
+    kept.stage = "starting";
+  }
+  post([ctx, op, serial, params, token] { execute(ctx, op, order_of(serial, params, token)); });
+  return "";
+}
+
+std::string cancel_from_panel(const std::string& user, int port) {
+  if (port < 1 || port > bat::Guard::kPorts) return "invalid_request";
+  std::string stage, op;
+  {
+    std::lock_guard<std::mutex> guard(g_panel_lock);
+    if (!g_panel) return bat::refusal::kNotArmed;
+    stage = g_panel->ports[port - 1].stage;
+    op = g_panel->ports[port - 1].op;
+  }
+  if (stage == "armed") {
+    { std::lock_guard<std::mutex> guard(g_lock); g_guard.forget(port); }
+    {
+      std::lock_guard<std::mutex> guard(g_panel_lock);
+      PanelPort& kept = g_panel->ports[port - 1];
+      kept.stage = "withdrawn";
+      kept.token.clear();
+      if (kept.campaign && g_panel->campaign.port == port) { g_panel->campaign.lapsed("withdrawn"); keep_campaign(); }
+    }
+    note(user, port, "withdrawn", op, "", "");
+    return "";
+  }
+  if (stage == "starting" || stage == "started" || stage == "running") {
+    if (!manager::cancel_battery_job(static_cast<std::size_t>(port - 1))) return bat::refusal::kNotCancellable;
+    note(user, port, "withdrawn", op, "cancel_requested", "");
+    return "";
+  }
+  return bat::refusal::kNotArmed;
 }
 
 // The broker's client only hands the text over: the reading and the thinking are done by the task of this file.
@@ -457,6 +691,9 @@ void apply(const config::Settings& settings) {
   if (settings.battery.enabled) return;   // switching it ON still waits for the restart; switching it OFF is immediate
   g_enabled = false;
   for (int port = 1; port <= bat::Guard::kPorts; ++port) g_guard.forget(port);   // an order armed a moment ago is no longer valid
+  g_stage.clear();
+  std::lock_guard<std::mutex> panel(g_panel_lock);
+  if (g_panel) for (PanelPort& kept : g_panel->ports) { kept.token.clear(); if (kept.stage == "armed") kept.stage = "withdrawn"; }
 }
 
 void start(const config::Settings& settings) {
@@ -471,6 +708,188 @@ void start(const config::Settings& settings) {
   if (g_ready == nullptr || xTaskCreate(worker, "battery-ops", 12288, nullptr, 4, nullptr) != pdPASS) { ESP_LOGE(kTag, "the battery maintenance task could not be started: it stays off"); g_ready = nullptr; return; }
   mqtt_link::subscribe("armor/solar/" + g_node + "/maintenance/command", on_message);
   ESP_LOGI(kTag, "battery maintenance %s", g_enabled ? "is ON" : "is off");
+}
+
+// ---- the panel ---------------------------------------------------------------------------------------------------------------------------------
+
+void panel_flags(bool& enabled, bool& password) {
+  std::lock_guard<std::mutex> guard(g_lock);
+  enabled = g_enabled && g_ready != nullptr;
+  password = !g_password.empty();
+}
+
+std::string panel_state(int port, const std::string& session) {
+  if (port < 1 || port > bat::Guard::kPorts) port = 1;
+  bool enabled = false, password = false;
+  panel_flags(enabled, password);
+  json::Writer w;
+  w.begin_object().field("enabled", enabled).field("password", password).field("https", true).field("port", port);
+  if (!enabled) { w.end_object(); return w.str(); }
+  const manager::BatteryPortFacts facts = manager::battery_port_facts(static_cast<std::size_t>(port - 1));
+  w.key("facts").begin_object().field("pylontech", facts.pylontech).field("present", facts.present).field("slave", facts.slave).field("current_ma", static_cast<long long>(facts.current_ma))
+      .field("alarm", facts.critical_alarm).end_object();
+  {
+    std::lock_guard<std::mutex> guard(g_lock);
+    g_stage.expire(uptime_ms());
+    const auto image = g_stage.image();
+    w.key("image");
+    if (!image) w.null();
+    else w.begin_object().field("board", bp::image_board(*image)).field("version", bp::image_version(*image)).field("size", static_cast<long long>(image->size())).end_object();
+  }
+  std::lock_guard<std::mutex> guard(g_panel_lock);
+  PanelState& state = panel_data();
+  lapse(state, port);
+  const PanelPort& kept = state.ports[port - 1];
+  w.key("operation");
+  if (kept.stage.empty()) w.null();
+  else {
+    w.begin_object().field("stage", kept.stage).field("op", kept.op).field("user", kept.user).field("mine", kept.session == session).field("campaign", kept.campaign);
+    if (kept.stage == "armed") {
+      const std::uint64_t age = uptime_ms() - kept.armed_ms;
+      w.field("left_s", static_cast<long long>(age < bat::Guard::kArmWindowMs ? (bat::Guard::kArmWindowMs - age) / 1000 : 0));
+    }
+    w.key("reply");
+    if (kept.reply.empty()) w.null();
+    else w.raw(kept.reply);
+    w.end_object();
+  }
+  w.key("campaign").raw(state.campaign.to_json());
+  w.end_object();
+  return w.str();
+}
+
+std::string panel_audit() {
+  std::string text;
+  if (!store::blob_read(kAuditKey, text)) return "[]";
+  bp::Audit audit;
+  audit.from_json(text);
+  return audit.to_json();
+}
+
+void panel_note(const std::string& user, int port, const char* event, const std::string& detail) {
+  if (writes_on()) note(user, port, event, "", detail, "");
+}
+
+std::string panel_arm(const std::string& user, const std::string& session, int port, const std::string& op, const json::Value& params, const std::string& serial) {
+  return arm_from_panel(user, session, port, op, params, serial, false);
+}
+
+std::string panel_execute(const std::string& user, const std::string& session, int port, const std::string& serial) { return execute_from_panel(user, session, port, serial); }
+
+std::string panel_cancel(const std::string& user, int port) { return writes_on() ? cancel_from_panel(user, port) : std::string("battery_write_disabled"); }
+
+std::shared_ptr<std::vector<std::uint8_t>> panel_image_buffer(std::size_t size, std::string& why) {
+  why.clear();
+  std::lock_guard<std::mutex> guard(g_lock);
+  if (!g_enabled || g_ready == nullptr) why = "battery_write_disabled";
+  else if (size < bat::kImageMinBytes || size > bat::kImageMaxBytes) why = "bad_size";
+  for (int port = 1; why.empty() && port <= bat::Guard::kPorts; ++port) if (g_guard.busy(port)) why = bat::refusal::kBusy;
+  // the image waits in the external memory only: without it, nothing is taken
+  if (why.empty() && heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) < size + 65536) why = bat::refusal::kNoMemory;
+  if (!why.empty()) return nullptr;
+  const memory::ExternalScope in_psram;
+  return std::make_shared<std::vector<std::uint8_t>>(size);
+}
+
+std::string panel_image_keep(const std::string& user, std::shared_ptr<std::vector<std::uint8_t>> whole) {
+  if (!whole) return bat::refusal::kImageMissing;
+  const std::string board = bp::image_board(*whole), version = bp::image_version(*whole);
+  if (board.empty()) return "image_header";
+  const std::size_t size = whole->size();
+  {
+    std::lock_guard<std::mutex> guard(g_lock);
+    if (!g_enabled) return "battery_write_disabled";
+    for (int port = 1; port <= bat::Guard::kPorts; ++port) if (g_guard.busy(port)) return bat::refusal::kBusy;
+    if (!g_stage.keep_whole(std::move(whole), uptime_ms()).empty()) return "bad_size";
+  }
+  note(user, 0, "image", "firmware_update", board + " " + version + " " + std::to_string(size), "");
+  return "";
+}
+
+std::string panel_campaign(const std::string& user, const std::string& session, const std::string& action, int port, const std::string& serial, int& module) {
+  module = 0;
+  if (!writes_on()) return "battery_write_disabled";
+  if (action == "create") {
+    if (port < 1 || port > bat::Guard::kPorts) return "invalid_request";
+    const manager::BatteryPortFacts facts = manager::battery_port_facts(static_cast<std::size_t>(port - 1));
+    if (!facts.pylontech) return bat::refusal::kNotPylontech;
+    if (!facts.present || facts.slave) return bat::refusal::kNoBattery;   // the list of a stack is read from its first battery
+    bp::Image image;
+    {
+      std::lock_guard<std::mutex> guard(g_lock);
+      g_stage.expire(uptime_ms());
+      const auto kept = g_stage.image();
+      if (!kept) return bat::refusal::kImageMissing;
+      image.board = bp::image_board(*kept); image.version = bp::image_version(*kept); image.size = kept->size(); image.crc32 = g_stage.crc32();
+      g_stage.touch(uptime_ms());
+    }
+    const std::shared_ptr<const std::string> reading = manager::reading(static_cast<std::size_t>(port - 1));
+    if (!reading) return bat::refusal::kNoBattery;
+    std::lock_guard<std::mutex> guard(g_panel_lock);
+    PanelState& state = panel_data();
+    const memory::ExternalScope in_psram;
+    const std::string why = state.campaign.create(port, user, bp::modules_from_reading(*reading), image, module);
+    if (!why.empty()) { note(user, port, "campaign", "firmware_update", "refused " + why, ""); return why; }
+    keep_campaign();
+    note(user, port, "campaign", "firmware_update", "started " + std::to_string(state.campaign.modules.size()), "");
+    return "";
+  }
+  std::string module_serial;
+  bool resume = false;
+  int at = 0;
+  std::size_t size = 0;
+  std::uint32_t crc = 0;
+  {
+    std::lock_guard<std::mutex> guard(g_panel_lock);
+    PanelState& state = panel_data();
+    bp::Campaign& campaign = state.campaign;
+    if (!campaign.open()) return "campaign_state";
+    at = campaign.port;
+    lapse(state, at);
+    size = campaign.image.size; crc = campaign.image.crc32;
+    if (const bp::Module* m = campaign.module()) { module_serial = m->serial; resume = m->resume; module = m->number; }
+    if (action == "check") {
+      if (!campaign.can_check()) return "campaign_state";
+    } else if (action == "retry") {
+      const std::string why = campaign.retry();
+      if (why.empty()) { keep_campaign(); note(user, at, "campaign", "firmware_update", "retry", module_serial); }
+      return why;
+    } else if (action == "finish") {
+      const std::string why = campaign.finish();
+      if (why.empty()) { keep_campaign(); note(user, at, "campaign", "firmware_update", "finished", ""); }
+      return why;
+    }
+  }
+  if (action == "check") {
+    {
+      std::lock_guard<std::mutex> guard(g_lock);
+      g_stage.expire(uptime_ms());
+      if (!g_stage.image() || g_stage.size() != size || g_stage.crc32() != crc) return bat::refusal::kImageMissing;   // the same image again
+    }
+    json::Value params;
+    params.type = json::Type::kObject;
+    if (resume) add_member(params, "resume", flag_value(true));
+    return arm_from_panel(user, session, at, "firmware_update", params, module_serial, true);
+  }
+  if (action == "execute") return execute_from_panel(user, session, at, serial);
+  if (action == "cancel") {
+    bool armed = false;
+    {
+      std::lock_guard<std::mutex> guard(g_panel_lock);
+      const PanelPort& kept = g_panel->ports[at - 1];
+      armed = kept.campaign && kept.stage == "armed";
+    }
+    if (armed) cancel_from_panel(user, at);
+    std::string why;
+    {
+      std::lock_guard<std::mutex> guard(g_panel_lock);
+      why = g_panel->campaign.cancel();
+      if (why.empty()) keep_campaign();
+    }
+    if (why.empty()) note(user, at, "campaign", "firmware_update", "cancelled", "");
+    return why;
+  }
+  return "invalid_request";
 }
 
 }  // namespace armor::maintenance

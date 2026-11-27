@@ -8,7 +8,12 @@ every operation is a *typed* one: there is no free command, except the expert co
 may answer differently, and the first thing a bench test finds is where. The staged plan to try it on a spare battery is in [BATTERY_BENCH_TEST_PLAN.md](BATTERY_BENCH_TEST_PLAN.md). Changing what a
 battery keeps can void the maker's warranty, and some of it cannot be undone.
 
-## The three locks
+## Two ways in
+
+An order can come from the **server** (Studio and the phone, over the broker) or from the **node's own panel** (the *Battery maintenance* page, below). Both end in the same checks, the same guard and
+the same runner on the node.
+
+## The three locks of the server's way
 
 1. **The node.** The setting `battery.write_enabled` (Network page of the node's panel, administrators) and the battery's **service password**, which the console asks for before it accepts a change.
    The password is stored only in the node, like the other secrets of its settings; the panel only learns that there is one, and it appears in no answer, no log, no message and no transcript.
@@ -114,11 +119,41 @@ and the same serial number as the try that failed on that port, which the node k
 waits up to 90 s for `Program start`, transfers, and never erases the external memory. It can be insisted on up to 10 times (a real battery took its image after several tries). A node that
 restarted has forgotten the failed try (`nothing_to_resume`): the maker's tool is then the way. **Do not switch the battery off and do not send it a different image.**
 
+## From the node's own panel
+
+An administrator can do the same from the panel of the node, with the server and the broker out of the way. The page offers every operation of the table above and the campaign on a stack.
+
+| Lock | What it asks |
+|---|---|
+| The setting | `battery.write_enabled` on (off by default) and the service password saved. Switching it on takes effect after a restart; switching it off is immediate and forgets what was armed |
+| HTTPS | Only over the HTTPS panel. Over plain HTTP the page says so and nothing is read or sent (`https_required`) |
+| The person | An administrator, who types the account's password **again** for every arm, execute and step of a campaign. Wrong ones count like wrong logins |
+| The battery | The serial number typed at the arm **and again** at the execute |
+| Two steps | `arm` reads and checks and makes a one-time token that **stays in the node** (the browser never sees it); only the session that armed may execute, once, within two minutes |
+| Limits | One operation per port, 30 seconds after a write, three wrong tries lock every order for five minutes, at most 20 orders a minute |
+| The node | Not paused or in standby; while an operation is under way the node refuses to restart, reset or change its firmware (`battery_busy`) |
+
+Nothing forces anything: an unknown chip, an image that does not fit or a model with no rule (the US2000 Plus among them) is refused, as for the server.
+
+**The record.** The node keeps the last 24 entries (who, port, what, result, serial number) in its own flash, shown at the bottom of the page. The service password is never in it. Orders of the
+server are noted when they start and end, as `server`.
+
+**The firmware image** is uploaded from the browser straight into the node's external memory (PSRAM), 64 to 512 KiB, never into flash. A cut or stalled upload keeps nothing and nothing is sent to a
+battery. The image is kept 30 minutes (longer while it is being used by a campaign) and is lost with a restart; a node without external memory refuses it (`no_memory`).
+
+**The campaign** follows the server's rules: the list of modules is read from the first battery of the stack, then one module at a time with the cable moved, checked and then executed with its serial
+number typed; a failure stops it, *try again* repeats only the same image on a battery left in its bootloader, and at the end the cable goes back. It is kept in flash: after a restart in the middle
+of a module it comes back stopped (`operation_lost`), and the node no longer remembers the failed try (`nothing_to_resume`).
+
+With the writes off, the page allocates nothing: no list, no image, no record is made.
+
+Not offered by the panel: the *put it back* button of the outputs (run the operation again with the old state, which is in what was read before).
+
 ## What is left, and what is not done
 
 * **A real battery.** All of the above is proven only against the simulated console. See the bench plan.
 * **Reading the limits back.** The format of the console's `config` answer is not known, so the verification only checks that every value written appears in it, and **restoring** previous limits or
   protections is done by running the operation again with the old values (they are in the record of the operation), not by a button. Only the outputs have a *put it back* button.
 * **The current limits** (charge and discharge over-current) are not offered, and neither are `emptyvolt` and `blocksoc`: the maker's files give no range for them.
-* **A battery group.** The console of a stack answers for the module it is plugged into; the operations apply to that module. The panel of the node does not offer the writes or the campaign: Studio does.
+* **A battery group.** The console of a stack answers for the module it is plugged into; the operations apply to that module. A whole stack is updated with the campaign, in Studio or in the node's panel.
 * **The service password** is a setting of the node. There is no way to read it back, and a node that loses its settings has to be given it again.

@@ -29,6 +29,8 @@ add_executable(test_usb test_usb.cpp)
 add_executable(test_port_probe test_port_probe.cpp)
 add_executable(test_battery_write test_battery_write.cpp)
 add_executable(test_runner_edges test_runner_edges.cpp)
+# writing to a battery from the node's own panel: who may ask, the record, the image kept and the campaign on a stack
+add_executable(test_battery_panel test_battery_panel.cpp)
 add_executable(emit_samples emit_samples.cpp)
 add_executable(emit_poller_samples emit_poller_samples.cpp)
 
@@ -83,6 +85,7 @@ add_test(NAME console COMMAND test_console)
 add_test(NAME port_probe COMMAND test_port_probe)
 add_test(NAME battery_write COMMAND test_battery_write)
 add_test(NAME runner_edges COMMAND test_runner_edges)
+add_test(NAME battery_panel COMMAND test_battery_panel)
 add_test(NAME shared COMMAND test_shared)
 add_test(NAME shared_more COMMAND test_shared_more)
 add_test(NAME control COMMAND test_control ${CMAKE_CURRENT_SOURCE_DIR}/../../ARMOR-COMMON/conformance)
@@ -99,6 +102,8 @@ add_test(NAME memory COMMAND test_memory)
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_FOUND)
   add_test(NAME panel_text COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_panel_text.py)
+  # the three levels of a battery's states, and the blink of a cell of poor health
+  add_test(NAME battery_levels COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_battery_levels.py)
   add_test(NAME equipment_options COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_equipment_options.py)
   # the protocol table of the node is the shared catalogue (skipped without ARMOR-COMMON next to it)
   add_test(NAME protocol_catalogue COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_protocols.py)
@@ -116,10 +121,18 @@ if(Python3_FOUND)
   add_test(NAME ble_session COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_ble_session.py)
   # the firmware upload reads the board mark, refuses an image of another board before the boot slot is set, and the switch looks at the other slot
   add_test(NAME ota_board COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_ota_board.py)
+  # the battery page and the node agree on operations, limits and refusals, and every lock of a write is in place
+  add_test(NAME battery_panel_locks COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_battery_panel.py)
   # the routes every node of the family serves, the routes the panel calls, and the stand-in node the panel is tried against
   add_test(NAME routes COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_routes.py)
   # the server and the stand-in node answer only with the codes of core/http_status.hpp
   add_test(NAME http_codes COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_http_codes.py)
   # the tool that turns a capture of the exchanges into a test fixture keeps the entries, skips cut lines and refuses a sign-in
   add_test(NAME frames_tool COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_frames_tool.py)
+endif()
+
+# the battery page of the panel run in a made-up browser (skipped without Node.js)
+find_program(NODE_PROGRAM node)
+if(NODE_PROGRAM)
+  add_test(NAME battery_page COMMAND ${NODE_PROGRAM} ${CMAKE_CURRENT_SOURCE_DIR}/check_battery_page.mjs)
 endif()

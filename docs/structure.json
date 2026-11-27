@@ -109,14 +109,14 @@
         },
         {
           "desc": {
-            "en": "battery_ops, battery_runner, battery_stage, xmodem: the writes to a battery",
-            "es": "battery_ops, battery_runner, battery_stage, xmodem: las escrituras a una batería",
-            "de": "battery_ops, battery_runner, battery_stage, xmodem: die Schreibzugriffe auf eine Batterie",
-            "fr": "battery_ops, battery_runner, battery_stage, xmodem : les écritures vers une batterie",
-            "it": "battery_ops, battery_runner, battery_stage, xmodem: le scritture su una batteria",
-            "ja": "battery_ops、battery_runner、battery_stage、xmodem：バッテリーへの書き込み",
-            "zh": "battery_ops、battery_runner、battery_stage、xmodem：对电池的写入",
-            "pt": "battery_ops, battery_runner, battery_stage, xmodem: as escritas numa bateria"
+            "en": "battery_ops, battery_runner, battery_stage, battery_panel, xmodem: battery writes",
+            "es": "battery_ops, _runner, _stage, _panel, xmodem: las escrituras a una batería",
+            "de": "battery_ops, _runner, _stage, _panel, xmodem: Schreiben auf eine Batterie",
+            "fr": "battery_ops, _runner, _stage, _panel, xmodem : écritures vers une batterie",
+            "it": "battery_ops, _runner, _stage, _panel, xmodem: le scritture su una batteria",
+            "ja": "battery_ops、_runner、_stage、_panel、xmodem：バッテリーへの書き込み",
+            "zh": "battery_ops、_runner、_stage、_panel、xmodem：对电池的写入",
+            "pt": "battery_ops, _runner, _stage, _panel, xmodem: as escritas numa bateria"
           }
         },
         {

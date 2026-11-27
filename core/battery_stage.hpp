@@ -66,6 +66,20 @@ class ImageStage {
 
   // Drops an image that waited too long.
   void expire(std::uint64_t now_ms) { if (buffer_ && now_ms - touched_ms_ > kKeepMs) clear(); }
+  // An image that is being used (a campaign on a stack) waits again from now.
+  void touch(std::uint64_t now_ms) { if (ready_) touched_ms_ = now_ms; }
+
+  // A whole image that arrived at once (uploaded to the node's own panel). "" when it is kept, else stage_size; whatever was kept before is dropped only on success.
+  std::string keep_whole(std::shared_ptr<std::vector<std::uint8_t>> whole, std::uint64_t now_ms) {
+    if (!whole || whole->size() < kImageMinBytes || whole->size() > kImageMaxBytes) return "stage_size";
+    clear();
+    size_ = whole->size();
+    crc_ = battery::crc32(whole->data(), whole->size());
+    buffer_ = std::move(whole);
+    ready_ = true;
+    touched_ms_ = now_ms;
+    return "";
+  }
 
   // One piece. Piece 0 starts a new image (and drops any other). "" when accepted, else why not: stage_invalid, stage_order, stage_size, stage_data, stage_crc.
   std::string add(const std::string& id, std::size_t index, std::size_t total, std::size_t size, std::uint32_t crc, std::string_view data_b64, std::uint64_t now_ms) {

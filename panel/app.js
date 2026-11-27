@@ -240,6 +240,7 @@ const PAGES = [
   { id: "overview", icon: "◎", label: "navOverview", group: "navNode" },
   { id: "ports", icon: "⇋", label: "navPorts", group: "navSolar" },
   { id: "readings", icon: "☀", label: "navReadings", group: "navSolar" },
+  { id: "battery", icon: "▮", label: "navBattery", group: "navSolar", admin: true },
   { id: "network", icon: "⇄", label: "navNetwork", group: "navNetwork" },
   { id: "wifi", icon: "◌", label: "navWifi", group: "navNetwork" },
   { id: "broker", icon: "⌁", label: "navBroker", group: "navNetwork" },
@@ -824,11 +825,22 @@ const deltaLevel = delta => (delta >= lim("delta_bad_mv") ? 2 : delta >= lim("de
 const tempOut = c => c <= lim("temp_low_c") || c >= lim("temp_high_c");
 const cellLevel = (v, limits) => (v < limits[0] || v > limits[3] ? 2 : v < limits[1] || v > limits[2] ? 1 : 0);
 
-// What is wrong with one battery of a stack: level 0 (nothing), 1 (look at it) or 2 (alarm), and the words for it.
+// The three levels of what a battery says of itself: 1 a notice (High, Low and the like: not an alarm), 2 a protection or an alarm (OV, UV, OC, temperature, and any word that
+// is not known: it is shown as it is), 3 a fault of the battery's own electronics (SysError, cells it does not read). The words are the battery's.
+const flagLevel = f => (f.word === "SysError" ? 3 : /^(High|Low|COCAlm|DOCAlm)$/.test(f.word) && f.column !== "system" ? 1 : 2);
+const unreadCells = x => x.cells_unread || [];
+const readCells = x => (x.cells_v || []).filter((v, i) => !unreadCells(x).includes(i));
+const bmsFault = x => unreadCells(x).length > 0 || (x.flags || []).some(f => flagLevel(f) === 3) || x.state === "SysError";
+const flagText = f => (f.cell === undefined ? "" : t("rv_cell", f.cell + 1) + " · ") + t("rv_col_" + f.column) + " · " + f.word;
+const makerText = m => (m.manufacturer ? m.manufacturer + (m.manufacturer_source === "deduced" ? " (" + t("rv_deduced") + ")" : "") : "");
+
+// What is wrong with one battery of a stack: level 0 (nothing), 1 (look at it) or 2 (alarm or fault), and the words for it.
 function moduleHealth(x, limits) {
   const problems = [];
-  const add = (level, key) => problems.push([level, key]);
-  const cells = x.cells_v || [];
+  const add = (level, key, arg) => problems.push([level, key, arg]);
+  if (unreadCells(x).length) add(2, "rv_unread", unreadCells(x).map(i => i + 1).join(", "));
+  (x.flags || []).forEach(f => add(flagLevel(f) === 1 ? 1 : 2, "rv_lvl" + flagLevel(f), flagText(f)));
+  const cells = readCells(x);
   if (cells.length) {
     const low = Math.min(...cells), high = Math.max(...cells), delta = Math.round((high - low) * 1000);
     if (low < limits[1]) add(cellLevel(low, limits), "rv_cellLow");
@@ -838,7 +850,7 @@ function moduleHealth(x, limits) {
   const temps = (x.temperatures_c || []).concat(isNum(x.temperature_c) ? [x.temperature_c] : []);
   if (temps.some(tempOut)) add(2, "rv_tempOut");
   if (x.soh_abnormal && x.soh_abnormal.length) add(1, "rv_soh");
-  if (x.state && !/^(idle|charge|dischg|normal|full|balance)$/i.test(x.state)) add(2, "rv_stateBad");
+  if (!x.flags && x.state && !/^(idle|charge|dischg|normal|full|balance)$/i.test(x.state)) add(2, "rv_stateBad");
   return { level: problems.reduce((a, p) => Math.max(a, p[0]), 0), problems };
 }
 
@@ -867,16 +879,20 @@ const cellColumns = count => (count % 5 === 0 ? 5 : count % 4 === 0 ? 4 : count 
 function cellBars(x, limits) {
   const cells = x.cells_v || [];
   if (!cells.length) return el("p", { class: "muted" }, t("rv_noCells"));
-  const low = Math.min(...cells), high = Math.max(...cells), abnormal = x.soh_abnormal || [];
+  // soh_abnormal and cells_unread count from 0, like cells_v: the console's own `bat` and `soh` tables number the cells from 0. A person counts from 1.
+  const read = readCells(x), low = Math.min(...read), high = Math.max(...read), abnormal = x.soh_abnormal || [];
   const box = el("div", { class: "rv-cells" }, cells.map((v, i) => {
-    const level = cellLevel(v, limits);
+    const unread = unreadCells(x).includes(i), poor = abnormal.includes(i);
+    const level = unread ? 2 : cellLevel(v, limits);
     const bar = el("i");
     bar.style.width = Math.max(6, Math.min(100, (v - limits[0]) / (limits[3] - limits[0]) * 100)) + "%";
     // (the marks of the highest and the lowest cell have names of their own: a bare "top" is the header of the page in style.css)
-    const mark = high - low >= 0.01 ? (v === high ? " rv-max" : v === low ? " rv-min" : "") : "";
-    const cell = el("div", { class: "rv-cell " + levelClass(level) + mark + (abnormal.includes(i) ? " soh" : ""), title: t("rv_cell", i + 1) + ": " + v.toFixed(3) + " V" },
-      el("small", {}, String(i + 1)), el("b", {}, v.toFixed(3)), el("span", { class: "rv-tube" }, bar));
-    return level === 2 ? blink(cell) : cell;
+    const mark = !unread && high - low >= 0.01 ? (v === high ? " rv-max" : v === low ? " rv-min" : "") : "";
+    const words = (unread ? " · " + t("rv_notRead") : "") + (poor ? " · " + t("rv_sohBad") : "");
+    const cell = el("div", { class: "rv-cell " + levelClass(level) + mark + (poor ? " soh" : "") + (unread ? " unread" : ""), title: t("rv_cell", i + 1) + ": " + v.toFixed(3) + " V" + words },
+      el("small", {}, String(i + 1)), el("b", {}, unread ? "✕ 0 V" : v.toFixed(3)), el("span", { class: "rv-tube" }, bar));
+    // a cell of poor health blinks in red, bar and all; a cell that is not read is red and still (a fault is told without a fuss)
+    return poor || (level === 2 && !unread) ? blink(cell) : cell;
   }));
   box.style.setProperty("--cols", String(cellColumns(cells.length)));
   return box;
@@ -888,28 +904,29 @@ const noSheet = x => !!x.present && !!(x.cells_v && x.cells_v.length) && x.model
 function moduleCard(x, limits, key, console_) {
   if (!x.present) return el("div", { class: "rv-module absent" }, el("header", {}, el("h3", {}, t("rd_module") + " " + x.n), el("span", { class: "pill" }, t("rv_absent"))));
   const health = moduleHealth(x, limits), cells = x.cells_v || [];
-  const delta = cells.length ? Math.round((Math.max(...cells) - Math.min(...cells)) * 1000) : null;
-  const current = x.current_a;
+  const read = readCells(x);
+  const delta = read.length ? Math.round((Math.max(...read) - Math.min(...read)) * 1000) : null;
+  const current = x.current_a, fault = bmsFault(x);
   const flow = current > 0.5 ? "rv_charging" : current < -0.5 ? "rv_discharging" : "rv_idle";
   const details = [x.health_percent === undefined ? null : [t("rv_health"), x.health_percent + " %"], x.cycles === undefined ? null : [t("rd_cycles"), x.cycles],
     x.capacity_ah === undefined ? null : [t("rd_capacity"), num(x.capacity_ah, 1) + " / " + num(x.full_capacity_ah, 1) + " Ah"],
     x.temperatures_c ? [t("rd_temp"), x.temperatures_c.map(c => num(c, 1)).join(" · ") + " °C"] : null, x.state ? [t("rd_state"), x.state] : null,
-    x.model ? [t("rv_model"), x.model] : null, x.serial ? [t("rv_serial"), x.serial] : null, x.chip ? [t("rv_chip"), t("rv_chip_" + x.chip)] : null, x.board ? [t("rv_board"), x.board] : null,
+    x.model ? [t("rv_model"), x.model] : null, x.manufacturer ? [t("rv_maker"), makerText(x)] : null, x.serial ? [t("rv_serial"), x.serial] : null, x.chip ? [t("rv_chip"), t("rv_chip_" + x.chip)] : null, x.board ? [t("rv_board"), x.board] : null,
     x.specification ? [t("rv_spec"), x.specification] : null, x.soft_version ? [t("firmware"), x.soft_version] : null, x.main_soft_version ? [t("rv_mainSoft"), x.main_soft_version] : null,
     x.boot_version ? [t("rv_boot"), x.boot_version] : null, x.comm_version ? [t("rv_comm"), x.comm_version] : null, x.board_version ? [t("rv_boardVersion"), x.board_version] : null,
     x.release_date ? [t("rv_released"), x.release_date] : null,
     x.soh_abnormal && x.soh_abnormal.length ? [t("rv_soh"), x.soh_abnormal.map(i => i + 1).join(", ")] : null,
     x.last_event ? [t("rv_event"), [x.last_event.time, x.last_event.voltage_state, x.last_event.current_state, x.last_event.temperature_state, x.last_event.power_events, x.last_event.battery_events].filter(Boolean).join(" · ")] : null].filter(Boolean);
-  const box = el("div", { class: "rv-module " + levelClass(health.level) },
-    el("header", {}, el("h3", {}, t("rd_module") + " " + x.n), el("span", { class: "pill " + levelClass(health.level) }, health.level ? t(health.level === 2 ? "rd_alarm" : "rv_check") : t(flow))),
+  const box = el("div", { class: "rv-module " + levelClass(health.level) + (fault ? " fault" : "") },
+    el("header", {}, el("h3", {}, t("rd_module") + " " + x.n), el("span", { class: "pill " + levelClass(health.level) }, fault ? t("rv_lvl3") : health.level ? t(health.level === 2 ? "rd_alarm" : "rv_check") : t(flow))),
     el("div", { class: "rv-soc" }, meter(x.soc_percent, socKind(x.soc_percent)), el("strong", {}, x.soc_percent === undefined ? "—" : x.soc_percent + " %")),
     el("div", { class: "rv-chips" }, chip("V", num(x.voltage_v, 2)), chip("A", num(current, 2)), chip("°C", num(x.temperature_c, 1), isNum(x.temperature_c) && tempOut(x.temperature_c) ? 2 : undefined),
       delta === null ? null : chip("Δ mV", String(delta), deltaLevel(delta))),
     cellBars(x, limits),
     console_ && noSheet(x) ? el("p", { class: "muted rv-nosheet" }, t("rv_noSheet")) : null,
-    health.problems.length ? el("ul", { class: "rv-problems" }, health.problems.map(p => el("li", { class: levelClass(p[0]) }, t(p[1])))) : null,
+    health.problems.length ? el("ul", { class: "rv-problems" }, health.problems.map(p => el("li", { class: levelClass(p[0]) }, p[2] === undefined ? t(p[1]) : p[1] === "rv_unread" ? t(p[1], p[2]) : t(p[1]) + ": " + p[2]))) : null,
     details.length ? el("details", { open: !!S.open[key], ontoggle: e => { S.open[key] = e.target.open; } }, el("summary", {}, t("rv_details")), kv(details)) : null);
-  return health.level === 2 ? blink(box) : box;
+  return health.level === 2 && !fault ? blink(box) : box;
 }
 
 const stale = port => port.state !== "reporting";
@@ -920,11 +937,11 @@ const stackAlarm = m => !!m.alarm || !!m.protecting || (m.stack || []).some(x =>
 const aboutFull = m => ((m.stack || []).some(x => x.present && x.full_capacity_ah === undefined) ? "≈ " : "");
 
 function batterySection(port, m) {
-  const limits = cellLimits(m), alarm = stackAlarm(m);
+  const limits = cellLimits(m), alarm = stackAlarm(m), fault = (m.stack || []).some(x => x.present && bmsFault(x));
   const head = el("header", { class: "rv-head" },
-    el("div", {}, el("h2", {}, m.device), el("p", { class: "muted" }, t("portN", port.port) + " · " + t("rd_battery_stack") + (m.model ? " · " + m.model : "") + " · " + t("rv_batteries", m.modules))),
+    el("div", {}, el("h2", {}, m.device), el("p", { class: "muted" }, t("portN", port.port) + " · " + t("rd_battery_stack") + (m.model ? " · " + m.model : "") + (m.manufacturer ? " · " + makerText(m) : "") + " · " + t("rv_batteries", m.modules))),
     el("div", { class: "rv-pills" }, staleNote(port), psPill(port.state), m.protecting ? el("span", { class: "pill bad" }, t("rv_protect")) : null,
-      m.modules ? el("span", { class: "pill " + (alarm ? "bad" : "ok") }, alarm ? t("rd_alarm") : t("rv_allOk")) : null));
+      m.modules ? el("span", { class: "pill " + (alarm ? "bad" : "ok") }, fault ? t("rv_lvl3") : alarm ? t("rd_alarm") : t("rv_allOk")) : null));
   if (!m.modules) return el("section", { class: "rv-section" }, head, note(t("rd_no_modules")));
   // the batteries the port's limit leaves out are said, not left looking broken
   const setting = S.cfg.ports[port.port - 1], limit = (setting && setting.modules) || 16;
@@ -932,7 +949,7 @@ function batterySection(port, m) {
   const delta = Math.round((m.cell_max_v - m.cell_min_v) * 1000);
   const section = el("section", { class: "rv-section" + (stale(port) ? " old" : "") }, head, beyond,
     el("div", { class: "rv-summary" }, ring(m.soc_percent),
-      el("div", { class: "rv-chips" }, chip(t("rd_voltage"), num(m.voltage_v, 2) + " V · " + num(m.current_a, 1) + " A"), chip(t("rv_power"), watts(isNum(m.power_w) ? m.power_w : m.voltage_v * m.current_a)),
+      el("div", { class: "rv-chips" }, chip(t("rd_voltage"), num(m.voltage_v, 2) + " V · " + num(m.current_a, 1) + " A"), chip(t("rv_power"), watts(isNum(m.power_w) ? m.power_w : isNum(m.voltage_v) && isNum(m.current_a) ? m.voltage_v * m.current_a : undefined)),
         chip(t("rv_cellRange"), num(m.cell_min_v, 3) + " – " + num(m.cell_max_v, 3) + " V"), chip("Δ mV", String(delta), deltaLevel(delta)),
         chip(t("rd_temp"), num(m.temperature_min_c, 1) + " – " + num(m.temperature_max_c, 1) + " °C"),
         m.capacity_ah === undefined || m.full_capacity_ah === undefined ? null : chip(t("rd_capacity"), aboutFull(m) + num(m.capacity_ah, 1) + " / " + num(m.full_capacity_ah, 1) + " Ah" + (m.energy_kwh === undefined ? "" : " · " + num(m.energy_kwh, 2) + " kWh")),
@@ -946,7 +963,7 @@ function inverterSection(port, m) {
   const tile = (icon, label, value, detail, percent) => el("div", { class: "rv-tile" }, el("span", { class: "rv-icon", "aria-hidden": "true" }, icon), el("span", {}, label), el("strong", {}, value), el("small", {}, detail), percent === undefined ? null : meter(percent, percent >= 90 ? "bad" : percent >= 70 ? "warn" : "ok"));
   const warnings = (m.warnings || []).map(w => w.replace(/_/g, " "));
   const section = el("section", { class: "rv-section" + (stale(port) ? " old" : "") },
-    el("header", { class: "rv-head" }, el("div", {}, el("h2", {}, m.device), el("p", { class: "muted" }, t("portN", port.port) + " · " + t("rd_inverter") + (port.detail ? " · " + port.detail.toUpperCase() : ""))),
+    el("header", { class: "rv-head" }, el("div", {}, el("h2", {}, m.device), el("p", { class: "muted" }, t("portN", port.port) + " · " + t("rd_inverter") + (port.detail ? " · " + port.detail.toUpperCase() : "") + (m.manufacturer ? " · " + makerText(m) : ""))),
       el("div", { class: "rv-pills" }, staleNote(port), psPill(port.state), el("span", { class: "pill " + (fault ? "bad" : m.mode === "battery" ? "warn" : "ok") }, t("sm_" + m.mode)))),
     el("div", { class: "rv-tiles" },
       tile("☀", t("rd_pv"), watts(m.pv_w), num(m.pv_v, 1) + " V · " + num(m.pv_a, 1) + " A"),
@@ -1306,7 +1323,7 @@ function updatePills() {
 function shell(content) {
   const groups = [...new Set(PAGES.map(p => p.group))];
   const nav = el("nav", { class: "nav" }, groups.map(g => [el("div", { class: "nav-title" }, t(g)),
-    PAGES.filter(p => p.group === g).map(p => el("button", { class: p.id === S.page ? "active" : "", tip: p.label, onclick: () => go(p.id) }, el("span", { class: "ico" }, p.icon), t(p.label)))]));
+    PAGES.filter(p => p.group === g && (!p.admin || isAdmin())).map(p => el("button", { class: p.id === S.page ? "active" : "", tip: p.label, onclick: () => go(p.id) }, el("span", { class: "ico" }, p.icon), t(p.label)))]));
   const langSelect = el("select", { "aria-label": t("language"), onchange: e => { lang = Number(e.target.value); try { localStorage.setItem("armor_lang", LANGS[lang][0]); } catch (error) { /* ignore */ } document.documentElement.lang = LANGS[lang][0]; persistLanguage(); render(); } },
     LANGS.map((l, i) => el("option", { value: String(i), selected: i === lang }, l[1])));
   const page = PAGES.find(p => p.id === S.page);
@@ -1336,6 +1353,7 @@ function render(full = true) {
     case "broker": content = brokerPage(); break;
     case "ports": content = portsPage(); break;
     case "readings": content = readingsPage(); break;
+    case "battery": content = loadedBatteryPage(); break;
     case "users": content = usersPage(); break;
     case "update": content = updatePage(); break;
     case "help": content = helpPage(); break;
@@ -1345,6 +1363,13 @@ function render(full = true) {
   $app.replaceChildren(shell(content));
   updatePills();
   refreshBar();
+}
+
+// The page that writes to batteries is a script of its own (maintenance.js), asked for when it is first opened.
+function loadedBatteryPage() {
+  if (typeof batteryPage === "function") return batteryPage();
+  if (!document.getElementById("bm-js")) document.head.append(el("script", { id: "bm-js", src: "maintenance.js", onload: () => render() }));
+  return el("p", { class: "muted" }, t("loading"));
 }
 
 // ---- login and set-up screens -----------------------------------------------------------------------------------------------------------

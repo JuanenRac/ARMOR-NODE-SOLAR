@@ -230,7 +230,7 @@ class Poller {
     ready_ = false;
     topic = solar::topic(node_id_, device_);
     if (topic.empty()) return false;
-    if (driver_ && driver_->inverter()) { InverterExtras extras; extras.warnings_unknown = !driver_->out().warnings_known; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
+    if (driver_ && driver_->inverter()) { InverterExtras extras; extras.warnings_unknown = !driver_->out().warnings_known; if (const char* maker = protocol_maker(kind_)) { extras.manufacturer = maker; extras.manufacturer_deduced = true; } payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
     else if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.warnings_unknown = dialect_ == Dialect::kRevo || dialect_ == Dialect::kPi41 || dialect_ == Dialect::kPi34 || !warnings_read_; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
     else {   // a Pylontech stack or an ANT-BMS (one module)
       const int present = last_present(modules_);
@@ -292,13 +292,19 @@ class Poller {
   enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kPs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kAnt, kDriver };
   enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34, kPi00, kPi17 };
   // What `info`, `stat`, `data event` and `soh` said of one module. at_ms: the last full round; tried_ms and misses: the tries while something is still missing.
-  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; pylontech::DataPlate plate; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0, tried_ms = 0; int misses = 0; bool valid = false; };
+  struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; pylontech::DataPlate plate; std::string manufacturer; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0, tried_ms = 0; int misses = 0; bool valid = false; };
 
   // Whether the sheet of a module is still missing: its rated capacity (`info`) or its history (`stat`).
   static bool incomplete(const Extras& e) { return e.full_capacity_ah < 0 || (e.cycles < 0 && e.counters.empty()); }
   // What was kept from earlier answers goes into whatever this module has not said now.
+  // The maker a protocol tells by itself: a protocol that only one maker's equipment speaks. The Voltronic dialects and the Modbus maps are sold under many names: nothing is said.
+  static const char* protocol_maker(config::Kind kind) {
+    return kind == config::Kind::kAnt ? "ANT" : kind == config::Kind::kDaly ? "Daly" : kind == config::Kind::kJbd ? "JBD" : kind == config::Kind::kJk ? "JK"
+           : kind == config::Kind::kVedirect ? "Victron Energy" : nullptr;
+  }
   static void fill_from_kept(pylontech::Module& m, const Extras& e) {
     if (m.model.empty()) m.model = e.model;
+    if (m.manufacturer.empty()) m.manufacturer = e.manufacturer;
     if (m.full_capacity_ah < 0) m.full_capacity_ah = e.full_capacity_ah;
     if (m.cycles < 0) m.cycles = e.cycles;
     if (m.health_percent < 0) m.health_percent = e.health_percent;
@@ -391,7 +397,8 @@ class Poller {
   void finish(std::uint64_t now_ms) {
     step_ = Step::kIdle;
     ready_ = true;
-    if (kind_ == config::Kind::kPylontech) for (pylontech::Module& m : modules_) pylontech::estimate_remaining(m);
+    if (kind_ == config::Kind::kPylontech) for (pylontech::Module& m : modules_) { pylontech::estimate_remaining(m); pylontech::deduce_maker(m); }
+    else if (const char* maker = protocol_maker(kind_)) for (pylontech::Module& m : modules_) { m.manufacturer = maker; m.manufacturer_deduced = true; }
     next_cycle_ms_ = cycle_started_ms_ + poll_ms_;
     if (next_cycle_ms_ < now_ms) next_cycle_ms_ = now_ms;
     buffer_.clear();
@@ -709,6 +716,8 @@ class Poller {
       // not this module's turn: it keeps the cells of its last one
       const CellsCache& cache = cells_cache_[static_cast<std::size_t>(number)];
       pylontech::attach_cells(modules_, number, cache.cells);
+      modules_[module_at_].cell_flags = cache.flags;
+      modules_[module_at_].cells_unread = cache.unread;
       if (cache.remaining_ah >= 0) modules_[module_at_].capacity_ah = cache.remaining_ah;
       modules_[module_at_].balancing = cache.balancing;
       after_bat(now_ms);
@@ -771,11 +780,20 @@ class Poller {
       double remaining_ah = -1;
       int balancing = 0;
       const bool read = pylontech::parse_bat(buffer_, cells, &remaining_ah, &balancing) > 0;
-      if (read && !pylontech::cells_match_row(modules_[module_at_], cells)) {
+      std::vector<pylontech::CellFlag> flags;
+      pylontech::parse_cell_flags(buffer_, flags);
+      // A cell that reads 0 V for the first time may be bytes lost on the line: that table waits. Read as 0 V again, it is the battery that does not read the cell, and it is told.
+      const std::uint32_t zeros = read ? pylontech::unread_mask(cells) : 0;
+      CellsCache& seen = cells_cache_[static_cast<std::size_t>(modules_[module_at_].number)];
+      const bool unconfirmed = (zeros & ~seen.zeros) != 0;
+      if (read) seen.zeros = zeros;
+      if (read && (unconfirmed || !pylontech::cells_match_row(modules_[module_at_], cells))) {
         // a table that does not agree with the module's own row is not published: the module keeps the cells of its last good turn
-        stats_.last_error = "bat table does not match pwr";
+        stats_.last_error = unconfirmed ? "bat table with a cell at 0 V, to be read again" : "bat table does not match pwr";
         const CellsCache& kept = cells_cache_[static_cast<std::size_t>(modules_[module_at_].number)];
         pylontech::attach_cells(modules_, modules_[module_at_].number, kept.cells);
+        modules_[module_at_].cell_flags = kept.flags;
+        modules_[module_at_].cells_unread = kept.unread;
         if (kept.remaining_ah >= 0) modules_[module_at_].capacity_ah = kept.remaining_ah;
         modules_[module_at_].balancing = kept.balancing;
       } else if (read) {
@@ -783,6 +801,10 @@ class Poller {
         if (remaining_ah >= 0) modules_[module_at_].capacity_ah = remaining_ah;
         modules_[module_at_].balancing = balancing;
         CellsCache& cache = cells_cache_[static_cast<std::size_t>(modules_[module_at_].number)];
+        std::vector<int> unread;
+        for (int i = 0; i < 32; ++i) if (zeros & (1u << i)) unread.push_back(i);
+        modules_[module_at_].cell_flags = cache.flags = flags;
+        modules_[module_at_].cells_unread = cache.unread = unread;
         cache.cells = cells;
         cache.remaining_ah = remaining_ah;
         cache.balancing = balancing;
@@ -862,7 +884,7 @@ class Poller {
     pylontech::Module& m = modules_[module_at_];
     Extras& e = extras_[static_cast<std::size_t>(m.number)];
     fill_from_kept(m, e);   // a question that got no answer this time does not take away what the module told before
-    e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.counters = m.counters; e.plate = m.plate; if (m.last_event.valid) e.last_event = m.last_event; e.cell_count = m.cell_count; e.board_version = m.board_version; e.main_soft_version = m.main_soft_version; e.soft_version = m.soft_version; e.max_charge_a = m.max_charge_a; e.max_discharge_a = m.max_discharge_a; e.console_baud = m.console_baud; e.soh_counts = m.soh_counts; e.soh_abnormal = m.soh_abnormal;
+    e.manufacturer = m.manufacturer; e.model = m.model; e.full_capacity_ah = m.full_capacity_ah; e.cycles = m.cycles; e.health_percent = m.health_percent; e.counters = m.counters; e.plate = m.plate; if (m.last_event.valid) e.last_event = m.last_event; e.cell_count = m.cell_count; e.board_version = m.board_version; e.main_soft_version = m.main_soft_version; e.soft_version = m.soft_version; e.max_charge_a = m.max_charge_a; e.max_discharge_a = m.max_discharge_a; e.console_baud = m.console_baud; e.soh_counts = m.soh_counts; e.soh_abnormal = m.soh_abnormal;
     if (!catching_up_) e.at_ms = now_ms;
     e.tried_ms = now_ms;
     e.misses = !incomplete(e) ? 0 : e.misses < kExtrasQuickTries ? e.misses + 1 : e.misses;
@@ -907,6 +929,8 @@ class Poller {
       const int number = modules_[module_at_].number;
       const CellsCache& cache = cells_cache_[static_cast<std::size_t>(number)];
       if (!cache.cells.empty()) pylontech::attach_cells(modules_, number, cache.cells);
+      modules_[module_at_].cell_flags = cache.flags;
+      modules_[module_at_].cells_unread = cache.unread;
       if (cache.remaining_ah >= 0) modules_[module_at_].capacity_ah = cache.remaining_ah;
       modules_[module_at_].balancing = cache.balancing;
       after_bat(now_ms);
@@ -957,7 +981,8 @@ class Poller {
   int cells_per_cycle_ = 0;
   int bat_cursor_ = 1;                // the module whose cells come next in the rotation
   std::uint32_t cells_wanted_ = 0;    // bit n: this cycle asks the cells of module n
-  struct CellsCache { std::vector<double> cells; double remaining_ah = -1; int balancing = -1; };
+  // zeros: the cells that read 0 V in the last table of the module, published or not (see rx_pylontech)
+  struct CellsCache { std::vector<double> cells; double remaining_ah = -1; int balancing = -1; std::vector<pylontech::CellFlag> flags; std::vector<int> unread; std::uint32_t zeros = 0; };
   std::array<CellsCache, 17> cells_cache_;   // by module number: the cells and remaining charge of the module's last turn
   Step step_ = Step::kIdle;
   std::uint64_t deadline_ms_ = 0, next_cycle_ms_ = 0, cycle_started_ms_ = 0, last_rx_ms_ = 0, last_reading_ms_ = 0;

@@ -21,6 +21,9 @@ const port = Number(process.argv.find(a => /^\d+$/.test(a)) ?? 8090);
 // --board s3-eth: the mock plays the Waveshare ESP32-S3-ETH (a cable, the W5500 pins reserved); the default is the s3-wifi board
 const board = process.argv.includes("--board") ? process.argv[process.argv.indexOf("--board") + 1] : "s3-wifi";
 const wired = board === "s3-eth";
+// --plain: the battery page is told it is not over HTTPS (the mock itself is plain HTTP, so by default it plays the HTTPS panel); --battery-off: the writes are not turned on
+const plain = process.argv.includes("--plain"), writesOff = process.argv.includes("--battery-off");
+const battery = { image: null, operation: null, campaign: null, record: [] };
 const seeded = process.argv.includes("--user") ? process.argv[process.argv.indexOf("--user") + 1] : "";
 const recorded = process.argv.includes("--readings") ? JSON.parse(readFileSync(process.argv[process.argv.indexOf("--readings") + 1], "utf8")) : null;
 // The pages and files the FIRMWARE serves (the list main/web_server.cpp registers): the stand-in answers 404 for any other, as a node does, so a file that was never registered shows here too.
@@ -105,6 +108,50 @@ let probing = null;
 const antSettings = { model: "16ZM", version: "16ZMUB00-211026A", asked: 57, answered: 57, missing: 0, settings: [["CellOvervoltageProtection", 3.65, "V"], ["CellOvervoltageRecovery", 3.6, "V"], ["PackOvervoltageProtection", 58.4, "V"], ["CellUndervoltageProtection", 2.5, "V"], ["CellUndervoltageRecovery", 2.8, "V"], ["CellVoltageDifferenceProtection", 0.5, "V"], ["ChargeOvercurrentProtection", 150, "A"], ["DischargeOvercurrentProtection", 200, "A"], ["ShortCircuitProtection", 800, "A"], ["SOCLowLevel1Warning", 20, "%"], ["CellBalancingStartVoltage", 3.4, "V"], ["CellNumber", 16, "S"], ["NominalCapacity", 280, "Ah"], ["RemainingCapacity", 252.6, "Ah"], ["TotalCycleCapacity", 4862.65, "Ah"]].map(([name, value, unit], i) => ({ address: i * 2, name, value, unit })) };
 const rawText = "48 65 6C 6C 6F 2C 20 69 6E 76 65 72 74 65 72 0D  |Hello, inverter.|\n0A                                               |.|\n";
 
+// The battery page: a pretend battery that arms, executes and ends by itself. Nothing is checked as the firmware checks it.
+const mockSerial = n => "PPTBH0111110000" + n;
+function batteryState(portNumber) {
+  if (writesOff) return { enabled: false, password: false, https: true, port: portNumber };
+  const o = battery.operation;
+  if (o && o.stage === "running" && Date.now() > o.until) {
+    o.stage = "final";
+    o.reply = { ...o.reply, stage: "final", outcome: "ok", code: "", before: "## info\nsample", after: "## info\nsample", transcript: "> info\n< sample" };
+    const c = battery.campaign;
+    if (o.campaign && c) { c.modules[c.current].status = "done"; if (++c.current >= c.modules.length) c.state = "return_cable"; }
+  }
+  return { enabled: true, password: true, https: true, port: portNumber, facts: { pylontech: config.ports[portNumber - 1]?.kind === "pylontech", present: true, slave: false, current_ma: 0, alarm: false },
+    image: battery.image, operation: o, campaign: battery.campaign };
+}
+function batteryArm(op, serial, campaign) {
+  battery.operation = { stage: "armed", op, user: "admin", mine: true, campaign, left_s: 110,
+    reply: { stage: "armed", refusal: "none", risk: op === "firmware_update" ? "irreversible" : "low", atomic: op === "firmware_update", summary: "sample: " + op, battery: { model: "US3000C", serial, soft_version: "V3.0" }, snapshot_before: "## info\nsample" } };
+}
+function batteryPost(response, route, body) {
+  const refuse = (code, error) => json(response, code, { error });
+  if (plain) return refuse(403, "https_required");
+  if (writesOff) return refuse(403, "battery_write_disabled");
+  if (route === "battery/image") { battery.image = { board: "US2000C", version: "3.1", size: 131072 }; return json(response, 200, { ok: true }); }
+  const step = route === "battery/campaign" ? body.action : route.slice(8);
+  if (step !== "cancel" && body.password !== "adminpass123") return refuse(403, "wrong_password");
+  battery.record.push({ at: Math.floor(Date.now() / 1000), user: "admin", port: body.port, event: step, op: body.op ?? "", detail: "", serial: body.serial ?? "" });
+  const c = battery.campaign;
+  if (route === "battery/arm") batteryArm(body.op, body.serial, false);
+  else if (route === "battery/execute" || step === "execute") {
+    if (!battery.operation || battery.operation.stage !== "armed") return refuse(409, "not_armed");
+    battery.operation.stage = "running"; battery.operation.until = Date.now() + 1500; battery.operation.reply = { steps_done: 1, steps_total: 4, battery: battery.operation.reply.battery };
+    if (battery.operation.campaign) c.modules[c.current].status = "updating";
+  } else if (route === "battery/cancel") battery.operation = null;
+  else if (step === "create") {
+    if (!battery.image) return refuse(409, "image_missing");
+    battery.campaign = { state: "active", port: body.port, current: 0, stop_reason: "", image: battery.image,
+      modules: [1, 2].map(n => ({ n, serial: mockSerial(n), model: "US3000C", board: "", chip: "older", status: "pending", code: "" })) };
+  } else if (step === "check") { c.modules[c.current].status = "ready"; batteryArm("firmware_update", c.modules[c.current].serial, true); }
+  else if (step === "finish") c.state = "done";
+  else if (step === "retry") { c.state = "active"; c.modules[c.current].status = "pending"; }
+  else if (step === "cancel") c.state = "cancelled";
+  return json(response, 202, { ok: true });
+}
+
 const json = (response, code, body, headers = {}) => { response.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store", ...headers }); response.end(JSON.stringify(body)); };
 const bodyOf = request => new Promise(resolve => { const chunks = []; request.on("data", c => chunks.push(c)); request.on("end", () => resolve(Buffer.concat(chunks))); });
 const tokenOf = request => /armor_session=([0-9a-f]+)/.exec(request.headers.cookie ?? "")?.[1] ?? "";
@@ -145,7 +192,7 @@ const server = createServer(async (request, response) => {
   const route = url.pathname.slice(8), method = request.method;
   const raw = await bodyOf(request);
   let body = {};
-  if (raw.length && !url.pathname.endsWith("/ota")) { try { body = JSON.parse(raw.toString("utf8")); } catch { return json(response, 400, { error: "not_json" }); } }
+  if (raw.length && !url.pathname.endsWith("/ota") && !url.pathname.endsWith("/battery/image")) { try { body = JSON.parse(raw.toString("utf8")); } catch { return json(response, 400, { error: "not_json" }); } }
   const session = sessions.get(tokenOf(request));
   const setup = users.size === 0;
 
@@ -173,6 +220,10 @@ const server = createServer(async (request, response) => {
   const needAdmin = () => { if (!admin) { json(response, 403, { error: "forbidden" }); return false; } return true; };
 
   if (method === "GET" && route === "status") return json(response, 200, status());
+  if (method === "GET" && route === "battery/maintenance") { if (!needAdmin()) return; return json(response, 200, plain ? { https: false, enabled: !writesOff, password: !writesOff } : batteryState(Number(url.searchParams.get("port")) || 1)); }
+  if (method === "GET" && route === "battery/audit") { if (!needAdmin()) return; return json(response, 200, battery.record); }
+  // the orders ("battery/arm", "battery/execute", "battery/cancel", "battery/campaign") and the upload of an image ("battery/image")
+  if (method === "POST" && route.startsWith("battery/")) { if (!needAdmin()) return; return batteryPost(response, route, body); }
   if (method === "GET" && route === "wifi/scan") { if (!needAdmin()) return; return json(response, 200, { networks: [{ ssid: "HomeRouter", rssi: -48, channel: 6, security: "wpa2" }, { ssid: "Neighbour", rssi: -71, channel: 11, security: "wpa2wpa3" }, { ssid: "CafeOpen", rssi: -80, channel: 1, security: "open" }] }); }
   if (method === "GET" && route === "config") return json(response, 200, { config, channel_auto: 6, firmware: "0.2.3" });
   if (method === "PUT" && route === "config") {

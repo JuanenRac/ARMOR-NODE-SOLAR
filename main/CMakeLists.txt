@@ -36,6 +36,14 @@ endif()
 set_property(DIRECTORY "${COMPONENT_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ARMOR_PANEL_DIR}/readings.css")
 target_add_binary_data(${COMPONENT_LIB} "${ARMOR_PANEL_OUT}/readings.css.gz" BINARY)
 
+# The page that writes to batteries, a script of its own that only an administrator's browser asks for.
+execute_process(COMMAND ${Python3_EXECUTABLE} "${PROJECT_DIR}/tools/pack_readings.py" "${ARMOR_PANEL_DIR}/maintenance.js" "${ARMOR_PANEL_OUT}/maintenance.js.gz" RESULT_VARIABLE ARMOR_PACK_MAINTENANCE)
+if(NOT ARMOR_PACK_MAINTENANCE EQUAL 0)
+  message(FATAL_ERROR "tools/pack_readings.py failed")
+endif()
+set_property(DIRECTORY "${COMPONENT_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ARMOR_PANEL_DIR}/maintenance.js")
+target_add_binary_data(${COMPONENT_LIB} "${ARMOR_PANEL_OUT}/maintenance.js.gz" BINARY)
+
 # A CA certificate for mqtts:// is embedded when the operator puts one at certs/ca.pem (never committed: it is git-ignored).
 if(EXISTS "${PROJECT_DIR}/certs/ca.pem")
   target_add_binary_data(${COMPONENT_LIB} "${PROJECT_DIR}/certs/ca.pem" TEXT)

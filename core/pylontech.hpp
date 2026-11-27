@@ -84,6 +84,16 @@ struct DataPlate {
   std::string serial, board, specification, boot_version, comm_version, release_date;
 };
 
+// A state of one cell that is not the normal one, as the console's `bat` table prints it: the cell (from 0, like cells_v), the column and the word.
+struct CellFlag {
+  int cell = 0;
+  const char* column = "";   // "base", "voltage", "current" or "temperature"
+  std::string word;
+};
+
+// A cell the monitoring chip does not read comes out as 0 V.
+constexpr double kUnreadCellV = 0.1;
+
 struct Module {
   int number = 0;
   bool present = false;
@@ -95,6 +105,9 @@ struct Module {
   int health_percent = -1;            // the capacity the module has learned (`stat`'s Pwr Coulomb) against its rated one, in percent; -1 when unknown
   std::vector<std::pair<std::string_view, long long>> counters;   // the counters of `stat`'s text that are in stat_catalog(): the message key (the catalogue's own text, not a copy) and the value, in the order the console printed them
   std::string model;                  // the device name from `info` (US3000C ...)
+  std::string manufacturer;           // who made it, as the equipment said it or as its protocol or model tells; "" when not known
+  bool manufacturer_deduced = false;  // true: the equipment did not say it, its protocol or model does
+  bool has_voltage = true, has_current = true;   // false: the figure that came was impossible and is not told (see keep_plausible)
   int cell_count = -1;                // `info`: Cell Number
   std::string board_version, main_soft_version, soft_version;   // `info`: the board, the main software and the software of the module (V10R04, B68.2.0.0, V2.6)
   double max_charge_a = -1, max_discharge_a = -1;   // `info`: Max Charge Curr / Max Dischg Curr, the module's current limits in amperes (both positive); -1 when not told
@@ -113,6 +126,8 @@ struct Module {
   int charge_mos = -1, discharge_mos = -1;   // the status codes of the MOSFETs of a battery management system (ANT-BMS); -1 when the equipment does not say
   bool protecting = false;            // a protection has switched a MOSFET off
   bool has_temperature = true;        // false: the equipment has no temperature sensor to read (its temperatures are then not published)
+  std::vector<CellFlag> cell_flags;   // the states of the cells that are not normal
+  std::vector<int> cells_unread;      // the cells (from 0) that read 0 V two turns in a row: a reading fault of the battery, not a voltage
 };
 
 namespace detail {
@@ -137,6 +152,51 @@ inline bool integer(const std::string& text, long& out) {
 }
 }  // namespace detail
 
+// The limits of the figures of a battery in the message (ARMOR-COMMON solar_battery.schema.json). One figure beyond them makes the server refuse the whole message, so a
+// spoiled one (bytes lost on the line, a row run into the next, not a number) is left out here and the rest of the reading still goes.
+inline bool within(double value, double low, double high) { return value >= low && value <= high; }   // false for a NaN
+
+inline void keep_plausible(Module& m) {
+  if (m.has_voltage && !within(m.voltage_v, 0, 1000)) m.has_voltage = false;
+  if (!m.has_voltage) m.voltage_v = 0;
+  if (m.has_current && !within(m.current_a, -1000, 1000)) m.has_current = false;
+  if (!m.has_current) m.current_a = 0;
+  if (m.has_temperature && !(within(m.temperature_c, -50, 200) && within(m.temperature_low_c, -50, 200) && within(m.temperature_high_c, -50, 200))) m.has_temperature = false;
+  if (!m.has_temperature) m.temperature_c = m.temperature_low_c = m.temperature_high_c = 0;
+  if (m.temperatures_c.size() > 8) m.temperatures_c.resize(8);
+  for (const double t : m.temperatures_c) if (!within(t, -50, 200)) { m.temperatures_c.clear(); break; }
+  if (!(within(m.cell_low_v, 0, 10) && within(m.cell_high_v, 0, 10) && m.cell_low_v <= m.cell_high_v)) m.cell_low_v = m.cell_high_v = 0;   // 0 and 0: not told
+  if (m.cells_v.size() > 32) m.cells_v.clear();
+  for (const double v : m.cells_v) if (!within(v, 0, 10)) { m.cells_v.clear(); break; }
+  if (m.soc_percent < 0 || m.soc_percent > 100) m.soc_percent = -1;
+  if (!within(m.capacity_ah, 0, 100000)) m.capacity_ah = -1;
+  if (!within(m.full_capacity_ah, 0, 100000)) m.full_capacity_ah = -1;
+  if (m.cycles < 0 || m.cycles > 1000000) m.cycles = -1;
+  if (m.health_percent < 0 || m.health_percent > 100) m.health_percent = -1;
+  if (m.cell_count < 1 || m.cell_count > 32) m.cell_count = -1;
+  if (!within(m.max_charge_a, 0, 1000)) m.max_charge_a = -1;
+  if (!within(m.max_discharge_a, 0, 1000)) m.max_discharge_a = -1;
+  if (m.console_baud < 300 || m.console_baud > 1000000) m.console_baud = -1;
+  if (m.balancing < 0 || m.balancing > 512) m.balancing = -1;
+  if (m.has_power && !within(m.power_w, -1000000, 1000000)) { m.has_power = false; m.power_w = 0; }
+  if (m.charge_mos < 0 || m.charge_mos > 255) m.charge_mos = -1;
+  if (m.discharge_mos < 0 || m.discharge_mos > 255) m.discharge_mos = -1;
+  if (m.model.size() > 24) m.model.clear();
+  if (m.base_state.size() > 16) m.base_state.clear();
+  if (m.manufacturer.size() > 32) m.manufacturer.clear();
+  bool soh_good = m.soh_counts.size() <= 32 && m.soh_abnormal.size() <= 32;
+  for (const int count : m.soh_counts) if (count < 0 || count > 1000000) soh_good = false;
+  for (const int cell : m.soh_abnormal) if (cell < 0 || cell > 31) soh_good = false;
+  if (!soh_good) { m.soh_counts.clear(); m.soh_abnormal.clear(); }
+}
+
+// Who made a battery that did not say it, when its model leaves no doubt: the families of Pylontech, with the word their own consoles print.
+inline void deduce_maker(Module& m) {
+  if (!m.present || !m.manufacturer.empty()) return;
+  for (const char* family : {"US2000", "US3000", "US5000", "UP5000", "US2KBPL"})
+    if (m.model.rfind(family, 0) == 0) { m.manufacturer = "Pylon"; m.manufacturer_deduced = true; return; }
+}
+
 // The modules of the text a `pwr` command printed (any number of lines, with or without the header and the prompt). Returns how many rows were read.
 inline std::size_t parse_pwr(const std::string& text, std::vector<Module>& modules) {
   modules.clear();
@@ -154,6 +214,7 @@ inline std::size_t parse_pwr(const std::string& text, std::vector<Module>& modul
     }
     long number = 0;
     if (t.empty() || !detail::integer(t[0], number) || number < 1 || number > 16) return;
+    for (const Module& seen : modules) if (seen.number == number) return;   // a place is listed once: a second row of it is a spoiled line
     Module m;
     m.number = static_cast<int>(number);
     bool absent = false;
@@ -183,6 +244,7 @@ inline std::size_t parse_pwr(const std::string& text, std::vector<Module>& modul
     const auto mos = cell.find("MosTempr");
     long mos_mc = 0;
     if (mos != cell.end() && detail::integer(mos->second, mos_mc)) m.temperatures_c = {m.temperature_c, mos_mc / 1000.0};   // the cells' sensor and the MOSFETs'
+    keep_plausible(m);
     modules.push_back(m);
   };
   for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
@@ -230,6 +292,39 @@ inline SlaveSheet read_slave_sheet(const std::string& text) {
   for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
   handle(line);
   return sheet;
+}
+
+// Whether a word of the base state column is trouble: the others (Idle, Charge, Dischg, Balance...) say what the battery is doing.
+inline bool base_word_matters(const std::string& word) { return word == "SysError" || word == "Protect" || word == "Alarm"; }
+// Whether a word of any other state column says anything but "all is well".
+inline bool state_word_matters(const std::string& word) { return !word.empty() && word != "Normal" && word != "Idle" && word != "Charge" && word != "Dischg" && word != "Absent"; }
+
+// The states of the cells of a `bat` table that are not normal, in the order of the table (at most 32).
+inline void parse_cell_flags(const std::string& text, std::vector<CellFlag>& flags) {
+  flags.clear();
+  std::string line;
+  const auto word_like = [](const std::string& w) { if (w.empty() || w.size() > 16) return false; for (const char c : w) if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) return false; return true; };
+  const auto handle = [&](const std::string& row) {
+    std::vector<std::string> t = detail::tokens(row);
+    t.erase(std::remove(t.begin(), t.end(), std::string("-")), t.end());
+    long index = 0, millivolts = 0;
+    if (t.size() < 8 || !detail::integer(t[0], index) || index < 0 || index > 31 || !detail::integer(t[1], millivolts)) return;
+    for (std::size_t i = 4; i < 8; ++i) if (!word_like(t[i])) return;   // a table with other columns is not guessed at
+    static const char* const kColumns[4] = {"base", "voltage", "current", "temperature"};
+    for (std::size_t i = 0; i < 4 && flags.size() < 32; ++i) {
+      const std::string& w = t[4 + i];
+      if (i == 0 ? base_word_matters(w) : state_word_matters(w)) flags.push_back(CellFlag{static_cast<int>(index), kColumns[i], w});
+    }
+  };
+  for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
+  handle(line);
+}
+
+// The cells that read 0 V, one bit each.
+inline std::uint32_t unread_mask(const std::vector<double>& cells) {
+  std::uint32_t mask = 0;
+  for (std::size_t i = 0; i < cells.size() && i < 32; ++i) if (cells[i] < kUnreadCellV) mask |= 1u << i;
+  return mask;
 }
 
 // The cells of a module from the text a `bat <module>` command printed: one row per cell with the index, the voltage (mV), the current (mA), the temperature
@@ -339,6 +434,10 @@ inline int parse_info(const std::string& text, Module& module) {
     {
       std::string squeezed;   // the name with one space between the words ("Soft  version" is "soft version")
       for (const std::string& w : detail::tokens(name)) squeezed += (squeezed.empty() ? "" : " ") + w;
+      if (squeezed == "manufacturer") {   // "Pylon", spaces and all; blank on some firmwares, and then nothing is said
+        if (!value.empty() && !detail::carried(value, 32).empty()) { module.manufacturer = value; module.manufacturer_deduced = false; }
+        return;
+      }
       std::string* into = squeezed == "board version" ? &module.board_version : squeezed == "main soft version" ? &module.main_soft_version : squeezed == "soft version" ? &module.soft_version : nullptr;
       if (into != nullptr) {
         const std::vector<std::string> w = detail::tokens(value);
@@ -601,6 +700,10 @@ struct Stack {
   bool protecting = false;            // any module is protecting
   int charge_mos = -1, discharge_mos = -1;   // the first module's that says
   bool has_temperature = false;       // at least one module says its temperature
+  bool has_voltage = false;           // at least one module says its voltage
+  bool has_current = true;            // every present module says its current: a total is the whole stack's or it is not told
+  std::string manufacturer;           // the maker of the stack: only when every present module has the same one
+  bool manufacturer_deduced = false;  // true when any of them was deduced
 };
 
 // The rated capacity to take for a module that has not told its own: that of the others, only when every one that told it told the same and no two present modules name different
@@ -634,7 +737,7 @@ inline bool state_alarms(const std::string& word, bool system_column) {
 inline bool cells_match_row(const Module& m, const std::vector<double>& cells) {
   if (cells.empty() || m.cell_low_v <= 0 || m.cell_high_v <= 0) return true;
   constexpr double kMargin = 0.25;
-  for (const double v : cells) if (v < m.cell_low_v - kMargin || v > m.cell_high_v + kMargin) return false;
+  for (const double v : cells) if (v >= kUnreadCellV && (v < m.cell_low_v - kMargin || v > m.cell_high_v + kMargin)) return false;   // a cell at 0 V has its own rule (see the poller)
   return true;
 }
 
@@ -643,24 +746,38 @@ inline Stack summarise(const std::vector<Module>& modules) {
   double voltage = 0, soc = 0, current = 0;
   int with_soc = 0, with_health = 0, with_capacity = 0, with_full = 0;
   double health = 0;
-  bool first = true;
+  bool first = true, one_maker = true;
+  int with_voltage = 0;
   for (const Module& m : modules) {
     if (!m.present) continue;
     ++s.modules;
-    voltage += m.voltage_v;
-    current += m.current_a;
+    if (s.modules == 1) s.manufacturer = m.manufacturer;
+    else if (m.manufacturer != s.manufacturer) one_maker = false;
+    if (m.manufacturer_deduced) s.manufacturer_deduced = true;
+    if (m.has_voltage) { voltage += m.voltage_v; ++with_voltage; }
+    if (m.has_current) current += m.current_a;
+    else s.has_current = false;
     if (m.soc_percent >= 0) { soc += m.soc_percent; ++with_soc; }
     double cell_low = m.cell_low_v, cell_high = m.cell_high_v;
     if (!m.cells_v.empty()) {   // the cells' own extremes are truer than the module's Vlow and Vhigh columns
-      cell_low = m.cells_v[0]; cell_high = m.cells_v[0];
-      for (double v : m.cells_v) { if (v < cell_low) cell_low = v; if (v > cell_high) cell_high = v; }
+      cell_low = 0; cell_high = 0;
+      bool any = false;
+      for (std::size_t i = 0; i < m.cells_v.size(); ++i) {   // a cell that is not read has no voltage: it is told as such (cells_unread), not as the lowest of the stack
+        if (std::find(m.cells_unread.begin(), m.cells_unread.end(), static_cast<int>(i)) != m.cells_unread.end()) continue;
+        const double v = m.cells_v[i];
+        if (!any) { cell_low = cell_high = v; any = true; }
+        else { if (v < cell_low) cell_low = v; if (v > cell_high) cell_high = v; }
+      }
     }
+    if (!m.cells_unread.empty() || base_word_matters(m.base_state)) s.alarm = true;
+    for (const CellFlag& flag : m.cell_flags) if (flag.column[0] == 'b' || state_alarms(flag.word, false)) s.alarm = true;
     if (m.has_temperature) {
       if (!s.has_temperature || m.temperature_low_c < s.temperature_min_c) s.temperature_min_c = m.temperature_low_c;
       if (!s.has_temperature || m.temperature_high_c > s.temperature_max_c) s.temperature_max_c = m.temperature_high_c;
       s.has_temperature = true;
     }
-    if (first) { s.cell_low_v = cell_low; s.cell_high_v = cell_high; first = false; }
+    if (!(cell_high > 0)) {}   // this module's extremes are not told: the others' stand for the stack
+    else if (first) { s.cell_low_v = cell_low; s.cell_high_v = cell_high; first = false; }
     else {
       if (cell_low < s.cell_low_v) s.cell_low_v = cell_low;
       if (cell_high > s.cell_high_v) s.cell_high_v = cell_high;
@@ -687,13 +804,21 @@ inline Stack summarise(const std::vector<Module>& modules) {
     if (each >= 0) { s.full_capacity_ah += each * (s.modules - with_full); s.full_estimated = true; }
     else s.full_capacity_ah = -1;
   }
+  if (!one_maker) s.manufacturer.clear();
+  if (s.manufacturer.empty()) s.manufacturer_deduced = false;
+  if (!within(s.capacity_ah, 0, 100000)) s.capacity_ah = -1;
+  if (!within(s.full_capacity_ah, 0, 100000)) s.full_capacity_ah = -1;
+  if (s.has_power && !within(s.power_w, -1000000, 1000000)) s.has_power = false;
+  if (s.balancing > 512) s.balancing = -1;
   if (s.modules > 0) {
-    s.voltage_v = voltage / s.modules;   // the modules of a stack are in parallel: the same voltage, so the mean is what the bus has
-    s.current_a = current;               // and their currents add
-    if (s.capacity_ah >= 0) s.energy_kwh = s.capacity_ah * s.voltage_v / 1000.0;
+    s.has_voltage = with_voltage > 0;
+    if (s.has_voltage) s.voltage_v = voltage / with_voltage;   // the modules of a stack are in parallel: the same voltage, so the mean is what the bus has
+    s.current_a = s.has_current ? current : 0;                 // and their currents add
+    if (s.capacity_ah >= 0 && s.has_voltage) s.energy_kwh = s.capacity_ah * s.voltage_v / 1000.0;
+    if (!within(s.energy_kwh, 0, 10000)) s.energy_kwh = -1;
     if (with_soc > 0) s.soc_percent = static_cast<int>(soc / with_soc + 0.5);
     if (with_health > 0) s.health_percent = static_cast<int>(health / with_health + 0.5);
-    s.state = s.current_a > 0.5 ? "charging" : s.current_a < -0.5 ? "discharging" : "idle";
+    s.state = !s.has_current ? "" : s.current_a > 0.5 ? "charging" : s.current_a < -0.5 ? "discharging" : "idle";
   }
   return s;
 }
