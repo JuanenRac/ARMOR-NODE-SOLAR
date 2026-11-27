@@ -19,11 +19,6 @@ struct TlsStatus {
 };
 TlsStatus tls_status();
 
-// For the recovery of a silent panel (web_recovery.hpp). Whether a request that takes as long as the link does (an upload, the core dump) is being served.
-bool long_request_running();
-// Hands the task of the HTTPS server a piece of work and says whether it had run the one handed the time before. True with no HTTPS server.
-bool tls_task_answers();
-
 // Restarts the node after `delay_ms` (the answer that caused it has time to leave).
 void restart_after(unsigned delay_ms);
 

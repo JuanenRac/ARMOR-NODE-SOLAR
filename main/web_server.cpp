@@ -5,6 +5,7 @@
 // JSON. Errors are short codes ({"error":"invalid"}), never sentences: the panel translates them into the eight languages.
 // The panel itself (index.html, app.js, style.css) is embedded compressed in the firmware, so an update of the firmware updates it too.
 #include "web_server.hpp"
+#include "web_recovery.hpp"
 #include "node_diag.hpp"
 #include "node_guard.hpp"
 

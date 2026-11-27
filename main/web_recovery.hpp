@@ -3,6 +3,16 @@
 #pragma once
 #include <cstdint>
 
+// What the web server (web_server.cpp) tells the recovery. They are declared here because web_server.hpp is the same file in every node and only this one has the recovery.
+namespace armor::web {
+
+// Whether a request that takes as long as the link does (an upload, the core dump) is being served.
+bool long_request_running();
+// Hands the task of the HTTPS server a piece of work and says whether it had run the one handed the time before. True with no HTTPS server.
+bool tls_task_answers();
+
+}  // namespace armor::web
+
 namespace armor::webrecovery {
 
 // Reads what a restart of this kind left (and says it in the log), and, when `enabled`, starts the task that asks the panel. Called once, after the web server was started.
