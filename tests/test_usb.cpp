@@ -217,6 +217,53 @@ static void setting() {
   CHECK(refused(R"({"usb_host":{"pid":"zzzz"}})", "usb_host.pid"));
 }
 
+// The edges of the line and of the setting: nothing to take, a device seen while one is taken, ports and identifiers out of place.
+static void edges() {
+  usbhid::Link link;
+  link.disconnected();   // nothing was plugged in: not a disconnection
+  CHECK(link.counters.disconnects == 0 && link.id_text().empty());
+  CHECK(link.diagnosis().find("device=no") != std::string::npos && link.diagnosis().find("vid:pid=-") != std::string::npos);
+  link.connected(cypress());
+  usbhid::DeviceInfo other;
+  other.present = true;
+  other.vid = 1;
+  link.seen(other);   // a device was taken: another one changes nothing
+  CHECK(link.info().vid == 0x0665);
+  link.on_report(nullptr, 8);
+  const std::uint8_t byte[1] = {'('};
+  link.on_report(byte, 0);
+  CHECK(link.waiting() == 0 && link.counters.reports_in == 0);
+  link.on_receive_error();
+  CHECK(link.counters.receive_errors == 1);
+  link.on_report(byte, 1);
+  std::uint8_t none[1];
+  CHECK(link.read(none, 0) == 0 && link.waiting() == 1);
+  const auto yes = [](const std::uint8_t*, std::size_t) { return true; };
+  CHECK(link.transmit(byte, 0, yes) && link.waiting() == 0);
+  std::uint16_t id = 0;
+  CHECK(!usbhid::parse_id("00G0", id) && !usbhid::parse_id("00:0", id) && !usbhid::parse_id("00~0", id) && !usbhid::parse_id("06655", id));
+  CHECK(usbhid::wanted(0, 2, 1, 2) && !usbhid::wanted(0, 3, 1, 2));
+
+  config::Settings base = config::default_settings("a1b2c3");
+  base.sta.enabled = true;
+  base.sta.ssid = "bench";
+  config::Settings out;
+  config::Problems problems;
+  CHECK(config::load(R"({"usb_host":3})", base, out, problems));   // not a section: left as it was
+  CHECK(!out.usb.enabled);
+  CHECK(config::load(R"({"usb_host":{}})", base, out, problems) && !out.usb.enabled);
+  CHECK(config::load(R"({"ports":[{"enabled":true,"kind":"voltronic","name":"inv"}],"usb_host":{"enabled":false,"port":1}})", base, out, problems));
+  CHECK(!config::on_usb(out.usb, 0));
+  const auto refused = [&base](const char* document) {
+    config::Settings s;
+    config::Problems p;
+    return !config::load(document, base, s, p);
+  };
+  CHECK(refused(R"({"usb_host":{"enabled":true,"port":0}})"));
+  CHECK(refused(R"({"usb_host":{"enabled":true,"port":2},"ports":[{"enabled":true,"kind":"voltronic","name":"inv"}]})"));
+  CHECK(refused(R"({"usb_host":{"enabled":"yes"}})"));
+}
+
 int main() {
   fragmentation();
   joining_and_crc();
@@ -224,6 +271,7 @@ int main() {
   ids();
   polling();
   setting();
+  edges();
   std::printf(g_failures == 0 ? "usb: all checks passed\n" : "usb: %d checks failed\n", g_failures);
   return g_failures == 0 ? 0 : 1;
 }
