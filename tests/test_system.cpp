@@ -448,7 +448,7 @@ static void test_web_recovery() {
   damaged.silent_for_s = 1;
   CHECK(!wr::record_valid(damaged) && !wr::record_valid(wr::make_record(0, 5)) && !wr::record_valid(wr::make_record(4, 5)));
   // the settings: off by default, read and written, and a time out of range refused
-  armor::config::Settings defaults;
+  const armor::config::Settings defaults = valid_settings();
   CHECK(!defaults.web_recovery && defaults.web_recovery_after_s == 300);
   const std::string written = armor::config::to_json(defaults, true);
   CHECK(written.find("\"web_recovery\":false") != std::string::npos && written.find("\"web_recovery_after_s\":300") != std::string::npos);
@@ -457,7 +457,7 @@ static void test_web_recovery() {
   CHECK(armor::config::load("{\"system\":{\"web_recovery\":true,\"web_recovery_after_s\":120}}", defaults, read, problems) && read.web_recovery && read.web_recovery_after_s == 120);
   problems.clear();
   armor::config::Settings refused;
-  CHECK(!armor::config::load("{\"system\":{\"web_recovery_after_s\":5}}", defaults, refused, problems) && !problems.empty() && problems.front().path == "system.web_recovery_after_s");
+  CHECK(!armor::config::load("{\"system\":{\"web_recovery_after_s\":5}}", defaults, refused, problems) && has(problems, "system.web_recovery_after_s", "range"));
 }
 
 int main() {
