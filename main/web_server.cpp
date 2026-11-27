@@ -49,6 +49,7 @@ extern "C" {
 #include "node_control.hpp"
 #include "node_store.hpp"
 #include "req_watch.hpp"
+#include "core/slow_req.hpp"
 #include "psram_mem.hpp"
 #include "psram_new.hpp"
 #include "tls_cert.hpp"
@@ -1106,8 +1107,17 @@ esp_err_t api_handler(httpd_req_t* r) {
   return send_error(r, 404, "not_found");
 }
 
+std::atomic<int> g_long_requests{0};
+std::atomic<std::uint32_t> g_tls_pings_sent{0}, g_tls_pings_done{0};
+
 // A request that does not end is said (req_watch.hpp).
-esp_err_t watched_api_handler(httpd_req_t* r) { return reqwatch::run(r, is_tls(r), api_handler); }
+esp_err_t watched_api_handler(httpd_req_t* r) {
+  const bool long_one = slowreq::may_be_long(slowreq::label(r->method == HTTP_GET ? "GET" : "POST", r->uri));
+  if (long_one) ++g_long_requests;
+  const esp_err_t result = reqwatch::run(r, is_tls(r), api_handler);
+  if (long_one) --g_long_requests;
+  return result;
+}
 
 esp_err_t page_handler(httpd_req_t* r) {
   const std::string uri = r->uri;
@@ -1178,6 +1188,16 @@ void restart_after(unsigned delay_ms) {
   }
   esp_timer_stop(timer);
   esp_timer_start_once(timer, static_cast<std::uint64_t>(delay_ms) * 1000ULL);
+}
+
+bool long_request_running() { return g_long_requests.load() > 0; }
+
+bool tls_task_answers() {
+  if (g_tls_server == nullptr) return true;
+  if (g_tls_pings_done.load() != g_tls_pings_sent.load()) return false;
+  ++g_tls_pings_sent;
+  if (httpd_queue_work(g_tls_server, [](void*) { ++g_tls_pings_done; }, nullptr) != ESP_OK) { --g_tls_pings_sent; return false; }
+  return true;
 }
 
 TlsStatus tls_status() {

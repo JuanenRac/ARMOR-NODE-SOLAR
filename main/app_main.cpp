@@ -42,6 +42,7 @@ extern "C" {
 #include "network.hpp"
 #include "node_store.hpp"
 #include "solar_manager.hpp"
+#include "web_recovery.hpp"
 #include "web_server.hpp"
 
 namespace {
@@ -165,6 +166,8 @@ extern "C" void app_main() {
   armor::clocksync::start(settings);
   armor::improv_serial::start();   // Improv Wi-Fi over the USB cable (ESP Web Tools)
   const bool panel_ok = network_ok && armor::web::start(settings);
+  // system.web_recovery (off by default): restart when the panel stays silent; it also says here why a restart of its kind was made.
+  armor::webrecovery::start(panel_ok && !setup && settings.web_recovery, settings.web_recovery_after_s);
   if (!setup) armor::maintenance::start(settings);   // subscribes before the broker link starts
   armor::mqtt_link::start(settings);
   // The health report every node says about itself (uptime, why it restarted, memory, link, broker reconnects, the last error): armor/health/<node>, see ARMOR-COMMON node_health.schema.json.

@@ -292,3 +292,7 @@ The internal memory of the ESP32-S3 is small and is the only one drivers, interr
 * The panel's overview and `GET /api/v1/status` (`heap_internal_free`, `heap_internal_min`, `heap_internal_largest`, `tasks`) show what is left. The log warns under 40 kB and the panel refuses new connections under 16 kB.
 
 `tests/test_memory.cpp` reads four stacks of eight batteries on a computer and fails when what a port keeps grows past its limit. The figures of a real board are still to be taken.
+
+## Recovery of a silent panel (off by default)
+
+A node whose web server is stuck keeps reporting to the broker while nobody can open its panel. With `system.web_recovery` on, the node asks itself every 15 seconds: `GET /api/v1/session` on its own port 80 over the loopback address, and a piece of work handed to the task of the HTTPS server. When one of the two has gone unanswered without a break for `system.web_recovery_after_s` seconds (60 to 3600, 300 by default), the node restarts. It never does so in the first two minutes of a run, during a firmware upload, download or copy, a core dump download or an operation on a battery, nor more than three times in an hour of running time (the guard's own restarts count too). After the restart the log has the error line `web recovery: restarted after N s without an answer (...)`, which the health report takes to the server, and the panel says it. The setting takes effect after a restart. It has not run on a board.

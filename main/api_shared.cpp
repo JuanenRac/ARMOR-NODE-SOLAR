@@ -34,6 +34,7 @@ extern "C" {
 #include "task_health.hpp"
 #include "node_store.hpp"
 #include "solar_manager.hpp"
+#include "web_recovery.hpp"
 #include "web_server.hpp"
 
 namespace armor::api {
@@ -167,6 +168,8 @@ std::string status_json() {
   if (std::isfinite(chip_celsius)) w.number(chip_celsius, 1); else w.null();
   const web::TlsStatus tls = web::tls_status();
   w.key("web").begin_object().field("mode", tls.mode).field("https", tls.running).field("cert_sha256", tls.fingerprint).end_object();
+  const webrecovery::Last recovered = webrecovery::last();
+  if (recovered.after_restart) w.key("web_recovery").begin_object().field("silent_for_s", static_cast<long long>(recovered.silent_for_s)).field("restarts_in_hour", static_cast<long long>(recovered.restarts_in_hour)).end_object();
   w.key("tasks").raw(taskhealth::json());
   taskhealth::warn_if_low();
   w.key("ports").begin_array();
