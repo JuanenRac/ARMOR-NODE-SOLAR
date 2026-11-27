@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <string>
 
 namespace armor::usbhid {
@@ -71,8 +72,8 @@ class Link {
   bool ready() const { return info_.present && info_.hid; }
 
   // Cuts `length` bytes into reports and hands each to `send(const std::uint8_t*, std::size_t)`, which says whether it went. False without a device, or at the first report that did not go.
-  template <class Send>
-  bool transmit(const std::uint8_t* data, std::size_t length, Send send) {
+  using Send = std::function<bool(const std::uint8_t*, std::size_t)>;
+  bool transmit(const std::uint8_t* data, std::size_t length, const Send& send) {
     if (!ready()) return false;
     in_.clear();   // a question starts a new exchange
     for (std::size_t from = 0; from < length; from += kReportSize) {
