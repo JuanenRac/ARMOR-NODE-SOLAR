@@ -4,15 +4,16 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-### Added
+## [0.7.7] - Battery faults and makers, writes from the node's panel, inverter by USB
 
+- ### Added
 - **A figure that came impossible is told, not only left out:** the message lists them per module (`left_out`) and the Readings page says which.
 - **The code of a battery's electronics fault is read live:** a module that reports a fault is asked for its own sheet (`pwr <n>`, read only) and the `System Fault` code (for example `0x40 VOLT err`) goes with its states. Tested on a computer against captured answers; not tried on the node.
 - **An inverter can be read through USB (off by default, `s3-wifi` board only):** the node can be the USB host of a Voltronic family inverter (a HID adapter) and asks it the same reading questions as on a serial port; it shows as that port in the readings and on MQTT. Setting `usb_host`. While it is on, the native USB socket is no console and cannot flash. The board is not expected to supply 5 V there: the cable must. USB serial chips (CH340, CP210x, FTDI, CDC) are not supported. Tested on a computer; not tried on a board or an inverter. Even while off it takes about 1.7 KB of internal memory.
 - **The 12 KB task of the battery operations exists only while writing is switched on** (it was reserved in internal memory even when off). An order that arrives with writing off is still answered "disabled", by a short task that ends at once.
 - The node's own panel can now write to Pylontech batteries and update a stack module by module (a *Battery maintenance* page for administrators, over HTTPS), with the same locks as the
-  server's way: off by default, the password asked again, the serial number typed twice, arm and execute with a one-time token that stays in the node, one operation per port, rate limits, a
-  record kept in flash and no way to force a doubtful chip or image. A firmware image is uploaded into the external memory only. Nothing here has been tried on a real battery.
+-   server's way: off by default, the password asked again, the serial number typed twice, arm and execute with a one-time token that stays in the node, one operation per port, rate limits, a
+-   record kept in flash and no way to force a doubtful chip or image. A firmware image is uploaded into the external memory only. Nothing here has been tried on a real battery.
 - The node refuses to restart, reset or change its firmware while a battery operation is under way.
 - **A battery says what is wrong with it, in three levels:** the message carries each state that is not normal with the module, the cell, the column and the battery's own word (`flags`), and the Readings page tells a notice (High, Low) from a protection or alarm (OV, UV, OC, temperature) and from a fault of the battery's management system (SysError, cells it does not read), which stands out in red without blinking. A cell at 0 V two turns in a row is a reading fault (`cells_unread`): it is no longer taken for the lowest cell of the stack; a single table with a 0 V cell is still held back as a spoiled line.
 - **A cell of poor health blinks in red** on the Readings page, bar included, once every 1.6 s (still and red when the browser asks for less movement), with a mark beside its number and a title that says it.
