@@ -9,6 +9,7 @@
 // the node (the browser never sees it) and a record of who did what in flash. Its rules are in core/battery_panel.hpp. With the writes off nothing of it is allocated.
 #include "battery_maintenance.hpp"
 
+#include <atomic>
 #include <ctime>
 #include <deque>
 #include <functional>
@@ -668,11 +669,25 @@ std::string cancel_from_panel(const std::string& user, int port) {
   return bat::refusal::kNotArmed;
 }
 
-// The broker's client only hands the text over: the reading and the thinking are done by the task of this file.
+// While writing is off there is no task of 12 KB. An order of the broker is still answered ("disabled") by a short task, one at a time: others that arrive meanwhile are dropped.
+std::atomic<bool> g_refusing{false};
+std::string g_refused;   // owned by the one short task
+
+void refuse_once(void*) {
+  handle(g_refused);
+  g_refused.clear();
+  g_refusing = false;
+  vTaskDelete(nullptr);
+}
+
+// The broker's client only hands the text over: the reading and the thinking are done by a task of this file.
 void on_message(const std::string& topic, const std::string& payload) {
   (void)topic;
   if (payload.size() > 4096) return;   // an order is a few hundred bytes (a piece of an image, a little over six hundred)
-  post([payload] { handle(payload); });
+  if (g_ready != nullptr) { post([payload] { handle(payload); }); return; }
+  if (g_refusing.exchange(true)) return;
+  g_refused = payload;
+  if (xTaskCreate(refuse_once, "battery-off", 8192, nullptr, 4, nullptr) != pdPASS) g_refusing = false;
 }
 }  // namespace
 
@@ -704,8 +719,11 @@ void start(const config::Settings& settings) {
   g_require_sig = settings.battery.require_sig;
   bat::parse_expert_mode(settings.battery.expert_mode, g_expert_mode);
   if (g_node.empty()) return;
-  g_ready = xSemaphoreCreateBinary();
-  if (g_ready == nullptr || xTaskCreate(worker, "battery-ops", 12288, nullptr, 4, nullptr) != pdPASS) { ESP_LOGE(kTag, "the battery maintenance task could not be started: it stays off"); g_ready = nullptr; return; }
+  // The 12 KB task exists only with writing switched on (switching it on needs a restart, see apply()).
+  if (g_enabled) {
+    g_ready = xSemaphoreCreateBinary();
+    if (g_ready == nullptr || xTaskCreate(worker, "battery-ops", 12288, nullptr, 4, nullptr) != pdPASS) { ESP_LOGE(kTag, "the battery maintenance task could not be started: it stays off"); g_ready = nullptr; g_enabled = false; }
+  }
   mqtt_link::subscribe("armor/solar/" + g_node + "/maintenance/command", on_message);
   ESP_LOGI(kTag, "battery maintenance %s", g_enabled ? "is ON" : "is off");
 }
