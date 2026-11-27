@@ -638,6 +638,7 @@ inline bool build_plan(const Request& request, Plan& plan, std::string& why) {
       Step up;
       up.kind = StepKind::kUpdata; up.phase = kPhaseWrite; up.label = "updata"; up.send = "updata"; up.write = true; up.timeout_ms = 600'000;
       up.no_command = request.resume;
+      if (request.resume) steps.clear();   // a battery in its bootloader answers no command: the reads before the writes are left out
       steps.push_back(up);
       Step after; after.phase = kPhaseWrite; after.label = "restart"; after.listen = true; after.prompt = "pylon>"; after.timeout_ms = 30'000; after.settle_ms = 1'500;
       steps.push_back(after);
