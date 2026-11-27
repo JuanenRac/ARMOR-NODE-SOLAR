@@ -646,7 +646,7 @@ inline bool build_plan(const Request& request, Plan& plan, std::string& why) {
       steps.push_back(write_step("barcode", "tbar " + serial, {"Test result:pass"}));
       if (clear_eeprom) { steps.push_back(write_step("eeprom", "eepe 0")); steps.push_back(restart_step()); steps.push_back(login_step()); steps.push_back(write_step("barcode", "tbar " + serial, {"Test result:pass"})); }
       // The maker's tool writes the capacity again and runs the MOSFET test after an update (seen in its console logs). Only for the models whose capacity the maker states.
-      const int official = profile->capacity_ah;
+      const int official = profile->official_ah;
       if (official > 0) {
         steps.push_back(write_step("capacity", "totalcoul " + std::to_string(official)));
         steps.push_back(write_step("mostest", "ctrl mostest on"));
