@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Language-C%2B%2B17-00599c.svg" alt="Langage">
   <img src="https://img.shields.io/badge/Devices-Voltronic%20%C2%B7%20Pylontech-ffb020.svg" alt="Devices">
   <img src="https://img.shields.io/badge/Tests-36%20host%20programs-2ea44f.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Version-0.7.3-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.7.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturité">
 </p>
 
@@ -36,7 +36,7 @@
 
 | | |
 |---|---|
-| Version | `0.7.3` |
+| Version | `0.7.4` |
 | Maturité | Fonctionnel |
 | Rôle | Nœud de terrain solaire pour ESP32-S3 : onduleurs et batteries (famille : Field Nodes, parent : ARMOR-COMMON) |
 | Technologie | C++17, ESP-IDF 5.5.5, ESP32-S3 |
@@ -77,6 +77,7 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 * **Autres protocoles, un seul catalogue :** onduleurs et chargeurs Modbus (EASun SMG II, SRNE), cartes de batterie DALY, JBD et JK, Victron VE.Direct et les variantes PI41 et PI34 de la famille Voltronic, chacun avec son type de port ([protocoles](docs/PROTOCOLS.md)). Écrits d'après les documents publics et essayés seulement sur un ordinateur. Un onduleur qui ne répond jamais au mode ou aux avertissements est tout de même lu, et la vue brute d'un port montre ce qui a été envoyé et la dernière erreur.
 * **Sonder un port muet :** un diagnostic lancé depuis le panneau, qui parcourt vitesses, formats et polarités avec des questions de lecture seulement (jamais d'ordre d'écriture), garde chaque octet envoyé et reçu et distingue un écho d'une réponse et du silence. Pas essayé sur une carte.
 * **Un port illisible dit pourquoi :** la page *Ports* indique si seuls des zéros arrivent, si la question du nœud revient, si les octets sont illisibles (vitesse, niveau ou polarité), si un autre équipement écrit un texte lisible ou si aucune trame n'est jamais complète, avec la vitesse, les broches, la polarité, le nombre d'octets et les derniers ; la console d'une batterie Pylontech esclave est signalée comme telle, et un module qui ne répond pas à sa fiche est marqué sur la page *Lectures*. Testé sur ordinateur ; pas sur une carte.
+* **Une requête web qui ne se termine pas est signalée :** après 20 secondes sur la même requête, le journal la nomme, avec la mémoire interne à ce moment, et le rapport d'état la porte au serveur même si le panneau ne répond pas ; une requête de 5 secondes ou plus est un avertissement. Testé sur ordinateur, pas sur une carte.
 * **Seuils de batterie et charge du système :** les seuils de cellule, d'écart entre cellules et de température sont des réglages du nœud (par défaut 2,80 / 3,00 / 3,55 / 3,65 V, 50 / 100 mV, 0 / 50 °C), et l'état de charge de l'ensemble est pondéré par la capacité, sans valeur quand un pack ne dit pas la sienne.
 * **Batteries Pylontech** (US2000, US3000, US5000) : le tableau `pwr` de la console (tension, courant, températures et état de charge de chaque module), `bat <n>` (tension et température de chaque cellule) et `info <n>` (modèle, capacité restante et totale, cycles), résumés en une pile avec sa capacité et son énergie totales, et la trame RS485 avec ses deux contrôles. Les formats sont écrits de mémoire de la console publique et peuvent varier selon les firmwares. Les colonnes sont trouvées par les noms de l'en-tête (y compris le format de l'US5000 V2.3 avec ses colonnes Id, MosTempr et SysAlarm.St), la charge restante et l'équilibrage viennent de `bat`, et le modèle, la capacité nominale et les cycles de `info` et `stat`, demandés une fois et gardés une demi-heure.
 * **Ce qu'un module Pylontech dit de lui-même :** son modèle et les versions de sa carte et de son logiciel, ses cellules et le courant qu'il admet, les compteurs de sa vie (`stat`), la santé de chaque cellule (`soh`, l'anormale marquée) et l'entrée la plus récente de son journal d'événements, avec les noms des protections tels que la console les imprime. La console ne fait que lire, et un administrateur peut télécharger sous forme de fichier texte ce qu'un port a entendu.
