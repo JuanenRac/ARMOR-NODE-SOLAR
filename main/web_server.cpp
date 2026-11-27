@@ -24,8 +24,6 @@ extern "C" {
 #include "esp_https_server.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_partition.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -37,7 +35,6 @@ extern "C" {
 #include "core/board_s3.hpp"
 #include "core/http_status.hpp"
 #include "core/netplan.hpp"
-#include "core/slow_req.hpp"
 #include "core/image_board.hpp"
 #include "core/json.hpp"
 #include "core/web_policy.hpp"
@@ -51,6 +48,7 @@ extern "C" {
 #include "solar_manager.hpp"
 #include "node_control.hpp"
 #include "node_store.hpp"
+#include "req_watch.hpp"
 #include "psram_mem.hpp"
 #include "psram_new.hpp"
 #include "tls_cert.hpp"
@@ -1108,50 +1106,8 @@ esp_err_t api_handler(httpd_req_t* r) {
   return send_error(r, 404, "not_found");
 }
 
-// ---- a request that does not end (core/slow_req.hpp) ---------------------------------------------------------------------------------------
-
-std::mutex g_requests_lock;
-slowreq::Slot g_requests[2];   // one for each server: plain and HTTPS
-
-esp_err_t watched_api_handler(httpd_req_t* r) {
-  slowreq::Slot& slot = g_requests[is_tls(r) ? 1 : 0];
-  const char* const method = r->method == HTTP_GET ? "GET" : r->method == HTTP_POST ? "POST" : r->method == HTTP_PUT ? "PUT" : "DELETE";
-  const std::string what = slowreq::label(method, r->uri);
-  {
-    std::lock_guard<std::mutex> guard(g_requests_lock);
-    slot.begin(what, now_ms());
-  }
-  const esp_err_t result = api_handler(r);
-  std::uint64_t took = 0;
-  {
-    std::lock_guard<std::mutex> guard(g_requests_lock);
-    took = slot.end(now_ms());
-  }
-  if (took >= slowreq::kSlowMs && !slowreq::may_be_long(what)) {
-    const membudget::Snapshot memory = memory::snapshot();
-    ESP_LOGW(kTag, "%s", slowreq::line(what, took, false, memory.internal_free, memory.internal_largest).c_str());
-  }
-  return result;
-}
-
-// A task of its own: the server's task is the one that does not come back. It touches no flash (a heap query and a log line), so its stack can be in the external RAM.
-void request_watch_task(void*) {
-  for (;;) {
-    vTaskDelay(pdMS_TO_TICKS(5000));
-    for (slowreq::Slot& slot : g_requests) {
-      std::string what;
-      std::uint64_t ms = 0;
-      {
-        std::lock_guard<std::mutex> guard(g_requests_lock);
-        if (!slot.stuck(now_ms())) continue;
-        what = slot.what;
-        ms = now_ms() - slot.since_ms;
-      }
-      const membudget::Snapshot memory = memory::snapshot();
-      ESP_LOGE(kTag, "%s", slowreq::line(what, ms, true, memory.internal_free, memory.internal_largest).c_str());   // an error line: the health report carries it to the server
-    }
-  }
-}
+// A request that does not end is said (req_watch.hpp).
+esp_err_t watched_api_handler(httpd_req_t* r) { return reqwatch::run(r, is_tls(r), api_handler); }
 
 esp_err_t page_handler(httpd_req_t* r) {
   const std::string uri = r->uri;
@@ -1226,7 +1182,7 @@ TlsStatus tls_status() {
 
 bool start(const config::Settings& settings) {
   g_started_with = settings;
-  memory::start_task(request_watch_task, "web-watch", 4096, nullptr, 6);   // above the server's own priority, so that a busy server does not hide itself
+  reqwatch::start();
   const bool tls_wanted = webpolicy::serves_https(settings.web);
   const bool redirect = webpolicy::http_redirects(settings.web);
   bool tls_ok = false;

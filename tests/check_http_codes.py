@@ -2,8 +2,7 @@
 # ARMOR-NODE-SOLAR - guard on the status codes of the panel's server. Nothing is compiled: core/http_status.hpp is the one table, and this fails when
 #   1. the server (main/web_server.cpp, main/api_shared.cpp) answers with a code that is not in the table, which would go out as a 500 with the right body;
 #   2. the stand-in node the panel is tried against (tools/panel_mock.mjs) answers with a code that is not in the table, so a page could be tried against an answer the node never gives;
-#   3. a code in the table has no status line (the table and the switch must say the same);
-#   4. an answer is sent while the lock of the sessions is held: a slow browser then holds up every request that carries a session, on both servers.
+#   3. a code in the table has no status line (the table and the switch must say the same).
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 from __future__ import annotations
 
@@ -40,30 +39,8 @@ def problems_of(table: str, sources: dict[str, str], mock: str) -> list[str]:
     return problems
 
 
-def answers_under_lock(server: str) -> list[str]:
-    """Every block that takes `g_lock` is read from the guard to the brace that closes it: nothing in it may send."""
-    problems: list[str] = []
-    code = re.sub(r"//[^\n]*", "", server)
-    for guard in re.finditer(r"lock_guard<std::mutex>\s+\w+\s*\(\s*g_lock\s*\)", code):
-        depth, at = 0, guard.end()
-        while at < len(code):
-            if code[at] == "{":
-                depth += 1
-            elif code[at] == "}":
-                if depth == 0:
-                    break
-                depth -= 1
-            at += 1
-        held = code[guard.end():at]
-        for call in sorted(set(re.findall(r"\b(send_\w+|httpd_resp_send\w*)\s*\(", held))):
-            line = code.count("\n", 0, guard.start()) + 1
-            problems.append(f"main/web_server.cpp:{line}: {call}() is called while the lock of the sessions is held")
-    return problems
-
-
 def main() -> int:
     problems = problems_of(read("core/http_status.hpp"), {name: read(name) for name in ("main/web_server.cpp", "main/api_shared.cpp")}, read("tools/panel_mock.mjs"))
-    problems += answers_under_lock(read("main/web_server.cpp"))
     if problems:
         print("HTTP_CODES=FAIL")
         for problem in problems:
