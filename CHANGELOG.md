@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The equipment list of a port is in order:** three titled groups (inverters and chargers, batteries and BMS, others), and the protocol lists of an inverter and of VE.Direct in order. The stored values are the same.
 - **A full battery no longer reads as an alarm:** the stack's `alarm` was set by any state column that was not "Normal", so the "High" a Pylontech shows at the end of a charge raised it. A plain "High" or "Low" is now a warning level and no alarm (except in the system alarm column); protections, alarms and words not known are alarms as before. The level, column and value of a warning are not published yet. Not tried on a battery.
 - **A spoiled cell table is no longer published:** a `bat` table far from the lowest and highest cell that `pwr` gave for the same module (bytes lost on the line, a battery that restarts) is left out and the last good cells stay; the cells of a battery that went away are forgotten. Not tried on a battery.
 - **Updating a stack one module at a time:** on the console of a battery that is not the first of its stack the node now accepts a firmware update and writing back its serial number (everything else is still refused there). Off by default like every write. Tested on a computer; not tried on a battery.

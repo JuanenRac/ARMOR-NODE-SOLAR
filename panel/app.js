@@ -99,7 +99,8 @@ function field(labelKey, path, options = {}) {
   }
   if (options.type === "select") {
     input = el("select", { disabled, onchange: e => { const v = e.target.value; setValue(path, options.number ? Number(v) : v); if (options.after) options.after(v); if (options.rerender) render(); } },
-      options.options.map(([value, text]) => el("option", { value: String(value), selected: String(current) === String(value) }, text)));
+      options.groups ? options.groups.map(([title, list]) => el("optgroup", { label: title }, list.map(([value, text]) => el("option", { value: String(value), selected: String(current) === String(value) }, text))))
+        : options.options.map(([value, text]) => el("option", { value: String(value), selected: String(current) === String(value) }, text)));
   } else if (options.type === "number") {
     input = el("input", { type: "number", min: options.min, max: options.max, step: options.step || 1, value: current === undefined ? "" : current, disabled,
       oninput: e => setValue(path, e.target.value === "" ? NaN : Number(e.target.value)) });
@@ -469,6 +470,8 @@ function brokerPage() {
 
 const KINDS = [["voltronic", "kind_voltronic", 2400], ["pylontech", "kind_pylontech", 115200], ["ant", "kind_ant", 19200], ["modbus", "kind_modbus", 9600], ["daly", "kind_daly", 9600], ["jbd", "kind_jbd", 9600], ["jk", "kind_jk", 115200], ["vedirect", "kind_vedirect", 19200], ["raw", "kind_raw", 9600]];
 const kindOf = id => KINDS.find(k => k[0] === id) || KINDS[0];
+// How the equipment list is shown: titled groups, the usual brand first and the others by brand. The values are those of KINDS.
+const KIND_GROUPS = [["groupInverters", ["voltronic", "modbus", "vedirect"]], ["groupBatteries", ["pylontech", "ant", "daly", "jbd", "jk"]], ["groupOther", ["raw"]]];
 const HARDWARE_BAUDS = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800], SOFT_BAUDS = [1200, 2400, 4800, 9600, 19200];
 const portStatus = index => S.ports.find(p => p.port === index + 1) || { state: "disabled" };
 
@@ -730,16 +733,16 @@ function portCard(index) {
     cfg.enabled && pairMismatch(index) ? note(t("pairMismatch", index + 1, pairMismatch(index)), "") : null,
     cfg.enabled ? [
       el("div", { class: "row" },
-        field("equipment", base + "kind", { type: "select", rerender: true, after: kindChanged, options: KINDS.map(k => [k[0], t(k[1])]) }),
+        field("equipment", base + "kind", { type: "select", rerender: true, after: kindChanged, groups: KIND_GROUPS.map(([title, ids]) => [t(title), ids.map(id => [id, t(kindOf(id)[1])])]) }),
         field("baudRate", base + "baud", { type: "select", number: true, options: [[0, t("baudKind", kind[2])]].concat(bauds.map(b => [b, String(b)])) })),
       cfg.kind === "pylontech" ? el("p", { class: "hint" }, t("pylontechBaudHint")) : null,
       el("div", { class: "row" }, field("deviceName", base + "name", { max: 32, hint: t("deviceNameHintSolar") }),
         cfg.kind === "raw" ? null : field("pollSeconds", base + "poll_s", { type: "number", min: 0, max: 3600, hint: t("pollHint") }),
         cfg.kind === "pylontech" ? field("modulesLabel", base + "modules", { type: "number", min: 0, max: 16, hint: t("modulesHint") }) : null,
         cfg.kind === "pylontech" ? field("cellsLabel", base + "cells_per_cycle", { type: "number", min: 0, max: 8, hint: t("cellsHint") }) : null,
-        cfg.kind === "voltronic" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["pi30", t("dialectPi30")], ["pi00", t("dialectPi00")], ["revo", t("dialectRevo")], ["pi17", "PI17 (InfiniSolar 5K, LV6K, WP, TWIN)"], ["pi18", t("dialectPi18")], ["pi41", "PI41 (LV5048)"], ["pi34", "PI34 (MPPT)"]], hint: t("dialectHint") }) : null,
+        cfg.kind === "voltronic" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["pi30", t("dialectPi30")], ["pi00", t("dialectPi00")], ["pi17", "PI17 (InfiniSolar 5K, LV6K, WP, TWIN)"], ["pi18", t("dialectPi18")], ["pi34", "PI34 (MPPT)"], ["pi41", "PI41 (LV5048)"], ["revo", t("dialectRevo")]], hint: t("dialectHint") }) : null,
         cfg.kind === "modbus" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["smg2", "Easun / ISolar SMG II"], ["srne-hybrid", "SRNE hybrid"], ["srne-mppt", "SRNE MPPT"]], hint: t("modbusHint") }) : null,
-        cfg.kind === "vedirect" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["monitor", "BMV / SmartShunt"], ["mppt", "SmartSolar MPPT"], ["inverter", "Phoenix inverter"], ["monitor-hex", "BMV / SmartShunt (HEX)"]], hint: t("vedirectHint") }) : null,
+        cfg.kind === "vedirect" ? field("dialectLabel", base + "dialect", { type: "select", options: [["auto", t("dialectAuto")], ["monitor", "BMV / SmartShunt"], ["monitor-hex", "BMV / SmartShunt (HEX)"], ["inverter", "Phoenix inverter"], ["mppt", "SmartSolar MPPT"]], hint: t("vedirectHint") }) : null,
         cfg.kind === "voltronic" && (cfg.dialect === "auto" || cfg.dialect === "pi30") ? field("parallelLabel", base + "parallel", { type: "number", min: 0, max: 10, hint: t("parallelHint") }) : null),
       cfg.kind === "voltronic" && (cfg.dialect === "auto" || cfg.dialect === "pi30") ? [field("pv2Label", base + "pv2", { type: "checkbox" }), el("p", { class: "hint" }, t("pv2Hint"))] : null,
       mux ? [field("invertLabel", base + "invert", { type: "checkbox" }), el("p", { class: "hint" }, t("invertHint"))]
