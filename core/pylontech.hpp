@@ -180,6 +180,23 @@ inline std::size_t parse_pwr(const std::string& text, std::vector<Module>& modul
   return modules.size();
 }
 
+// The console of a battery that is NOT the first of its stack answers `pwr` with a sheet of itself alone instead of the table: a line "Power <n>" (its place in the stack) and
+// then "Voltage : ... mV", "Current : ... mA" and so on. Returns that place (2 to 16), or 0 when the text is not such a sheet.
+inline int parse_pwr_slave(const std::string& text) {
+  int place = 0;
+  bool voltage = false;
+  std::string line;
+  const auto handle = [&](const std::string& row) {
+    const std::vector<std::string> t = detail::tokens(row);
+    long n = 0;
+    if (t.size() == 2 && t[0] == "Power" && detail::integer(t[1], n) && n >= 1 && n <= 16) place = static_cast<int>(n);
+    else if (place > 0 && t.size() >= 4 && t[0] == "Voltage" && t[1] == ":" && detail::integer(t[2], n) && t[3] == "mV") voltage = true;
+  };
+  for (char c : text) { if (c == '\n') { handle(line); line.clear(); } else line += c; }
+  handle(line);
+  return voltage && place >= 2 ? place : 0;
+}
+
 // The cells of a module from the text a `bat <module>` command printed: one row per cell with the index, the voltage (mV), the current (mA), the temperature
 // (m°C), the four states and the charge (a percentage; the newer firmwares then give the charge in mAH and a Y or N for the cell being balanced). Returns how many cells were
 // read; a row that is not one is skipped, and a cell voltage out of 0 to 10 V refuses the whole table. `remaining_ah` gets the module's charge in ampere-hours when the rows have it (-1

@@ -104,6 +104,20 @@ void summary_tick(std::uint64_t now_ms) {
   if (!topic.empty() && g_publish) g_publish(topic, payload);
 }
 
+// A port that hears bytes and reads none says so in the log, one port at a time: the health report carries the last error line to the server (core/port_diag.hpp).
+std::mutex g_unreadable_lock;
+solar::portdiag::LogSchedule g_unreadable;
+
+void tell_unreadable(const PortStatus& s, std::uint64_t now_ms) {
+  const std::size_t port = static_cast<std::size_t>(s.number - 1);
+  {
+    std::lock_guard<std::mutex> guard(g_unreadable_lock);
+    if (s.readings > 0 && s.state == "reporting") g_unreadable.clear(port);
+    if (s.cause.empty() || !g_unreadable.take(port, now_ms)) return;
+  }
+  ESP_LOGE(kTag, "%s", solar::portdiag::log_line(s.number, s.cause, s.baud, s.rx, s.tx, s.invert, s.bytes_rx, s.cause == "slave" ? std::string() : s.sample, s.slave_module).c_str());
+}
+
 // The capture of the exchanges of the polling: off until the settings turn it on. The flag is read first so that a node with the capture off takes no lock for it.
 std::mutex g_capture_lock;
 framecap::Capture g_capture;
@@ -272,16 +286,27 @@ void fill(Slot& slot, const solar::Poller& poller, std::uint32_t overruns, std::
       facts.critical_alarm = solar::pylontech::summarise(modules).alarm;
     }
   }
-  std::lock_guard<std::mutex> guard(slot.lock);
-  PortStatus& s = slot.status;
-  s.state = poller.state(uptime_ms());
-  s.error = stats.last_error;
-  s.detail = poller.detail();
-  s.bytes_rx = stats.bytes_rx; s.bytes_tx = stats.bytes_tx; s.replies_ok = stats.replies_ok; s.replies_bad = stats.replies_bad; s.timeouts = stats.timeouts; s.readings = stats.readings;
-  s.overruns = overruns;
-  s.framing_errors = framing_errors;
-  if (whole) { slot.reading = std::move(whole); slot.facts = facts; }
-  slot.ant_new_protocol = poller.ant_new_protocol();
+  const std::uint64_t now = uptime_ms();
+  const std::string cause = poller.unreadable_cause(now);
+  const std::string sample = cause.empty() ? std::string() : poller.heard_sample();
+  PortStatus said;
+  {
+    std::lock_guard<std::mutex> guard(slot.lock);
+    PortStatus& s = slot.status;
+    s.cause = cause;
+    s.sample = sample;
+    s.slave_module = poller.slave_module();
+    s.state = poller.state(now);
+    s.error = stats.last_error;
+    s.detail = poller.detail();
+    s.bytes_rx = stats.bytes_rx; s.bytes_tx = stats.bytes_tx; s.replies_ok = stats.replies_ok; s.replies_bad = stats.replies_bad; s.timeouts = stats.timeouts; s.readings = stats.readings;
+    s.overruns = overruns;
+    s.framing_errors = framing_errors;
+    if (whole) { slot.reading = std::move(whole); slot.facts = facts; }
+    slot.ant_new_protocol = poller.ant_new_protocol();
+    said = s;
+  }
+  tell_unreadable(said, now);   // outside the slot's lock: writing the log may take its time
 }
 
 // Reads the settings of the BMS on this port: one request at a time, nothing written, the poller waits. The result is left in the slot for the web server to give.

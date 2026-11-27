@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../core/solar_json.hpp"
@@ -796,6 +797,153 @@ static void test_pylontech_real_logs() {
   CHECK(counter(again, "bat_ov_times") == 2429 && counter(again, "bat_hv_times") == 530);
 }
 
+// A console that waits for the module it was asked about shows no prompt until the answer arrives, and drops it when the next question comes. A module that answers only after six
+// seconds gives nothing within the usual time, and its sheet the first time it is asked again, which waits longer.
+static void test_pylontech_slow_module() {
+  Poller poller(armor::config::Kind::kPylontech, "solar-1", "bank-1", 5, 0);
+  std::uint64_t now = 1000;
+  std::string held, last;
+  std::uint64_t held_at = 0;
+  int cycles = 0, asked_info = 0;
+  armor::json::Value document;
+  for (int turn = 0; turn < 8000 && cycles < 2; ++turn) {
+    const std::vector<std::uint8_t> tx = poller.next_tx(now);
+    now += 40;
+    if (!tx.empty()) {
+      std::string command(tx.begin(), tx.end());
+      while (!command.empty() && command.front() == '\r') command.erase(0, 1);
+      while (!command.empty() && command.back() == '\r') command.pop_back();
+      held.clear();   // a new question ends the wait for the last one
+      std::string reply = sheet_answer(command, 0, false);
+      if (command == "info 7") { ++asked_info; held = reply; held_at = now + 6000; reply = "info 7\n\r"; }
+      if (!reply.empty()) poller.on_rx(reinterpret_cast<const std::uint8_t*>(reply.data()), reply.size(), now);
+    }
+    if (!held.empty() && now >= held_at) { poller.on_rx(reinterpret_cast<const std::uint8_t*>(held.data()), held.size(), now); held.clear(); }
+    std::string topic, payload;
+    if (poller.take_message(now, topic, payload)) {
+      ++cycles;
+      CHECK(armor::json::parse(payload, document) && modules_with_sheet(document) == (cycles == 1 ? 7 : 8));
+    }
+  }
+  CHECK(cycles == 2 && asked_info == 2);
+}
+
+// Why a port that hears bytes reads nothing.
+static void test_port_diagnosis() {
+  namespace diag = armor::solar::portdiag;
+  const std::vector<std::uint8_t> sent = {'\r', 'p', 'w', 'r', '\r'};
+  CHECK(std::string(diag::classify({}, sent, true)).empty());
+  CHECK(std::string(diag::classify(std::vector<std::uint8_t>(40, 0x00), sent, true)) == "flat");
+  CHECK(std::string(diag::classify(std::vector<std::uint8_t>(40, 0xFF), sent, false)) == "flat");
+  std::vector<std::uint8_t> echo = sent;
+  echo.insert(echo.end(), sent.begin(), sent.end());
+  CHECK(std::string(diag::classify(echo, sent, true)) == "echo");
+  CHECK(std::string(diag::classify({0x9A, 0x13, 0xE0, 0x81, 0xC4, 0x05, 'a', 0x00}, sent, true)) == "noise");
+  CHECK(std::string(diag::classify({'H', 'e', 'l', 'l', 'o', '\r', '\n'}, sent, true)) == "text");
+  CHECK(std::string(diag::classify({0x9A, 0x13, 0xE0, 0x81}, {0x01, 0x03}, false)) == "frames");
+  CHECK(diag::sample_hex({1, 2, 3, 4, 5, 6, 7, 0xAB}) == "03 04 05 06 07 AB" && diag::sample_hex({0}) == "00" && diag::sample_hex({}).empty());
+  CHECK(diag::log_line(3, "flat", 115200, 16, 15, false, 230, "00 00") == "port 3 unreadable flat 115200bd rx16 tx15 n230 [00 00]");
+  CHECK(diag::log_line(10, "frames", 1000000, 48, 47, true, 4294967295u, "00 00 00 00 00 00") == "port 10 unreadable frames 1000000bd rx48 tx47 inv n4294967295 [00 00 00 00 00 00]");
+  // it fits the 96 characters of the health report with the log's tag in front
+  CHECK(std::string("armor-ports: ").size() + diag::log_line(10, "frames", 1000000, 48, 47, true, 4294967295u, "00 00 00 00 00 00").size() <= 96);
+
+  diag::LogSchedule schedule;
+  CHECK(schedule.take(2, 0));                                         // at once, even at time zero
+  CHECK(!schedule.take(3, 1000));                                     // another port waits its turn
+  CHECK(schedule.take(3, diag::LogSchedule::kGapMs));
+  CHECK(!schedule.take(2, diag::LogSchedule::kGapMs * 2));            // not repeated before five minutes
+  CHECK(schedule.take(2, diag::LogSchedule::kRepeatMs));
+  schedule.clear(2);
+  CHECK(schedule.take(2, diag::LogSchedule::kRepeatMs + diag::LogSchedule::kGapMs) && !schedule.take(99, 99999999));
+
+  // ten unreadable ports take turns: every one is said, never two closer than the gap
+  diag::LogSchedule ten;
+  std::uint32_t said = 0;
+  std::uint64_t last_said = 0;
+  for (std::uint64_t t = 0; t <= 30ULL * 60ULL * 1000ULL; t += 1000) {
+    for (std::size_t port = 0; port < 10; ++port) {
+      if (!ten.take(port, t)) continue;
+      CHECK(said == 0 || t - last_said >= diag::LogSchedule::kGapMs);
+      said |= 1u << port;
+      last_said = t;
+    }
+  }
+  CHECK(said == 0x3FFu);
+  // any bytes get one of the five words, and the sample never grows
+  std::uint32_t seed = 12345;
+  const auto random = [&]() { seed = seed * 1103515245u + 12345u; return static_cast<std::uint8_t>(seed >> 16); };
+  for (int round = 0; round < 500; ++round) {
+    std::vector<std::uint8_t> heard(static_cast<std::size_t>(random()) + 1), asked(static_cast<std::size_t>(random() % 8));
+    for (auto& b : heard) b = round % 5 == 0 ? static_cast<std::uint8_t>(random() & 1 ? 0xFF : 0x00) : random();
+    for (auto& b : asked) b = random();
+    const std::string word = diag::classify(heard, asked, round % 2 == 0);
+    CHECK(word == "flat" || word == "echo" || word == "noise" || word == "text" || word == "frames");
+    CHECK(diag::sample_hex(heard).size() <= diag::kSampleBytes * 3 - 1);
+  }
+  // an inverter port that hears rubbish and a Modbus port that never gets a frame
+  for (const auto& which : {std::make_pair(armor::config::Kind::kVoltronic, std::string("noise")), std::make_pair(armor::config::Kind::kModbus, std::string("frames"))}) {
+    Poller bad(which.first, "solar-1", "device-1", 5, 0);
+    std::uint64_t at = 1000;
+    const std::uint8_t rubbish[4] = {0x9A, 0x13, 0xE0, 0x81};
+    for (int turn = 0; turn < 8000 && bad.stats().timeouts + bad.stats().replies_bad < 4; ++turn) {
+      const std::vector<std::uint8_t> tx = bad.next_tx(at);
+      at += 40;
+      if (!tx.empty()) bad.on_rx(rubbish, sizeof rubbish, at);
+    }
+    CHECK(bad.unreadable_cause(at) == which.second);
+  }
+
+  // the console of a battery that is not the first of its stack (invented figures): it is said so, and it is not read as a stack of one
+  const std::string slave_sheet =
+      "pwr\n\r@\r\r\n ----------------------------\r\r\n Power  4\r\r\n\r\r\n Voltage         : 50100       mV\r\r\n Current         : -1500       mA\r\r\n Temperature     : 21000       mC\r\r\n"
+      " Coulomb         : 77          %\r\r\n Total Coulomb   : 50000       mAH\r\r\n Basic Status    : Dischg  \r\r\n ----------------------------\r\n\rCommand completed successfully\r\n\r$$\r\n\rpylon>";
+  CHECK(armor::solar::pylontech::parse_pwr_slave(slave_sheet) == 4);
+  CHECK(armor::solar::pylontech::parse_pwr_slave("Power 4\r\nBattery Voltage SOHCount SOHStatus\r\n0 3300 0 Normal\r\n") == 0);
+  CHECK(armor::solar::pylontech::parse_pwr_slave("Power 99\r\nVoltage : 50000 mV\r\n") == 0 && armor::solar::pylontech::parse_pwr_slave("Voltage : 50000 mV\r\n") == 0 && armor::solar::pylontech::parse_pwr_slave("") == 0);
+  {
+    Poller slave(armor::config::Kind::kPylontech, "solar-1", "battery-6", 5, 0);
+    std::uint64_t at = 1000;
+    std::string answer = slave_sheet, topic, payload;
+    const auto run = [&](std::uint32_t bad) {
+      for (int turn = 0; turn < 2000 && slave.stats().replies_bad < bad; ++turn) {
+        const std::vector<std::uint8_t> tx = slave.next_tx(at);
+        at += 40;
+        if (!tx.empty()) slave.on_rx(reinterpret_cast<const std::uint8_t*>(answer.data()), answer.size(), at);
+      }
+    };
+    run(1);
+    CHECK(slave.unreadable_cause(at) == "slave" && slave.slave_module() == 4 && slave.state(at) == "garbled" && !slave.take_message(at, topic, payload));
+    // the cable moved to the first battery: the table comes back and the notice goes
+    at += 6000;
+    std::string table = sheet_answer("pwr", 0, false);
+    for (int turn = 0; turn < 50 && slave.slave_module() != 0; ++turn) {
+      const std::vector<std::uint8_t> tx = slave.next_tx(at);
+      at += 40;
+      if (!tx.empty()) slave.on_rx(reinterpret_cast<const std::uint8_t*>(table.data()), table.size(), at);
+    }
+    CHECK(slave.slave_module() == 0 && slave.unreadable_cause(at).empty());
+  }
+  CHECK(diag::log_line(6, "slave", 115200, 2, 1, false, 900, "", 4) == "port 6 unreadable slave 115200bd rx2 tx1 mod4 n900 []");
+  CHECK(std::string("armor-ports: ").size() + diag::log_line(10, "slave", 1000000, 48, 47, true, 4294967295u, "", 16).size() <= 96);
+
+  // a battery port that hears only zeros
+  Poller poller(armor::config::Kind::kPylontech, "solar-1", "battery-3", 10, 0);
+  std::uint64_t now = 1000;
+  for (int turn = 0; turn < 2000; ++turn) {
+    const std::vector<std::uint8_t> tx = poller.next_tx(now);
+    now += 40;
+    const std::uint8_t zero = 0;
+    if (!tx.empty()) { CHECK(poller.asking() == "pwr"); poller.on_rx(&zero, 1, now); }
+    if (poller.stats().timeouts == 1) CHECK(poller.unreadable_cause(now).empty());   // one silence is not enough to say
+    if (poller.stats().timeouts >= 3) break;
+  }
+  CHECK(poller.state(now) == "garbled" && poller.unreadable_cause(now) == "flat" && poller.heard_sample().compare(0, 5, "00 00") == 0);
+  // a port that hears nothing is silent, not unreadable
+  Poller silent(armor::config::Kind::kPylontech, "solar-1", "battery-4", 10, 0);
+  for (std::uint64_t t = 1000; t < 60000; t += 40) silent.next_tx(t);
+  CHECK(silent.unreadable_cause(60000).empty() && silent.heard_sample().empty());
+}
+
 int main() {
   test_voltronic_commands();
   test_voltronic_replies();
@@ -812,6 +960,8 @@ int main() {
   test_pylontech_remaining_capacity();
   test_pylontech_missing_sheets();
   test_pylontech_late_answer();
+  test_pylontech_slow_module();
+  test_port_diagnosis();
   test_pylontech_real_logs();
   test_pylontech_port_speeds();
   test_messages();
