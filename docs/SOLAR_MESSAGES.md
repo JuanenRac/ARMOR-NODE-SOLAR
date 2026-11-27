@@ -41,6 +41,12 @@ energy at the mean voltage) and `cycles` (the highest of its modules). A field t
 
 The console lists sixteen places whatever is connected: `stack` ends at the last battery that is there, or has been since the node started, so the empty places after it are not sent (one between two batteries is, with `present: false`).
 
+**What is wrong with a battery.** A module may carry `flags`: each state column that is not the normal one, and each cell's own from the `bat` table, with the console's word (`{"column":"voltage","word":"UV","cell":3}`; `cell` counts from 0 and is left out for the module's own columns). A word is a notice (`High`, `Low`, `COCAlm`, `DOCAlm`: not an alarm), a fault of the battery's electronics (`SysError`) or, any other, a protection or an alarm; a word never seen is shown as it is. `cells_unread` lists the cells (from 0) that read 0 V two turns in a row: the battery does not read them. Such a battery has `alarm: true` and those cells do not count in `cell_min_v`. A first table with a cell at 0 V is held back, so one spoiled line is not told as a fault.
+
+**Who made it.** `manufacturer` and `manufacturer_source` (`reported`: the equipment said it; `deduced`: its protocol or model leaves no doubt) are in the inverter message, the stack and each module. A Pylontech console's `info` says it in its `Manufacturer` line; a US2000, US3000, US5000, UP5000 or US2KBPL that does not is deduced; DALY, JBD, JK, ANT and VE.Direct are deduced from the protocol; the Voltronic dialects and the Modbus maps are sold under many names and say nothing. Unknown is left out.
+
+**Impossible figures.** A figure beyond the contract's limits (bytes lost on the line, a row run into the next, not a number) is left out and the rest of the reading goes: one such figure would make the server refuse the whole message.
+
 With no module present the message has `modules: 0` and the empty `stack`, and no other reading: the node says the battery does not answer instead of inventing numbers.
 `current_a` is the sum of the modules (negative discharging), `voltage_v` their mean, `soc_percent` the mean state of charge (left out when unknown: the contract has no nulls).
 
