@@ -598,7 +598,7 @@ static void test_pylontech_alarm_levels() {
   CHECK(pylontech::summarise(modules).alarm);
   modules[0].voltage_state = "Normal";
   // the lowest and highest cell of this row are 3.330 and 3.348 V: a cell read as 1.497 V comes from a spoiled table, a real weak cell would be in the row too
-  CHECK(pylontech::cells_match_row(modules[0], {3.330, 3.348, 3.340}) && !pylontech::cells_match_row(modules[0], {3.348, 1.497}) && !pylontech::cells_match_row(modules[0], {3.348, 0.0}));
+  CHECK(pylontech::cells_match_row(modules[0], {3.330, 3.348, 3.340}) && !pylontech::cells_match_row(modules[0], {3.348, 1.497}) && pylontech::cells_match_row(modules[0], {3.348, 0.0})   /* a 0 V cell has its own rule: held once, then told (test_pylontech_cells_not_read) */);
   modules[0].cell_low_v = 1.497;
   CHECK(pylontech::cells_match_row(modules[0], {3.348, 1.497}));
 }
