@@ -240,6 +240,7 @@ const PAGES = [
   { id: "overview", icon: "◎", label: "navOverview", group: "navNode" },
   { id: "ports", icon: "⇋", label: "navPorts", group: "navSolar" },
   { id: "readings", icon: "☀", label: "navReadings", group: "navSolar" },
+  { id: "battery", icon: "▮", label: "navBattery", group: "navSolar", admin: true },
   { id: "network", icon: "⇄", label: "navNetwork", group: "navNetwork" },
   { id: "wifi", icon: "◌", label: "navWifi", group: "navNetwork" },
   { id: "broker", icon: "⌁", label: "navBroker", group: "navNetwork" },
@@ -1312,7 +1313,7 @@ function updatePills() {
 function shell(content) {
   const groups = [...new Set(PAGES.map(p => p.group))];
   const nav = el("nav", { class: "nav" }, groups.map(g => [el("div", { class: "nav-title" }, t(g)),
-    PAGES.filter(p => p.group === g).map(p => el("button", { class: p.id === S.page ? "active" : "", tip: p.label, onclick: () => go(p.id) }, el("span", { class: "ico" }, p.icon), t(p.label)))]));
+    PAGES.filter(p => p.group === g && (!p.admin || isAdmin())).map(p => el("button", { class: p.id === S.page ? "active" : "", tip: p.label, onclick: () => go(p.id) }, el("span", { class: "ico" }, p.icon), t(p.label)))]));
   const langSelect = el("select", { "aria-label": t("language"), onchange: e => { lang = Number(e.target.value); try { localStorage.setItem("armor_lang", LANGS[lang][0]); } catch (error) { /* ignore */ } document.documentElement.lang = LANGS[lang][0]; persistLanguage(); render(); } },
     LANGS.map((l, i) => el("option", { value: String(i), selected: i === lang }, l[1])));
   const page = PAGES.find(p => p.id === S.page);
@@ -1342,6 +1343,7 @@ function render(full = true) {
     case "broker": content = brokerPage(); break;
     case "ports": content = portsPage(); break;
     case "readings": content = readingsPage(); break;
+    case "battery": content = loadedBatteryPage(); break;
     case "users": content = usersPage(); break;
     case "update": content = updatePage(); break;
     case "help": content = helpPage(); break;
@@ -1351,6 +1353,13 @@ function render(full = true) {
   $app.replaceChildren(shell(content));
   updatePills();
   refreshBar();
+}
+
+// The page that writes to batteries is a script of its own (maintenance.js), asked for when it is first opened.
+function loadedBatteryPage() {
+  if (typeof batteryPage === "function") return batteryPage();
+  if (!document.getElementById("bm-js")) document.head.append(el("script", { id: "bm-js", src: "maintenance.js", onload: () => render() }));
+  return el("p", { class: "muted" }, t("loading"));
 }
 
 // ---- login and set-up screens -----------------------------------------------------------------------------------------------------------
