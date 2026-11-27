@@ -114,6 +114,19 @@ and the same serial number as the try that failed on that port, which the node k
 waits up to 90 s for `Program start`, transfers, and never erases the external memory. It can be insisted on up to 10 times (a real battery took its image after several tries). A node that
 restarted has forgotten the failed try (`nothing_to_resume`): the maker's tool is then the way. **Do not switch the battery off and do not send it a different image.**
 
+## The node's own panel: not done yet
+
+The panel offers neither the writes nor the stack campaign. What it needs, with the same locks as the server's way (nothing less):
+
+1. Off unless `battery.write_enabled` is on and the service password is set; administrators only, with the password asked again for every step.
+2. Routes of the panel (HTTPS only): keep an image (the `.bin`, into external memory, with the same checks of size and header), arm, execute, cancel and the state of the operation. They call the
+   same code as the broker's orders (`main/battery_maintenance.cpp`), with the answers going to the request instead of the broker.
+3. Two steps (arm and execute with the one-time token, never shown) and the serial number typed at both.
+4. A record of who did what, kept across restarts, without the service password.
+5. The campaign: the list of modules read from the first battery, one module at a time with the cable moved, a stop at the first failure, the state kept across restarts, and the cable returned.
+6. A doubtful chip or an image that does not fit blocks, with no way to force it. The same retry for a battery left in its bootloader.
+7. Every text in the eight languages, the route check (`tests/check_routes.py`), the panel text check and a stand-in test of the routes.
+
 ## What is left, and what is not done
 
 * **A real battery.** All of the above is proven only against the simulated console. See the bench plan.
