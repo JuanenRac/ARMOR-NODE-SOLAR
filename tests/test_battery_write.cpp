@@ -173,18 +173,18 @@ static void test_xmodem() {
 
 static void test_identity_and_chip() {
   bench::Battery b;
-  b.model = "US2000C"; b.board = "NF4.E2"; b.serial = "H221014C32213244"; b.soft = "V2.4";
-  const std::string text = "Device address      : 1\r\nManufacturer        : Pylon\r\nDevice name         : US2000C\r\nBoard version       : V10R04\r\nBoard               : NF4.E2\r\nMain Soft version   : B69.20.0.0\r\nSoft  version       : V2.4\r\nBoot  version       : V1.0\r\nBarcode             : H221014C32213244\r\nSpecification       : 48V/50AH\r\nCell Number         : 15\r\n";
+  b.model = "US2000C"; b.board = "NF4.E2"; b.serial = "H000000C30000001"; b.soft = "V2.4";
+  const std::string text = "Device address      : 1\r\nManufacturer        : Pylon\r\nDevice name         : US2000C\r\nBoard version       : V10R04\r\nBoard               : NF4.E2\r\nMain Soft version   : B69.20.0.0\r\nSoft  version       : V2.4\r\nBoot  version       : V1.0\r\nBarcode             : H000000C30000001\r\nSpecification       : 48V/50AH\r\nCell Number         : 15\r\n";
   const Identity id = parse_info(text);
   CHECK(id.valid && id.model == "US2000C" && id.board == "NF4.E2" && id.board_version == "V10R04" && id.soft_version == "V2.4" && id.main_soft_version == "B69.20.0.0");
-  CHECK(id.serial == "H221014C32213244" && id.specification == "48V/50AH" && id.capacity_ah == 50 && id.cells == 15);
+  CHECK(id.serial == "H000000C30000001" && id.specification == "48V/50AH" && id.capacity_ah == 50 && id.cells == 15);
   CHECK(chip_of(id) == Chip::kNewer);   // C3 at the 8th and 9th characters, Board NF4.E2
   CHECK(!parse_info("nothing here").valid && !parse_info("").valid);
   const Identity blank = parse_info("Device name         : US3000C\nBarcode             :                 \nSpecification       : 48V/74AH\n");
   CHECK(blank.valid && blank.serial.empty() && chip_of(blank) == Chip::kUnknown && blank.capacity_ah == 74);
   CHECK(parse_total_coul_mah(" Total Coul: 50000 mAH\r\nCommand completed successfully") == 50000 && parse_total_coul_mah("nothing") == -1);
 
-  Identity older; older.valid = true; older.model = "US3000C"; older.serial = "PPTBH02200409223";
+  Identity older; older.valid = true; older.model = "US3000C"; older.serial = "PPTBH00000000001";
   CHECK(chip_of(older) == Chip::kOlder);
   Identity mismatch = older; mismatch.board = "NF4.E2";
   CHECK(chip_of(mismatch) == Chip::kUnknown);              // the board says newer, the serial says older
@@ -192,22 +192,22 @@ static void test_identity_and_chip() {
   CHECK(chip_of(mismatch2) == Chip::kUnknown);             // the serial says newer, the battery says nothing
   Identity strange = older; strange.board = "XYZ";
   CHECK(chip_of(strange) == Chip::kUnknown);
-  Identity us5; us5.valid = true; us5.model = "US5000"; us5.serial = "PPTBH02C50409223"; us5.board = "NF4.E3";
+  Identity us5; us5.valid = true; us5.model = "US5000"; us5.serial = "PPTBH00C50000001"; us5.board = "NF4.E3";
   CHECK(chip_of(us5) == Chip::kNewer);
   us5.board = "";
   CHECK(chip_of(us5) == Chip::kUnknown);
-  us5.serial = "PPTBH02200409223";
+  us5.serial = "PPTBH00000000001";
   CHECK(chip_of(us5) == Chip::kOlder);
   Identity other = older; other.model = "US2KBPL";
   CHECK(chip_of(other) == Chip::kUnknown);
-  CHECK(!valid_serial("short") && !valid_serial("has space 12345") && !valid_serial(std::string(30, 'A')) && valid_serial("H221014C32213244") && valid_serial("ABC-12345_xyz"));
+  CHECK(!valid_serial("short") && !valid_serial("has space 12345") && !valid_serial(std::string(30, 'A')) && valid_serial("H000000C30000001") && valid_serial("ABC-12345_xyz"));
 }
 
 static void test_image_checks() {
-  Identity older; older.valid = true; older.model = "US3000C"; older.serial = "PPTBH02200409223";
-  Identity newer; newer.valid = true; newer.model = "US3000C"; newer.serial = "H221014C32213244"; newer.board = "NF4.E2";
-  Identity us5old; us5old.valid = true; us5old.model = "US5000"; us5old.serial = "PPTBH02200409223";
-  Identity us5new; us5new.valid = true; us5new.model = "US5000"; us5new.serial = "PPTBH02C50409223"; us5new.board = "NF4.E3";
+  Identity older; older.valid = true; older.model = "US3000C"; older.serial = "PPTBH00000000001";
+  Identity newer; newer.valid = true; newer.model = "US3000C"; newer.serial = "H000000C30000001"; newer.board = "NF4.E2";
+  Identity us5old; us5old.valid = true; us5old.model = "US5000"; us5old.serial = "PPTBH00000000001";
+  Identity us5new; us5new.valid = true; us5new.model = "US5000"; us5new.serial = "PPTBH00C50000001"; us5new.board = "NF4.E3";
   const auto img = [](const char* board, int major, int minor) { return bench::make_image(board, major, minor); };
   CHECK(check_image(img("US2000C", 2, 4), older).ok);
   CHECK(!check_image(img("US2000C_NF4", 2, 4), older).ok && check_image(img("US2000C_NF4", 2, 4), older).code == "board_mismatch");
@@ -324,13 +324,13 @@ static void test_values_are_bounded() {
   CHECK(why_not(Op::kOutputSet, "{\"output\":\"cfet; shut\",\"state\":\"on\"}", id) == refusal::kInvalidParams);
 
   // the serial number
-  CHECK(why_not(Op::kWriteBarcode, "{\"serial\":\"H221014C32213244\"}", id).empty());
-  CHECK(why_not(Op::kWriteBarcode, "{\"serial\":\"short\"}", id) == refusal::kInvalidParams && why_not(Op::kWriteBarcode, "{\"serial\":\"H22101 4C32213244\"}", id) == refusal::kInvalidParams && why_not(Op::kWriteBarcode, "{}", id) == refusal::kInvalidParams);
+  CHECK(why_not(Op::kWriteBarcode, "{\"serial\":\"H000000C30000001\"}", id).empty());
+  CHECK(why_not(Op::kWriteBarcode, "{\"serial\":\"short\"}", id) == refusal::kInvalidParams && why_not(Op::kWriteBarcode, "{\"serial\":\"H00000 0C30000001\"}", id) == refusal::kInvalidParams && why_not(Op::kWriteBarcode, "{}", id) == refusal::kInvalidParams);
   Identity noserial = id; noserial.serial.clear();
   CHECK(why_not(Op::kSocReset, "{}", noserial) == refusal::kSerialUnreadable);              // the erase takes the serial with it: it must be known to be written back
   CHECK(why_not(Op::kEepromErase, "{}", noserial) == refusal::kSerialUnreadable);
   CHECK(why_not(Op::kEepromErase, "{\"restore_barcode\":false}", noserial).empty());
-  CHECK(why_not(Op::kPcbSetup, "{\"serial\":\"H221014C32213244\"}", noserial).empty() && why_not(Op::kPcbSetup, "{}", noserial) == refusal::kInvalidParams);
+  CHECK(why_not(Op::kPcbSetup, "{\"serial\":\"H000000C30000001\"}", noserial).empty() && why_not(Op::kPcbSetup, "{}", noserial) == refusal::kInvalidParams);
 
   // an unknown operation, and the read-only plan cannot be asked for
   Op op;
@@ -394,9 +394,9 @@ static void test_preconditions() {
   CHECK(preconditions(Op::kSocCapacity, g, none) == refusal::kUnknownModel);
   g = f; g.identity.soft_version.clear();
   CHECK(preconditions(Op::kSocCapacity, g, none) == refusal::kUnknownFirmware);
-  g = f; g.typed_serial = "PPTBH02200409224";
+  g = f; g.typed_serial = "PPTBH00000000002";
   CHECK(preconditions(Op::kSocCapacity, g, none) == refusal::kSerialMismatch);
-  g = f; g.typed_serial = "pptbh02200409223";
+  g = f; g.typed_serial = "pptbh00000000001";
   CHECK(preconditions(Op::kSocCapacity, g, none) == refusal::kSerialMismatch);                   // it is compared as typed
   g = f; g.typed_serial.clear();
   CHECK(preconditions(Op::kSocCapacity, g, none) == refusal::kSerialMismatch);
@@ -415,12 +415,12 @@ static void test_preconditions() {
   // a battery with no serial number
   g = f; g.identity.serial.clear(); g.typed_serial = "NOSERIAL";
   CHECK(preconditions(Op::kSetClock, g, none) == refusal::kNone);
-  g.typed_serial = "H221014C32213244";
+  g.typed_serial = "H000000C30000001";
   CHECK(preconditions(Op::kSetClock, g, none) == refusal::kSerialUnreadable);
-  g.typed_serial = "H221014C32213244";
-  CHECK(preconditions(Op::kWriteBarcode, g, J("{\"serial\":\"H221014C32213244\"}")) == refusal::kNone);
-  CHECK(preconditions(Op::kWriteBarcode, g, J("{\"serial\":\"H221014C32213245\"}")) == refusal::kSerialMismatch);
-  CHECK(preconditions(Op::kPcbSetup, g, J("{\"serial\":\"H221014C32213244\"}")) == refusal::kNone);
+  g.typed_serial = "H000000C30000001";
+  CHECK(preconditions(Op::kWriteBarcode, g, J("{\"serial\":\"H000000C30000001\"}")) == refusal::kNone);
+  CHECK(preconditions(Op::kWriteBarcode, g, J("{\"serial\":\"H000000C30000002\"}")) == refusal::kSerialMismatch);
+  CHECK(preconditions(Op::kPcbSetup, g, J("{\"serial\":\"H000000C30000001\"}")) == refusal::kNone);
   CHECK(preconditions(Op::kPreflight, f, none) == refusal::kNone);
 }
 
@@ -598,15 +598,15 @@ static void test_soc_operations() {
   // the maker's procedure after a board replacement
   bench::Battery pcb;
   pcb.serial.clear();
-  run_plan(plan_of(Op::kPcbSetup, "{\"serial\":\"H221014C32213244\"}", pcb), pcb, r);
-  CHECK(r.outcome == "ok" && pcb.serial == "H221014C32213244" && pcb.total_coul_mah == 74000 && pcb.outputs["mostest"] == "ON" && pcb.clock == "26-10-19 14:05:09");
-  CHECK(wrote_line(pcb, "totalcoul 74") && wrote_line(pcb, "ctrl mostest on") && wrote_line(pcb, "tbar H221014C32213244"));
+  run_plan(plan_of(Op::kPcbSetup, "{\"serial\":\"H000000C30000001\"}", pcb), pcb, r);
+  CHECK(r.outcome == "ok" && pcb.serial == "H000000C30000001" && pcb.total_coul_mah == 74000 && pcb.outputs["mostest"] == "ON" && pcb.clock == "26-10-19 14:05:09");
+  CHECK(wrote_line(pcb, "totalcoul 74") && wrote_line(pcb, "ctrl mostest on") && wrote_line(pcb, "tbar H000000C30000001"));
   // the reset of the learned state: erase, restart, log in again, write the capacity and the serial number back
   bench::Battery rs;
   rs.total_coul_mah = 33000;
   run_plan(plan_of(Op::kSocReset, "{}", rs), rs, r);
-  CHECK(r.outcome == "ok" && rs.resets == 1 && rs.serial == "PPTBH02200409223" && rs.total_coul_mah == 74000);
-  CHECK(wrote_line(rs, "eepe 0") && wrote_line(rs, "trst") && wrote_line(rs, "tbar PPTBH02200409223") && wrote_line(rs, "totalcoul 74"));
+  CHECK(r.outcome == "ok" && rs.resets == 1 && rs.serial == "PPTBH00000000001" && rs.total_coul_mah == 74000);
+  CHECK(wrote_line(rs, "eepe 0") && wrote_line(rs, "trst") && wrote_line(rs, "tbar PPTBH00000000001") && wrote_line(rs, "totalcoul 74"));
   CHECK(r.writes_done == 5 && r.steps_done == r.steps_total);
   // the order matters: erase, restart, then the writes that need the administrator mode again
   std::size_t eepe = 0, trst = 0, tbar = 0;
@@ -698,16 +698,16 @@ static void test_the_rest_of_the_writes() {
   // the serial number
   bench::Battery s;
   s.serial.clear();
-  run_plan(plan_of(Op::kWriteBarcode, "{\"serial\":\"H221014C32213244\"}", s), s, r);
-  CHECK(r.outcome == "ok" && s.serial == "H221014C32213244");
+  run_plan(plan_of(Op::kWriteBarcode, "{\"serial\":\"H000000C30000001\"}", s), s, r);
+  CHECK(r.outcome == "ok" && s.serial == "H000000C30000001");
   bench::Battery sf;
   sf.fail_tbar = true;
-  run_plan(plan_of(Op::kWriteBarcode, "{\"serial\":\"H221014C32213244\"}", sf), sf, r);
-  CHECK(r.outcome == "failed" && r.code == "step_failed:write" && sf.serial == "PPTBH02200409223");
+  run_plan(plan_of(Op::kWriteBarcode, "{\"serial\":\"H000000C30000001\"}", sf), sf, r);
+  CHECK(r.outcome == "failed" && r.code == "step_failed:write" && sf.serial == "PPTBH00000000001");
   // erase with the serial written back, and without
   bench::Battery e;
   run_plan(plan_of(Op::kEepromErase, "{}", e), e, r);
-  CHECK(r.outcome == "ok" && e.serial == "PPTBH02200409223" && e.resets == 1);
+  CHECK(r.outcome == "ok" && e.serial == "PPTBH00000000001" && e.resets == 1);
   bench::Battery e2;
   run_plan(plan_of(Op::kEepromErase, "{\"restore_barcode\":false}", e2), e2, r);
   CHECK(r.outcome == "ok" && e2.serial.empty());
@@ -746,12 +746,12 @@ static void test_firmware() {
   CHECK(b.packets_accepted == static_cast<int>(r.packets_total) && b.received_image.size() >= image.size());
   CHECK(std::equal(image.begin(), image.end(), b.received_image.begin()));                       // what arrived is what was sent
   for (std::size_t i = image.size(); i < b.received_image.size(); ++i) CHECK(b.received_image[i] == xmodem::kPad);
-  CHECK(b.soft == "V2.4" && b.serial == "PPTBH02200409223");                                      // the serial number was written back after the update
-  CHECK(wrote_line(b, "updata") && wrote_line(b, "tbar PPTBH02200409223") && !wrote_line(b, "eepe 0"));
+  CHECK(b.soft == "V2.4" && b.serial == "PPTBH00000000001");                                      // the serial number was written back after the update
+  CHECK(wrote_line(b, "updata") && wrote_line(b, "tbar PPTBH00000000001") && !wrote_line(b, "eepe 0"));
   // with the erase of the external memory afterwards
   bench::Battery b2;
   run_plan(firmware_plan(b2, image, true), b2, r, &image);
-  CHECK(r.outcome == "ok" && wrote_line(b2, "eepe 0") && b2.serial == "PPTBH02200409223");
+  CHECK(r.outcome == "ok" && wrote_line(b2, "eepe 0") && b2.serial == "PPTBH00000000001");
   // the receiver asks for some packets again
   bench::Battery nak;
   nak.nak_first_packets = 3;
@@ -838,8 +838,8 @@ static void test_the_catalog() {
   const std::string image_params = "{\"image_size\":200000,\"image_crc32\":1,\"image_version\":\"2.4\"}";
   struct Case { Op op; const char* params; };
   const Case cases[] = {{Op::kSetClock, "{}"}, {Op::kClearStats, "{}"}, {Op::kClearLog, "{}"}, {Op::kClearData, "{\"which\":\"event\"}"}, {Op::kRestart, "{}"}, {Op::kShutdown, "{}"}, {Op::kSocCapacity, "{}"}, {Op::kMosfailTest, "{}"},
-                        {Op::kSocReset, "{}"}, {Op::kPcbSetup, "{\"serial\":\"H221014C32213244\"}"}, {Op::kLimitsDefault, "{}"}, {Op::kProtectionsDefault, "{}"}, {Op::kOutputSet, "{\"output\":\"cfet\",\"state\":\"on\"}"},
-                        {Op::kFaultClear, "{}"}, {Op::kWriteBarcode, "{\"serial\":\"H221014C32213244\"}"}, {Op::kEepromErase, "{}"}, {Op::kExpertCommand, "{\"line\":\"pwr\"}"}};
+                        {Op::kSocReset, "{}"}, {Op::kPcbSetup, "{\"serial\":\"H000000C30000001\"}"}, {Op::kLimitsDefault, "{}"}, {Op::kProtectionsDefault, "{}"}, {Op::kOutputSet, "{\"output\":\"cfet\",\"state\":\"on\"}"},
+                        {Op::kFaultClear, "{}"}, {Op::kWriteBarcode, "{\"serial\":\"H000000C30000001\"}"}, {Op::kEepromErase, "{}"}, {Op::kExpertCommand, "{\"line\":\"pwr\"}"}};
   for (const Case& c : cases) {
     Plan p; std::string why;
     CHECK(build_plan(request(c.op, c.params, identity_of(b)), p, why) && !p.canonical.empty() && !p.summary.empty() && !p.steps.empty());
