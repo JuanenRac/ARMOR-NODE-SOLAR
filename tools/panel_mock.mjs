@@ -60,6 +60,7 @@ const config = {
   system: { auto_restart_hours: 0, login_limit_per_minute: 30, web_recovery: false, web_recovery_after_s: 300 },
   security: { seal_secrets: false, ota_check_board: true, ota_require_board_mark: true },
   capture: { enabled: false, frames: 48 },
+  usb_host: { enabled: false, port: 1, vid: "", pid: "" },
   web: { mode: "both" },
   ble: { mode: "setup" },
   ui: { language: "en" },

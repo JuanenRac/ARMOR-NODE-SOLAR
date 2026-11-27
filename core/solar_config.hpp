@@ -29,6 +29,7 @@
 #include "net_text.hpp"
 #include "node_id.hpp"
 #include "stored_load.hpp"
+#include "usb_hid_link.hpp"
 
 namespace armor::config {
 
@@ -201,6 +202,16 @@ struct SummarySettings {
   int temperature_low_c = 0;            // temperature_low: the coldest module is at or below this
 };
 
+// An inverter on the chip's native USB, as host (core/usb_hid_link.hpp; the s3-wifi board only). OFF unless the owner turns it on: while it is on, that socket is no longer the console or a way to flash.
+// The port it names is read through the USB instead of its pins; everything else about it (name, protocol, readings, MQTT) is the same. `vid` and `pid`: four hexadecimal digits, empty takes any HID device.
+struct UsbHost {
+  bool enabled = false;
+  int port = 1;   // 1 to 10
+  std::string vid, pid;
+};
+// Whether port `index` (0 to 9) is the one read through the USB.
+inline bool on_usb(const UsbHost& usb, std::size_t index) { return usb.enabled && usb.port == static_cast<int>(index) + 1; }
+
 struct Settings {
   std::string node_id;
   std::string node_name;
@@ -253,6 +264,7 @@ struct Settings {
   BatteryWrite battery;
   SummarySettings summary;
   CellLimits cell_limits;
+  UsbHost usb;
 };
 
 struct Problem {
@@ -601,6 +613,12 @@ inline void read_settings(const json::Value& document, Settings& s, Problems& pr
     read_bool(*security, "control_require_sig", s.control_require_sig, "security.control_require_sig", problems);
     read_bool(*security, "ota_invalidate_rejected", s.ota_invalidate_rejected, "security.ota_invalidate_rejected", problems);
   }
+  if (const json::Value* usb = document.get("usb_host"); usb != nullptr && usb->is_object()) {
+    read_bool(*usb, "enabled", s.usb.enabled, "usb_host.enabled", problems);
+    read_int(*usb, "port", s.usb.port, 1, static_cast<long long>(kPortCount), "usb_host.port", problems);
+    read_text(*usb, "vid", s.usb.vid, 4, "usb_host.vid", problems);
+    read_text(*usb, "pid", s.usb.pid, 4, "usb_host.pid", problems);
+  }
   if (const json::Value* capture = document.get("capture"); capture != nullptr && capture->is_object()) {
     read_bool(*capture, "enabled", s.capture_enabled, "capture.enabled", problems);
     read_int(*capture, "frames", s.capture_frames, framecap::kMinFrames, framecap::kMaxFrames, "capture.frames", problems);
@@ -804,13 +822,22 @@ inline Problems validate(const Settings& s) {
   if (l.high_warn_mv > l.high_alarm_mv) bad(problems, "cell_limits.high_warn_mv", "range");
   if (l.delta_warn_mv > l.delta_bad_mv) bad(problems, "cell_limits.delta_warn_mv", "range");
   if (l.temp_low_c >= l.temp_high_c) bad(problems, "cell_limits.temp_low_c", "range");
+  std::uint16_t usb_id = 0;
+  if (!usbhid::parse_id(s.usb.vid, usb_id)) bad(problems, "usb_host.vid", "invalid");
+  if (!usbhid::parse_id(s.usb.pid, usb_id)) bad(problems, "usb_host.pid", "invalid");
+  if (s.usb.enabled) {
+    if (board::kHasEthernet) bad(problems, "usb_host.enabled", "invalid");   // one socket and no second way to flash it
+    const bool inverter = s.usb.port >= 1 && s.usb.port <= static_cast<int>(kPortCount) && s.ports[static_cast<std::size_t>(s.usb.port - 1)].enabled && s.ports[static_cast<std::size_t>(s.usb.port - 1)].kind == "voltronic";
+    if (!inverter) bad(problems, "usb_host.port", "invalid");
+  }
   const std::size_t mux_ports = mux_port_count(s.mux);
   for (std::size_t i = 0; i < kPortCount; ++i) {
     const PortConfig& port = s.ports[i];
     if (!port.enabled) continue;
     const std::string base = "ports." + std::to_string(i) + ".", who = "port" + std::to_string(i + 1);
-    if (mux && i >= mux_ports) { bad(problems, base + "enabled", "not_in_profile"); continue; }
-    if (port.invert && !mux && is_soft_port(i)) bad(problems, base + "invert", "invalid");
+    const bool usb = on_usb(s.usb, i);   // read through the USB: no pins, no line speed of its own
+    if (mux && i >= mux_ports && !usb) { bad(problems, base + "enabled", "not_in_profile"); continue; }
+    if (port.invert && !mux && !usb && is_soft_port(i)) bad(problems, base + "invert", "invalid");
     if (port.cells_per_cycle < 0 || port.cells_per_cycle > 8) bad(problems, base + "cells_per_cycle", "range");
     if ((port.pv2 || port.parallel != 0) && (port.kind != "voltronic" || (port.dialect != "auto" && port.dialect != "pi30"))) bad(problems, port.pv2 ? base + "pv2" : base + "parallel", "invalid");   // only the standard dialect has QPIGS2 and QPGS
     Kind kind = Kind::kVoltronic;
@@ -823,8 +850,8 @@ inline Problems validate(const Settings& s) {
     const bool soft = !mux && is_soft_port(i);   // in the mux profile every port is served by a hardware UART
     const std::vector<int>& speeds = allowed_bauds(soft);
     const int baud = kind_ok ? effective_baud(port) : port.baud;
-    if (kind_ok && std::find(speeds.begin(), speeds.end(), baud) == speeds.end()) bad(problems, base + "baud", soft ? "too_fast_for_emulated" : "range");
-    if (!mux) {
+    if (!usb && kind_ok && std::find(speeds.begin(), speeds.end(), baud) == speeds.end()) bad(problems, base + "baud", soft ? "too_fast_for_emulated" : "range");
+    if (!mux && !usb) {
       if (port.rx < 0) bad(problems, base + "rx", "required"); else claim(port.rx, who, base + "rx");
       if (port.tx >= 0) claim(port.tx, who, base + "tx"); else if (kind_ok && info_of(kind).needs_tx) bad(problems, base + "tx", "required");
       if (port.de >= 0) claim(port.de, who, base + "de");
@@ -893,6 +920,7 @@ inline std::string to_json(const Settings& s, bool secrets) {
   w.key("time").begin_object().field("ntp_enabled", s.time.ntp_enabled).field("ntp", s.time.ntp).field("zone", s.time.zone).end_object();
   w.key("system").begin_object().field("auto_restart_hours", s.auto_restart_hours).field("login_limit_per_minute", s.login_limit_per_minute).field("web_recovery", s.web_recovery).field("web_recovery_after_s", s.web_recovery_after_s).end_object();
   w.key("security").begin_object().field("seal_secrets", s.seal_secrets).field("ota_check_board", s.ota_check_board).field("ota_require_board_mark", s.ota_require_board_mark).field("control_require_sig", s.control_require_sig).field("ota_invalidate_rejected", s.ota_invalidate_rejected).end_object();
+  w.key("usb_host").begin_object().field("enabled", s.usb.enabled).field("port", s.usb.port).field("vid", s.usb.vid).field("pid", s.usb.pid).end_object();
   w.key("capture").begin_object().field("enabled", s.capture_enabled).field("frames", s.capture_frames).end_object();
   w.key("cell_limits").begin_object().field("low_alarm_mv", s.cell_limits.low_alarm_mv).field("low_warn_mv", s.cell_limits.low_warn_mv).field("high_warn_mv", s.cell_limits.high_warn_mv)
       .field("high_alarm_mv", s.cell_limits.high_alarm_mv).field("delta_warn_mv", s.cell_limits.delta_warn_mv).field("delta_bad_mv", s.cell_limits.delta_bad_mv)

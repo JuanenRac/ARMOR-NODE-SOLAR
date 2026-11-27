@@ -34,6 +34,7 @@ extern "C" {
 #include "psram_mem.hpp"
 #include "psram_new.hpp"
 #include "uart_ports.hpp"
+#include "usb_port.hpp"
 
 namespace armor::manager {
 namespace {
@@ -65,6 +66,9 @@ struct Slot {
   bool open = false;
 };
 std::array<Slot, config::kPortCount> g_slots;
+config::UsbHost g_usb;
+// The native USB stays a console and a way to flash for this long after a start, before it becomes a host.
+constexpr unsigned kUsbHostDelayMs = 15000;
 Publish g_publish;
 
 std::uint64_t uptime_ms() { return static_cast<std::uint64_t>(esp_timer_get_time()) / 1000ULL; }
@@ -402,7 +406,17 @@ void port_task(void* argument) {
   options.baud = config::effective_baud(cfg);
   options.rx = cfg.rx; options.tx = cfg.tx; options.de = cfg.de; options.invert = cfg.invert;
   std::string error;
-  std::unique_ptr<ports::Port> port = ports::open(options, error);
+  const bool usb = config::on_usb(g_usb, slot.index);
+  std::unique_ptr<ports::Port> port;
+  if (usb) {
+    vTaskDelay(pdMS_TO_TICKS(kUsbHostDelayMs));
+    std::uint16_t vid = 0, pid = 0;
+    usbhid::parse_id(g_usb.vid, vid);
+    usbhid::parse_id(g_usb.pid, pid);
+    port = usbhost::open(vid, pid, error);
+  } else {
+    port = ports::open(options, error);
+  }
   if (!port) {
     ESP_LOGE(kTag, "port %u could not be opened (%s): it stays off", static_cast<unsigned>(slot.index + 1), error.c_str());
     std::lock_guard<std::mutex> guard(slot.lock);
@@ -422,7 +436,9 @@ void port_task(void* argument) {
   std::uint8_t buffer[256];
   std::uint64_t last_fill_ms = 0, last_raw_total = 0;
   std::unique_ptr<probe::Probe> prober;
-  { std::lock_guard<std::mutex> guard(slot.lock); slot.open = true; }
+  // a probe sweeps speeds and polarities of a serial line: an USB port has none, so it is never offered to one
+  { std::lock_guard<std::mutex> guard(slot.lock); slot.open = !usb; }
+  bool usb_was_there = false;
   for (;;) {
     if (slot.probe_requested.exchange(false)) {
       poller.abort(uptime_ms());
@@ -445,7 +461,11 @@ void port_task(void* argument) {
     if (slot.battery_requested.exchange(false)) run_battery(slot, *port);
     const std::uint64_t now = uptime_ms();
     const std::vector<std::uint8_t> request = poller.next_tx(now);
-    if (!request.empty() && !port->write(request.data(), request.size())) ESP_LOGW(kTag, "port %u: the request could not be sent", static_cast<unsigned>(slot.index + 1));
+    if (usb) {
+      const bool there = usbhost::connected();
+      if (there != usb_was_there) { poller.abort(now); usb_was_there = there; }   // plugged or unplugged: the exchange under way is dropped
+    }
+    if (!request.empty() && !port->write(request.data(), request.size()) && !usb) ESP_LOGW(kTag, "port %u: the request could not be sent", static_cast<unsigned>(slot.index + 1));
     const std::size_t n = port->read(buffer, sizeof buffer, 40);
     if (n > 0) poller.on_rx(buffer, n, uptime_ms());
     std::string topic, payload;
@@ -458,9 +478,16 @@ void port_task(void* argument) {
     if (ready || after - last_fill_ms >= 1000) {
       last_fill_ms = after;
       fill(slot, poller, port->overruns(), port->framing_errors(), ready ? std::move(payload) : std::string());
-      if (after < slot.raw_wanted_until_ms.load() && poller.raw().total() != last_raw_total) {
+      if (usb) {
+        const std::string id = usbhost::device_id();
+        const bool there = usbhost::connected();
+        std::lock_guard<std::mutex> guard(slot.lock);
+        slot.status.detail = id.empty() ? std::string() : "USB " + id;
+        if (!there) { slot.status.state = "waiting"; slot.status.error = id.empty() ? "usb_no_device" : "usb_not_hid"; }
+      }
+      if (after < slot.raw_wanted_until_ms.load() && (usb || poller.raw().total() != last_raw_total)) {
         last_raw_total = poller.raw().total();
-        const std::string dump = poller.diagnosis() + poller.raw().dump();
+        const std::string dump = (usb ? usbhost::diagnosis() : std::string()) + poller.diagnosis() + poller.raw().dump();
         std::lock_guard<std::mutex> guard(slot.lock);
         slot.raw = dump;
       }
@@ -610,7 +637,9 @@ static void start_mux(const config::Settings& settings) {
     s.number = static_cast<int>(i + 1);
     config::MuxSlot where;
     const bool in_profile = config::mux_slot_of(settings.mux, i, where);
-    s.enabled = cfg.enabled && in_profile;
+    const bool usb = config::on_usb(g_usb, i);
+    s.usb = usb;
+    s.enabled = cfg.enabled && (in_profile || usb);
     s.soft = false;
     s.kind = cfg.kind; s.name = cfg.name;
     s.baud = config::effective_baud(cfg);
@@ -618,6 +647,7 @@ static void start_mux(const config::Settings& settings) {
     s.poll_s = config::effective_poll_s(cfg);
     if (in_profile) { s.group = static_cast<int>(where.group); s.channel = static_cast<int>(where.channel); s.rx = settings.mux[where.group].rx; s.tx = settings.mux[where.group].tx; }
     s.state = s.enabled ? "starting" : "disabled";
+    if (usb) { s.group = -1; s.rx = -1; s.tx = -1; if (s.enabled) xTaskCreate(port_task, "port-usb", 6144, &slot, 5, nullptr); continue; }
     if (s.enabled) g_groups[where.group].ports.push_back(i);
   }
   leds::start(settings.leds, settings);
@@ -629,6 +659,8 @@ static void start_mux(const config::Settings& settings) {
 
 void start(const config::Settings& settings, Publish publish) {
   g_publish = std::move(publish);
+  g_usb = settings.usb;
+  if (board::kHasEthernet) g_usb.enabled = false;
   kept_before_restart();
   {
     std::lock_guard<std::mutex> guard(g_summary_lock);
@@ -652,6 +684,8 @@ void start(const config::Settings& settings, Publish publish) {
     s.baud = config::effective_baud(cfg);
     s.rx = cfg.rx; s.tx = cfg.tx; s.de = cfg.de; s.poll_s = config::effective_poll_s(cfg);
     s.invert = cfg.invert;
+    s.usb = config::on_usb(g_usb, i);
+    if (s.usb) { s.soft = false; s.rx = s.tx = s.de = -1; }
     s.state = cfg.enabled ? "starting" : "disabled";
     if (!cfg.enabled) continue;
     xTaskCreate(port_task, ("port" + std::to_string(i + 1)).c_str(), 6144, &slot, 5, nullptr);

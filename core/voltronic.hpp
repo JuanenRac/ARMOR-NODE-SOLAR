@@ -3,7 +3,7 @@
 //
 // Source: the public "communication protocol" document of these inverters, written from what it says; NOTHING here has been connected to an inverter.
 //
-//   Serial 2400 baud 8N1 on the RS232 port (the USB port is a HID device, which a microcontroller cannot read: use the RS232 one).
+//   Serial 2400 baud 8N1 on the RS232 port. The USB port of these units is usually a HID device carrying the same frames: the node can be its host (core/usb_hid_link.hpp, off by default).
 //   Command:  ASCII text (QPIGS, QPIRI, QMOD, QPIWS ...), then a CRC-16 of two bytes, then CR.
 //   Reply:    '(' + text + CRC-16 of two bytes + CR. "(NAK" + CRC + CR when the command is refused, "(ACK" for a setting that was accepted.
 //   CRC-16:   XMODEM (polynomial 0x1021, start 0) over every byte before the CRC; if either byte of the result is 0x28, 0x0D or 0x0A it is

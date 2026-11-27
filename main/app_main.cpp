@@ -164,7 +164,8 @@ extern "C" void app_main() {
   }
   if (!network_ok) ESP_LOGE(kTag, "the network could not be started: the node stays local");
   armor::clocksync::start(settings);
-  armor::improv_serial::start();   // Improv Wi-Fi over the USB cable (ESP Web Tools)
+  // With the native USB as a host (usb_host, off by default) that socket is no console, so Improv is not listened for.
+  if (setup || !settings.usb.enabled || armor::board::kHasEthernet) armor::improv_serial::start();   // Improv Wi-Fi over the USB cable (ESP Web Tools)
   const bool panel_ok = network_ok && armor::web::start(settings);
   // system.web_recovery (off by default): restart when the panel stays silent; it also says here why a restart of its kind was made.
   armor::webrecovery::start(panel_ok && !setup && settings.web_recovery, settings.web_recovery_after_s);
