@@ -406,6 +406,59 @@ static void test_extended_in_the_message() {
   CHECK(off.count("QFLAG") == 0 && off.count("QT") == 0);
 }
 
+// The parts of the message that are left out, the answers that are refused and the questions that get nothing back.
+static void test_extended_edges() {
+  voltronic::Extended x;
+  json::Writer empty;
+  empty.begin_object();
+  write_extended(empty, x);
+  empty.end_object();
+  CHECK(empty.str() == "{}");
+  x.has_bms = true;                                     // no battery on the inverter's line: only that is said
+  x.has_defaults = true;
+  x.defaults.battery_type = x.defaults.input_range = x.defaults.output_priority = x.defaults.charger_priority = 99;
+  x.energy_wh[6] = 5;                                   // a total with no date
+  x.ac_charge_options = {2, 10};
+  json::Writer some;
+  some.begin_object();
+  write_extended(some, x);
+  some.end_object();
+  const json::Value doc = parse(some.str());
+  CHECK(doc.get("bms") != nullptr && doc.get("bms")->get("connected") != nullptr && doc.get("bms")->get("soc_percent") == nullptr);
+  CHECK(doc.get("defaults")->get("battery_type") == nullptr && doc.get("energy")->get("day") == nullptr && doc.get("energy")->get("load_total_wh")->number == 5);
+  CHECK(doc.get("ac_charge_current_options_a") != nullptr && doc.get("options_on") == nullptr);
+  std::string day;
+  CHECK(!voltronic::parse_qt("19991231000000", day) && !voltronic::parse_qt("20210026000000", day) && !voltronic::parse_qt("20210700000000", day) && !voltronic::parse_qt("20210732000000", day));
+  std::vector<const char*> on, off;
+  CHECK(!voltronic::parse_qflag("", on, off) && !voltronic::parse_qflag("DaE", on, off) && !voltronic::parse_qflag("E" + std::string(40, 'a') + "D", on, off));
+  CHECK(voltronic::parse_qflag("ED", on, off) && on.empty() && off.empty());
+  voltronic::Bms b;
+  CHECK(voltronic::parse_qbms("1 0 0 0 0 0 0 0 0 0", b) && !b.connected);
+  CHECK(!voltronic::parse_qbms("0 100 2 0 1 532 532 450 0 30", b) && !voltronic::parse_qbms("0 100 0 2 1 532 532 450 0 30", b) && !voltronic::parse_qbms("0 100 0 0 2 532 532 450 0 30", b) && !voltronic::parse_qbms("0 x 0 0 1 532 532 450 0 30", b));
+
+  // answers that are refused (NAK, a damaged frame, a shape that is not the one asked) are asked twice and then left alone
+  Bench bad("pi30", false, 0);
+  bad.poller.set_extended(true);
+  bad.standard();
+  bad.answers["QFLAG"] = reply("NAK");
+  bad.answers["QDI"] = bad_crc_reply("230.0");
+  bad.answers["QMCHGCR"] = reply("abc");
+  bad.answers["QMUCHGCR"] = reply("002 010");
+  bad.answers["QBMS"] = reply("9");
+  bad.answers["QT"] = reply("today");
+  bad.run(150000);
+  CHECK(bad.count("QFLAG") == 2 && bad.count("QDI") == 2 && bad.count("QMCHGCR") == 2 && bad.count("QBMS") == 2 && bad.count("QT") == 2);
+  CHECK(bad.count("QLT") == 2 && !bad.messages.empty());
+  const json::Value last = parse(bad.messages.back());
+  CHECK(last.get("ac_charge_current_options_a") != nullptr && last.get("energy") == nullptr && last.get("bms") == nullptr);
+  // the other dialects are not asked
+  Bench plain("pi00", false, 0);
+  plain.poller.set_extended(true);
+  plain.standard();
+  plain.run(30000);
+  CHECK(plain.count("QFLAG") == 0);
+}
+
 int main() {
   test_qpigs2();
   test_qpgs();
@@ -421,6 +474,7 @@ int main() {
   test_identity_only_in_the_standard_dialect();
   test_extended_parsers();
   test_extended_in_the_message();
+  test_extended_edges();
   std::printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

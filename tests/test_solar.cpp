@@ -603,6 +603,45 @@ static void test_pylontech_pwrsys() {
   CHECK(pylontech::parse_pwrsys("Power System Information\r\n System SOC : 50 %\r\n System SOH : 300 %\r\n Recommend chg voltage : 53250 mV\r\n Recommend chg current : 14800 mA\r\n", s));
   CHECK(s.soc_percent == 50 && s.health_percent < 0 && s.charge_voltage_v > 53 && s.charge_current_a < 0 && s.remaining_ah < 0);
 
+  // every line the sheet lacks is left out of the message, and numbers no stack can have are not taken
+  json::Writer bare;
+  bare.begin_object();
+  write_system(bare, pylontech::SystemSheet{});
+  bare.end_object();
+  CHECK(bare.str() == "{\"bms_system\":{}}");
+  CHECK(pylontech::parse_pwrsys("Power System Information\n\tSystem SOC : 10 %\n Total Num : 99\n Present Num : -1\n Sleep Num : x\n System RC : -5 mAH\n System FCC :\n system Recommend chg voltage: 2000000 mV\n Recommend dsg voltage : 45000 mV\n system Recommend dsg current: 99000000 mA\n no colon here\n", s));
+  CHECK(s.soc_percent == 10 && s.modules_total < 0 && s.modules_present < 0 && s.modules_sleep < 0 && s.remaining_ah < 0 && s.full_capacity_ah < 0 && s.charge_voltage_v < 0 && s.discharge_voltage_v == 45.0 && s.discharge_current_a < 0);
+
+  // a battery that stays silent to `pwrsys` still gives its reading, and is asked again only half an hour after the second silence
+  {
+    Poller poller(armor::config::Kind::kPylontech, "solar-1", "bank-1", 5, 1);
+    poller.set_extended(true);
+    std::uint64_t now = 1000;
+    int asked = 0, readings = 0;
+    const auto run = [&](std::uint64_t until) {
+      for (; now < until; now += 40) {
+        const std::vector<std::uint8_t> tx = poller.next_tx(now);
+        if (!tx.empty()) {
+          std::string command(tx.begin(), tx.end());
+          while (!command.empty() && command.front() == '\r') command.erase(0, 1);
+          while (!command.empty() && command.back() == '\r') command.pop_back();
+          if (command == "pwrsys") ++asked;
+          else {
+            const std::string answer = sheet_answer(command, 0, false);
+            poller.on_rx(reinterpret_cast<const std::uint8_t*>(answer.data()), answer.size(), now);
+          }
+        }
+        std::string topic, payload;
+        if (poller.take_message(now, topic, payload)) ++readings;
+      }
+    };
+    run(120000);
+    CHECK(asked == 2 && readings > 5);
+    now += Poller::kExtendedRarelyMs;
+    run(now + 60000);
+    CHECK(asked >= 3);
+  }
+
   // the poller asks it after the modules, puts it in the message, and leaves alone a battery that refuses it twice
   for (const bool knows : {true, false}) {
     Poller poller(armor::config::Kind::kPylontech, "solar-1", "bank-1", 5, 1);
