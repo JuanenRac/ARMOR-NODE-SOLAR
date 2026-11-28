@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.7.8] - Stack totals, inverter counters and an SMG II register guard
+
 - **The totals of a Pylontech stack are read (`pwrsys`, read only):** state of charge and health of the whole stack, charge left and learned, modules asleep and the recommended charge and discharge limits go in the battery message (`bms_system`). Decoded from a public MIT-licensed capture; not tried on a battery. The node never sends `login debug`.
 - **The energy an inverter counts itself and what it says of its settings (read only):** a Voltronic family unit is asked, one question per cycle, for its date and the panel and load energy of the day, month, year and total, its flags, factory defaults, accepted charge currents and what it hears from its battery. Decoded from a public MIT-licensed catalogue; not tried on an inverter.
 - **An SMG II with another register map is no longer misread:** register 184 is asked first, and a unit that says layout 3 to 10 publishes no figure and says why on the panel. A unit that does not answer that register is read as before. Not tried on an inverter.
