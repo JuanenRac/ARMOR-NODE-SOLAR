@@ -294,7 +294,7 @@ function psPill(state) {
 }
 const portErrorText = s => (s.state === "error" && L["pe_" + s.error] ? t("pe_" + s.error) : s.error && L["le_" + s.error] ? t("le_" + s.error) : s.error || "");
 // Why a port that hears bytes reads nothing, as the node says it (core/port_diag.hpp).
-const CAUSES = ["flat", "echo", "noise", "text", "frames", "slave"];
+const CAUSES = ["flat", "echo", "noise", "text", "frames", "slave", "layout"];
 const portLiveText = s => t("portCounters", s.bytes_rx, s.bytes_tx, s.replies_ok, s.replies_bad, s.timeouts, s.readings);
 
 const BOARD_NAMES = { "s3-wifi": "ESP32-S3-WROOM-1 N16R8", "s3-eth": "Waveshare ESP32-S3-ETH" };
