@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The pictures of the web panel in the README are retaken** from the current pages, with the made-up data of the stand-in node.
+
 ## [0.7.7] - Battery faults and makers, writes from the node's panel, inverter by USB
 
 - ### Added
