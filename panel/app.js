@@ -938,6 +938,24 @@ const stackAlarm = m => !!m.alarm || !!m.protecting || (m.stack || []).some(x =>
 // The full capacity of a stack is an estimate when a battery that is there has not told its own: it is counted as the others.
 const aboutFull = m => ((m.stack || []).some(x => x.present && x.full_capacity_ah === undefined) ? "≈ " : "");
 
+// What the first battery of a stack says of the whole stack (pwrsys) and what an inverter counts itself: shown only when said.
+function stackChips(m) {
+  const s = m.bms_system;
+  if (!s) return null;
+  const said = (label, value, unit, digits) => (isNum(value) ? chip(t(label), num(value, digits) + " " + unit) : null);
+  const chips = [said("rd_stackSoc", s.soc_percent, "%", 0), said("rd_stackHealth", s.health_percent, "%", 0), said("rd_stackLeft", s.remaining_ah, "Ah", 1), said("rd_stackFull", s.full_capacity_ah, "Ah", 1),
+    isNum(s.modules_sleep) ? chip(t("rd_stackAsleep"), String(s.modules_sleep)) : null, said("rd_chargeVolts", s.charge_voltage_v, "V", 1), said("rd_chargeAmps", s.charge_current_a, "A", 1),
+    said("rd_dischargeVolts", s.discharge_voltage_v, "V", 1), said("rd_dischargeAmps", s.discharge_current_a, "A", 1)].filter(Boolean);
+  return chips.length ? el("div", { class: "rv-chips" }, chips) : null;
+}
+
+function counterChips(m) {
+  const e = m.energy || {};
+  const counted = [["rd_pvToday", e.pv_today_wh], ["rd_pvMonth", e.pv_month_wh], ["rd_pvYear", e.pv_year_wh], ["rd_pvTotal", m.pv_energy_total_wh], ["rd_loadToday", e.load_today_wh], ["rd_loadMonth", e.load_month_wh],
+    ["rd_loadYear", e.load_year_wh], ["rd_loadTotal", e.load_total_wh]].filter(([, wh]) => isNum(wh)).map(([label, wh]) => chip(t(label), num(wh / 1000, 1) + " kWh"));
+  return counted.length ? el("div", { class: "rv-chips" }, counted) : null;
+}
+
 function batterySection(port, m) {
   const limits = cellLimits(m), alarm = stackAlarm(m), fault = (m.stack || []).some(x => x.present && bmsFault(x));
   const head = el("header", { class: "rv-head" },
@@ -956,6 +974,7 @@ function batterySection(port, m) {
         chip(t("rd_temp"), num(m.temperature_min_c, 1) + " – " + num(m.temperature_max_c, 1) + " °C"),
         m.capacity_ah === undefined || m.full_capacity_ah === undefined ? null : chip(t("rd_capacity"), aboutFull(m) + num(m.capacity_ah, 1) + " / " + num(m.full_capacity_ah, 1) + " Ah" + (m.energy_kwh === undefined ? "" : " · " + num(m.energy_kwh, 2) + " kWh")),
         m.balancing ? chip(t("rv_balancing"), String(m.balancing)) : null)),
+    stackChips(m),
     el("div", { class: "rv-modules" }, (m.stack || []).map(x => moduleCard(x, limits, port.port + ":" + x.n, port.kind === "pylontech"))));
   return section;
 }
@@ -973,6 +992,7 @@ function inverterSection(port, m) {
       tile("⌂", t("rd_load"), watts(m.out_w), Math.round(m.out_va) + " VA · " + num(m.out_v, 0) + " V · " + num(m.out_hz, 1) + " Hz · " + Math.round(m.load_percent) + " %", m.load_percent),
       tile("▮", t("rd_battery"), Math.round(m.battery_percent) + " %", num(m.battery_v, 2) + " V · " + num(m.battery_a, 1) + " A"),
       tile("°", t("rd_temp"), Math.round(m.heatsink_c) + " °C", "")),
+    counterChips(m),
     m.warnings_known === false ? el("p", { class: "muted" }, t("rd_warnings") + ": —") : warnings.length
       ? el("ul", { class: "rv-problems" }, warnings.map(w => el("li", { class: fault ? "bad" : "warn" }, w))) : el("p", { class: "muted" }, t("rd_warnings") + ": " + t("rd_none")));
   return fault ? blink(section) : section;
