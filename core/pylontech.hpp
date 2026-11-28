@@ -24,6 +24,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "battery_info.hpp"
@@ -960,6 +961,127 @@ inline bool parse_frame(std::string_view text, Frame& out) {
   if (body.size() != 12 + info_length || length_field(info_length) != body.substr(8, 4)) return false;
   out.version = number(0, 2); out.address = number(2, 2); out.cid1 = number(4, 2); out.cid2 = number(6, 2);
   out.info = std::string(body.substr(12));
+  return true;
+}
+
+// ---- the INFO of two replies ---------------------------------------------------------------------------------------------------------
+// The layouts of the public MIT-licensed library Frankkkkk/python-pylontech, whose captured frames of US2000, US3000 and UP2500 the tests read. They only decode: nothing here asks
+// over RS485 yet, and no battery of this project has been read this way.
+
+struct AnalogModule {
+  std::vector<int> cells_mv;
+  std::vector<int> temperatures_dc;   // tenths of a degree; the first is the one of the electronics
+  int current_da = 0;                 // tenths of an ampere, positive while charging
+  int voltage_mv = 0;
+  long remaining_mah = 0, total_mah = 0;
+  int cycles = 0;
+};
+
+struct ManagementInfo {
+  int charge_voltage_mv = 0, discharge_voltage_mv = 0;
+  int charge_current_da = 0, discharge_current_da = 0;   // the discharge limit comes negative
+  bool charge_enable = false, discharge_enable = false, charge_immediately_1 = false, charge_immediately_2 = false, full_charge_request = false;
+};
+
+namespace detail {
+
+// Reads the hexadecimal text of an INFO from left to right; once it runs short or meets another character every later read fails.
+class HexReader {
+ public:
+  explicit HexReader(std::string_view text) : text_(text) {}
+  bool ok() const { return ok_; }
+  bool done() const { return ok_ && at_ == text_.size(); }
+  long take(std::size_t digits) {
+    if (!ok_ || at_ + digits > text_.size()) {
+      ok_ = false;
+      return 0;
+    }
+    long value = 0;
+    for (std::size_t i = 0; i < digits; ++i) {
+      const char c = text_[at_ + i];
+      const int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+      if (digit < 0) {
+        ok_ = false;
+        return 0;
+      }
+      value = value * 16 + digit;
+    }
+    at_ += digits;
+    return value;
+  }
+  int signed16() {
+    const long value = take(4);
+    return static_cast<int>(value >= 0x8000 ? value - 0x10000 : value);
+  }
+
+ private:
+  std::string_view text_;
+  std::size_t at_ = 0;
+  bool ok_ = true;
+};
+
+inline bool analog_module(HexReader& in, AnalogModule& out) {
+  const long cells = in.take(2);
+  if (!in.ok() || cells < 1 || cells > 32) return false;
+  for (long i = 0; i < cells; ++i) out.cells_mv.push_back(in.signed16());
+  const long temperatures = in.take(2);
+  if (!in.ok() || temperatures < 1 || temperatures > 16) return false;
+  for (long i = 0; i < temperatures; ++i) out.temperatures_dc.push_back(in.signed16() - 2731);   // sent as tenths of a kelvin
+  out.current_da = in.signed16();
+  out.voltage_mv = static_cast<int>(in.take(4));
+  const long remaining = in.take(4);
+  const long items = in.take(2);
+  const long total = in.take(4);
+  out.cycles = static_cast<int>(in.take(4));
+  out.remaining_mah = remaining;
+  out.total_mah = total;
+  if (items > 2) {   // a large module says its capacities again, in three bytes
+    out.remaining_mah = in.take(6);
+    out.total_mah = in.take(6);
+  }
+  return in.ok();
+}
+
+}  // namespace detail
+
+// The INFO of the reply to the analogue values (command 0x42). `whole_stack`: it was asked with FF, so a count of modules follows the information flag; otherwise the number of the
+// module asked for follows it and one module comes. False (and `out` empty) for anything that does not fill the text exactly.
+inline bool read_analog(std::string_view info, bool whole_stack, std::vector<AnalogModule>& out) {
+  out.clear();
+  detail::HexReader in(info);
+  in.take(2);   // the information flag
+  const long second = in.take(2);
+  const long modules = whole_stack ? second : 1;
+  if (!in.ok() || modules < 1 || modules > 16) return false;
+  for (long i = 0; i < modules; ++i) {
+    AnalogModule module;
+    if (!detail::analog_module(in, module)) {
+      out.clear();
+      return false;
+    }
+    out.push_back(std::move(module));
+  }
+  if (!in.done()) out.clear();
+  return in.done();
+}
+
+// The INFO of the reply to the management information (command 0x92): what the battery asks of its charger.
+inline bool read_management(std::string_view info, ManagementInfo& out) {
+  detail::HexReader in(info);
+  in.take(2);   // the module asked for
+  ManagementInfo read;
+  read.charge_voltage_mv = static_cast<int>(in.take(4));
+  read.discharge_voltage_mv = static_cast<int>(in.take(4));
+  read.charge_current_da = in.signed16();
+  read.discharge_current_da = in.signed16();
+  const long status = in.take(2);
+  if (!in.done()) return false;
+  read.charge_enable = (status & 0x80) != 0;
+  read.discharge_enable = (status & 0x40) != 0;
+  read.charge_immediately_2 = (status & 0x20) != 0;
+  read.charge_immediately_1 = (status & 0x10) != 0;
+  read.full_charge_request = (status & 0x08) != 0;
+  out = read;
   return true;
 }
 

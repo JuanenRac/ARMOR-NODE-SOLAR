@@ -11,7 +11,7 @@ capability matrix in ARMOR-DOCS).
 | PI16 hybrids (`pi00`) | RS232, 2400 baud 8N1 | `QPIGS` with its dashes, `QMOD`, `QPIWS` | `QPIFS`, `QPIBI`, ratings and settings |
 | Voltronic / MPP Solar inverters (Axpert, PIP, InfiniSolar and clones) | RS232, 2400 baud 8N1 | `QPIGS` (status), `QMOD` (mode), `QPIWS` (warnings and faults), `QPIGS2` and `QPGS<n>` (second PV input, parallel units), `QPIRI`, `QID`, `QVFW`, `QET`, and one further question per cycle: `QFLAG`, `QDI`, `QMCHGCR`, `QMUCHGCR`, `QBMS`, `QT`, `QED`, `QEM`, `QEY`, `QLD`, `QLM`, `QLY`, `QLT` | Every setting command (`PCP`, `POP`, `PBT`...) on purpose |
 | Pylontech US2000, US3000, US5000 (and the C versions) | Console RS232 115200 8N1 | The table of `pwr`: every module's voltage, current, temperatures, cell range, state of charge and states; `bat` (cells), `info`, `stat`, `soh`, the newest `data event`, the sheet `pwr <n>` of a faulty module and `pwrsys` (the stack's totals and recommended limits) | The meaning of the numbers in the event and protection fields; the whole event log |
-| Pylontech, RS485 | RS485, 9600 or 115200 | The frame: start, version, address, command, the length and its check, the checksum | The meaning of `INFO`, which differs between protocol versions: not decoded until a capture exists |
+| Pylontech, RS485 | RS485, 9600 or 115200 | The frame, and the decoding of two replies (analogue values 0x42, charge limits 0x92), checked on a computer with captures published by others | Asking: nothing is sent over RS485 yet and no battery has been read this way |
 | ANT-BMS (home-made batteries) | 3.3 V TTL UART, 19200 baud 8N1 | The status frame of both protocols (old and new): the cells, sensors, state of charge, current, capacities, MOSFET and balancer states, checked with frames captured on four real models | Every write command (on purpose), the settings registers, the device information, the Bluetooth link |
 
 ## The catalogue
@@ -40,8 +40,7 @@ A value the equipment does not give is left out of the message where the contrac
 charge controller, which has no AC side.
 
 **Not implemented, and why:** PI00 (frames without a checksum), PI16 and PI17 (three-phase families whose fields do not fit the message; they need captures), DALY over CAN (the node
-has no CAN transceiver), JK over Bluetooth and the JK Modbus map, the hexadecimal mode of VE.Direct (configuration; the text mode gives the readings), Pylontech RS485 `INFO` (needs a
-capture), EASun SMT III (only reverse-engineered notes without a documented checksum).
+has no CAN transceiver), JK over Bluetooth and the JK Modbus map, the hexadecimal mode of VE.Direct (configuration; the text mode gives the readings), asking a Pylontech battery over RS485 (the replies are decoded, nothing sends the questions yet), EASun SMT III (only reverse-engineered notes without a documented checksum).
 
 **An inverter that answers only part.** `QPIGS` is essential. `QMOD` and `QPIWS` are too while the inverter has answered them: a missed one loses that cycle. One that has never
 answered them is read without them from the third try (mode `unknown`, `warnings_known` false) instead of never being published.
@@ -175,7 +174,8 @@ read and configure it); the node uses the cable, which is the more stable of the
 - The meaning of the numbers in the protection and event fields of the console (`0x2`, `0x4`) is not decoded: only the mnemonics beside them are shown. The newest entry of the event log is asked by the count of `Data Items`; that this is its index is an assumption to check on a real battery.
 
 - The exact text of the console differs between firmware versions: the columns are found by the header's names, but a row that lacks a column the reading needs (voltage, current, temperatures, cell extremes, the four states, the charge) is refused rather than guessed.
-- The scaling of the RS485 analogue values differs between versions of Pylontech's document; the frame is built and checked here, the values are not read.
+- The scaling of the RS485 analogue values differs between versions of Pylontech's document. The decoding here follows the public MIT-licensed library Frankkkkk/python-pylontech and reads its captured frames of US2000, US3000 and UP2500; the node does not ask them yet.
+- `core/modbus_table.hpp` reads a Modbus unit from a table of registers (function 0x03 only). One table, of the first block of an SRNE charge controller, is held to the driver of the same registers by a test; no port uses the tables yet.
 - Nothing has been read from a real device by this project: the ANT-BMS frames in the tests were captured by other people on their own units; the first thing to do with a real one is to capture its replies and add them to the tests.
 - Writing to a BMS or to an inverter (their settings, the MOSFET switches, the charge priorities) is not implemented and will not be until it has been studied with the real equipment and tried in isolation: a wrong value can disconnect a battery under load or change how an inverter feeds the house, and an ANT-BMS asks for a password to accept a write.
 - The ANT-BMS cycle count is an estimate and the MOSFET codes past 15 (new protocol) are as the esphome-ant-bms project lists them; a BMS that does not know its capacity reports none.

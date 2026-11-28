@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The replies of a Pylontech battery over RS485 are decoded** (analogue values and charge limits), checked with frames captured by others from US2000, US3000 and UP2500 (MIT). Nothing is asked over RS485 yet.
+- **A Modbus unit can be described as a table of registers** (read only): the reads are planned and the answers named; one table is held to the existing SRNE driver. No port uses it yet.
+
 ## [0.7.8] - Stack totals, inverter counters and an SMG II register guard
 
 - **The totals of a Pylontech stack are read (`pwrsys`, read only):** state of charge and health of the whole stack, charge left and learned, modules asleep and the recommended charge and discharge limits go in the battery message (`bms_system`). Decoded from a public MIT-licensed capture; not tried on a battery. The node never sends `login debug`.
