@@ -351,6 +351,61 @@ static void test_identity_only_in_the_standard_dialect() {
   CHECK(revo.count("QID") == 0 && revo.count("QPIRI") == 0);
 }
 
+// ---- the further readings (set_extended) -----------------------------------------------------------------------------------------------------
+// The replies are the sample answers of the public MIT-licensed catalogue of jblance/mpp-solar (Copyright (c) jblance), put in frames with their CRC here.
+static void test_extended_parsers() {
+  std::string day;
+  CHECK(voltronic::parse_qt("20210726122606", day) && day == "20210726");
+  CHECK(!voltronic::parse_qt("20211326122606", day) && !voltronic::parse_qt("2021072612260", day) && !voltronic::parse_qt("2021072612260x", day) && day == "20210726");
+  std::vector<const char*> on, off;
+  CHECK(voltronic::parse_qflag("EakxyDbjuvz", on, off) && on.size() == 4 && off.size() == 5 && std::string(on[0]) == "buzzer" && std::string(off[1]) == "power_saving");
+  CHECK(!voltronic::parse_qflag("NAK", on, off) && !voltronic::parse_qflag("Eab", on, off) && !voltronic::parse_qflag("EaaD", on, off) && !voltronic::parse_qflag("E1D", on, off) && on.size() == 4);
+  std::vector<int> amps;
+  CHECK(voltronic::parse_current_list("010 020 030 040 050 060 070 080 090 100 110 120", amps) && amps.size() == 12 && amps.front() == 10 && amps.back() == 120);
+  CHECK(!voltronic::parse_current_list("", amps) && !voltronic::parse_current_list("010 x", amps) && !voltronic::parse_current_list("9999", amps) && amps.size() == 12);
+  voltronic::Ratings d;
+  CHECK(voltronic::parse_qdi("230.0 50.0 0030 42.0 54.0 56.4 46.0 60 0 0 2 0 0 0 0 0 1 1 0 0 1 0 54.0 0 1 000", d));
+  CHECK(d.out_rating_v == 230 && d.max_ac_charge_a == 30 && d.battery_under_v == 42 && d.battery_float_v == 54 && d.battery_bulk_v == 56.4 && d.battery_recharge_v == 46 && d.max_charge_a == 60 && d.charger_priority == 2);
+  CHECK(!voltronic::parse_qdi("230.0 50.0", d) && !voltronic::parse_qdi("a b c d e f g h i j k l", d));
+  voltronic::Bms b;
+  CHECK(voltronic::parse_qbms("0 100 0 0 1 532 532 450 0000 0030", b) && b.connected && b.soc_percent == 100 && !b.force_charge && b.stop_charge && !b.stop_discharge);
+  CHECK(b.bulk_v == 53.2 && b.cutoff_v == 45.0 && b.max_discharge_a == 30);
+  CHECK(!voltronic::parse_qbms("2 100 0 0 1 532 532 450 0000 0030", b) && !voltronic::parse_qbms("0 101 0 0 1 532 532 450 0000 0030", b) && !voltronic::parse_qbms("NAK", b));
+}
+
+static void test_extended_in_the_message() {
+  Bench b("pi30", false, 0);
+  b.poller.set_extended(true);
+  b.standard();
+  b.answers["QFLAG"] = reply("EakxyDbjuvz");
+  b.answers["QDI"] = reply("230.0 50.0 0030 42.0 54.0 56.4 46.0 60 0 0 2 0 0 0 0 0 1 1 0 0 1 0 54.0 0 1 000");
+  b.answers["QMCHGCR"] = reply("010 020 030");
+  b.answers["QBMS"] = reply("0 100 0 0 1 532 532 450 0000 0030");
+  b.answers["QT"] = reply("20210726122606");
+  b.answers["QED20210726"] = reply("00001200");
+  b.answers["QEM202107"] = reply("00034000");
+  b.answers["QEY2021"] = reply("00238800");
+  b.answers["QLD20210726"] = reply("00000900");
+  b.answers["QLT"] = reply("01000000");
+  b.run(150000);
+  // one further question per cycle, after the readings; a refused or unanswered one is asked twice and then left alone
+  CHECK(b.count("QFLAG") == 1 && b.count("QDI") == 1 && b.count("QMUCHGCR") == 2 && b.count("QED20210726") == 1 && b.count("QLM202107") == 2 && b.count("QLY2021") == 2);
+  CHECK(!b.messages.empty());
+  const json::Value first = parse(b.messages.front());
+  CHECK(first.get("energy") == nullptr && first.get("bms") == nullptr);
+  const json::Value doc = parse(b.messages.back());
+  const json::Value* energy = doc.get("energy");
+  CHECK(energy != nullptr && energy->get("day")->text == "20210726" && energy->get("pv_today_wh")->number == 1200 && energy->get("pv_month_wh")->number == 34000 && energy->get("pv_year_wh")->number == 238800);
+  CHECK(energy->get("load_today_wh")->number == 900 && energy->get("load_total_wh")->number == 1000000 && energy->get("load_month_wh") == nullptr);
+  CHECK(doc.get("options_on") != nullptr && doc.get("options_off") != nullptr && doc.get("defaults") != nullptr && doc.get("defaults")->get("battery_bulk_v")->number == 56.4);
+  CHECK(doc.get("charge_current_options_a") != nullptr && doc.get("ac_charge_current_options_a") == nullptr);
+  CHECK(doc.get("bms") != nullptr && doc.get("bms")->get("soc_percent")->number == 100 && doc.get("bms")->get("bulk_v")->number == 53.2);
+  Bench off("pi30", false, 0);
+  off.standard();
+  off.run(30000);
+  CHECK(off.count("QFLAG") == 0 && off.count("QT") == 0);
+}
+
 int main() {
   test_qpigs2();
   test_qpgs();
@@ -364,6 +419,8 @@ int main() {
   test_identity_in_the_message();
   test_a_unit_that_does_not_know_them();
   test_identity_only_in_the_standard_dialect();
+  test_extended_parsers();
+  test_extended_in_the_message();
   std::printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }

@@ -584,6 +584,51 @@ static void test_pylontech_late_answer() {
   CHECK(next() == "stat 1\r");
 }
 
+// `pwrsys`. The capture is the one published by guybw/PylontechToESPHome (MIT, Copyright (c) 2023-2026 guybw), tests/fixtures/pwrsys.txt: eight modules, taken in its debug mode.
+static const char* kPwrsys =
+    "pwrsys\r\n@\r\n Power System Information\r\n ---------------------------------\r\n System is discharging\r\n Total Num                : 8\r\n Present Num              : 8\r\n Sleep Num                : 0\r\n"
+    " System Volt              : 50012    mV\r\n System Curr              : -5760    mA\r\n System RC                : 396225   mAH\r\n System FCC               : 400104   mAH\r\n"
+    " System SOC               : 99       %\r\n System SOH               : 95       %\r\n Highest voltage          : 3337     mV\r\n Recommend chg voltage    : 53250    mV\r\n Recommend dsg voltage    : 45000    mV\r\n"
+    " Recommend chg current    : 14800    mA\r\n Recommend dsg current    : -37000   mA\r\n system Recommend chg voltage: 53250    mV\r\n system Recommend dsg voltage: 45000    mV\r\n"
+    " system Recommend chg current: 84800    mA\r\n system Recommend dsg current: -212000  mA\r\nCommand completed successfully\r\n$$\r\npylon>";
+
+static void test_pylontech_pwrsys() {
+  pylontech::SystemSheet s;
+  CHECK(pylontech::parse_pwrsys(kPwrsys, s) && s.valid && s.modules_total == 8 && s.modules_present == 8 && s.modules_sleep == 0 && s.soc_percent == 99 && s.health_percent == 95);
+  CHECK(s.remaining_ah > 396.224 && s.remaining_ah < 396.226 && s.full_capacity_ah > 400.103 && s.full_capacity_ah < 400.105);
+  CHECK(s.charge_voltage_v > 53.249 && s.charge_voltage_v < 53.251 && s.discharge_voltage_v == 45.0 && s.charge_current_a > 84.79 && s.charge_current_a < 84.81 && s.discharge_current_a == 212.0);
+  pylontech::SystemSheet kept = s;
+  CHECK(!pylontech::parse_pwrsys("pwrsys\r\nInvalid command or fail to excute.\r\n$$\r\npylon>", kept) && !pylontech::parse_pwrsys("Power System Information\r\n Total Num : 8\r\n", kept) && kept.soc_percent == 99);
+  // a firmware with only one module's limits gives the voltages and no current
+  CHECK(pylontech::parse_pwrsys("Power System Information\r\n System SOC : 50 %\r\n System SOH : 300 %\r\n Recommend chg voltage : 53250 mV\r\n Recommend chg current : 14800 mA\r\n", s));
+  CHECK(s.soc_percent == 50 && s.health_percent < 0 && s.charge_voltage_v > 53 && s.charge_current_a < 0 && s.remaining_ah < 0);
+
+  // the poller asks it after the modules, puts it in the message, and leaves alone a battery that refuses it twice
+  for (const bool knows : {true, false}) {
+    Poller poller(armor::config::Kind::kPylontech, "solar-1", "bank-1", 5, 1);
+    poller.set_extended(true);
+    std::uint64_t now = 1000;
+    int asked = 0;
+    std::string last;
+    for (int turn = 0; turn < 3000; ++turn) {
+      const std::vector<std::uint8_t> tx = poller.next_tx(now);
+      now += 40;
+      if (!tx.empty()) {
+        std::string command(tx.begin(), tx.end());
+        while (!command.empty() && command.front() == '\r') command.erase(0, 1);
+        while (!command.empty() && command.back() == '\r') command.pop_back();
+        const std::string answer = command == "pwrsys" ? (knows ? std::string(kPwrsys) : std::string("@\r\nInvalid command or fail to excute.\r\n$$\r\npylon>")) : sheet_answer(command, 0, false);
+        if (command == "pwrsys") ++asked;
+        poller.on_rx(reinterpret_cast<const std::uint8_t*>(answer.data()), answer.size(), now);
+      }
+      std::string topic, payload;
+      if (poller.take_message(now, topic, payload)) last = payload;
+    }
+    CHECK(!last.empty() && (last.find("\"bms_system\":{\"modules_total\":8") != std::string::npos) == knows);
+    CHECK(knows ? asked > 2 : asked == 2);
+  }
+}
+
 // End of charge ("High") is not an alarm; a protection, the system alarm column and a word never seen are. A `bat` table that lost bytes on the line is not taken.
 static void test_pylontech_alarm_levels() {
   CHECK(!pylontech::state_alarms("High", false) && !pylontech::state_alarms("Low", false) && !pylontech::state_alarms("Dischg", false) && !pylontech::state_alarms("", false));
@@ -1125,6 +1170,7 @@ int main() {
   test_pylontech_real_console_answers();
   test_pylontech_wake_frame();
   test_pylontech_real_us2000();
+  test_pylontech_pwrsys();
   test_pylontech_remaining_capacity();
   test_pylontech_missing_sheets();
   test_pylontech_late_answer();

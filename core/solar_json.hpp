@@ -42,6 +42,7 @@ struct InverterExtras {
   bool warnings_unknown = false;       // the dialect cannot ask for the warnings (REVO): an empty list means "unknown", and the message says so
   std::string manufacturer;            // who made it, "" when not known
   bool manufacturer_deduced = false;
+  const voltronic::Extended* extended = nullptr;   // the energy counters, the flags, the defaults, the current lists and what the unit says of its battery
 };
 
 // The maker and how it is known; nothing at all when it is not known.
@@ -52,6 +53,57 @@ inline void write_maker(json::Writer& w, const std::string& maker, bool deduced)
 // A number only when it is one the contract takes: one beyond it would make the server refuse the whole message.
 inline void write_within(json::Writer& w, const char* name, double value, double low, double high, int decimals) {
   if (pylontech::within(value, low, high)) w.key(name).number(value, decimals);
+}
+
+// What the inverter counts and says of itself (read only): each part is left out until the unit has answered it.
+inline void write_extended(json::Writer& w, const voltronic::Extended& x) {
+  bool any_energy = false;
+  for (const double v : x.energy_wh) if (v >= 0) any_energy = true;
+  if (any_energy) {
+    w.key("energy").begin_object();
+    if (!x.day.empty()) w.field("day", x.day);
+    for (std::size_t i = 0; i < x.energy_wh.size(); ++i) if (x.energy_wh[i] >= 0) write_within(w, voltronic::kEnergyNames[i], x.energy_wh[i], 0, 1e12, 0);
+    w.end_object();
+  }
+  if (x.has_flags) {
+    w.key("options_on").begin_array();
+    for (const char* name : x.on) w.string(name);
+    w.end_array();
+    w.key("options_off").begin_array();
+    for (const char* name : x.off) w.string(name);
+    w.end_array();
+  }
+  if (x.has_defaults) {
+    const voltronic::Ratings& r = x.defaults;
+    w.key("defaults").begin_object();
+    write_within(w, "out_rating_v", r.out_rating_v, 0, 600, 1); write_within(w, "out_rating_hz", r.out_rating_hz, 0, 100, 1);
+    write_within(w, "battery_recharge_v", r.battery_recharge_v, 0, 600, 1); write_within(w, "battery_under_v", r.battery_under_v, 0, 600, 1);
+    write_within(w, "battery_bulk_v", r.battery_bulk_v, 0, 600, 1); write_within(w, "battery_float_v", r.battery_float_v, 0, 600, 1);
+    write_within(w, "max_charge_a", r.max_charge_a, 0, 2000, 0); write_within(w, "max_ac_charge_a", r.max_ac_charge_a, 0, 2000, 0);
+    if (*voltronic::battery_type_name(r.battery_type) != 0) w.field("battery_type", voltronic::battery_type_name(r.battery_type));
+    if (*voltronic::input_range_name(r.input_range) != 0) w.field("input_range", voltronic::input_range_name(r.input_range));
+    if (*voltronic::output_priority_name(r.output_priority) != 0) w.field("output_priority", voltronic::output_priority_name(r.output_priority));
+    if (*voltronic::charger_priority_name(r.charger_priority) != 0) w.field("charger_priority", voltronic::charger_priority_name(r.charger_priority));
+    w.end_object();
+  }
+  const auto list = [&w](const char* name, const std::vector<int>& values) {
+    if (values.empty()) return;
+    w.key(name).begin_array();
+    for (const int v : values) w.integer(v);
+    w.end_array();
+  };
+  list("charge_current_options_a", x.charge_options);
+  list("ac_charge_current_options_a", x.ac_charge_options);
+  if (x.has_bms) {
+    const voltronic::Bms& b = x.bms;
+    w.key("bms").begin_object().field("connected", b.connected);
+    if (b.connected) {   // with no battery on the line the rest of the answer means nothing
+      w.field("soc_percent", b.soc_percent).field("force_charge", b.force_charge).field("stop_discharge", b.stop_discharge).field("stop_charge", b.stop_charge);
+      write_within(w, "bulk_v", b.bulk_v, 0, 600, 1); write_within(w, "float_v", b.float_v, 0, 600, 1); write_within(w, "cutoff_v", b.cutoff_v, 0, 600, 1);
+      write_within(w, "max_charge_a", b.max_charge_a, 0, 2000, 0); write_within(w, "max_discharge_a", b.max_discharge_a, 0, 2000, 0);
+    }
+    w.end_object();
+  }
 }
 
 inline std::string inverter_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, char mode, const voltronic::Status& s,
@@ -93,6 +145,7 @@ inline std::string inverter_json(const std::string& node_id, const std::string& 
     if (!extras->serial.empty()) w.field("serial", extras->serial);
     if (!extras->firmware.empty()) w.field("firmware", extras->firmware);
     if (extras->has_energy) write_within(w, "pv_energy_total_wh", extras->energy_total_wh, 0, 1e12, 0);
+    if (extras->extended != nullptr) write_extended(w, *extras->extended);
     if (extras->has_ratings) {
       const voltronic::Ratings& r = extras->ratings;
       w.key("ratings").begin_object();
@@ -147,7 +200,24 @@ inline void write_flags(json::Writer& w, const pylontech::Module& m) {
 
 // A battery stack's message from the console's table. The console lists sixteen places whatever is connected: the empty ones after the last battery are not sent. An empty place
 // between two batteries is, and so is one up to `keep_up_to` (a battery seen before that is not there now).
-inline std::string battery_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, const std::vector<pylontech::Module>& read, int keep_up_to = 0) {
+inline void write_system(json::Writer& w, const pylontech::SystemSheet& s) {
+  w.key("bms_system").begin_object();
+  if (s.modules_total >= 0) w.field("modules_total", s.modules_total);
+  if (s.modules_present >= 0) w.field("modules_present", s.modules_present);
+  if (s.modules_sleep >= 0) w.field("modules_sleep", s.modules_sleep);
+  if (s.soc_percent >= 0) w.field("soc_percent", s.soc_percent);
+  if (s.health_percent >= 0) w.field("health_percent", s.health_percent);
+  if (s.remaining_ah >= 0) w.key("remaining_ah").number(s.remaining_ah, 2);
+  if (s.full_capacity_ah >= 0) w.key("full_capacity_ah").number(s.full_capacity_ah, 2);
+  if (s.charge_voltage_v >= 0) w.key("charge_voltage_v").number(s.charge_voltage_v, 2);
+  if (s.discharge_voltage_v >= 0) w.key("discharge_voltage_v").number(s.discharge_voltage_v, 2);
+  if (s.charge_current_a >= 0) w.key("charge_current_a").number(s.charge_current_a, 1);
+  if (s.discharge_current_a >= 0) w.key("discharge_current_a").number(s.discharge_current_a, 1);
+  w.end_object();
+}
+
+inline std::string battery_json(const std::string& node_id, const std::string& device, std::uint64_t timestamp_ms, const std::vector<pylontech::Module>& read, int keep_up_to = 0,
+                                const pylontech::SystemSheet* system = nullptr) {
   std::vector<pylontech::Module> modules = read;   // whatever protocol they came by: no figure beyond the contract goes out
   for (pylontech::Module& m : modules) pylontech::keep_plausible(m);
   const pylontech::Stack s = pylontech::summarise(modules);
@@ -174,6 +244,7 @@ inline std::string battery_json(const std::string& node_id, const std::string& d
     if (s.balancing >= 0) w.field("balancing", s.balancing);
     if (s.charge_mos >= 0) { w.field("protecting", s.protecting); w.field("charge_mos", s.charge_mos); }
     if (s.discharge_mos >= 0) w.field("discharge_mos", s.discharge_mos);
+    if (system != nullptr && system->valid) write_system(w, *system);
   }
   w.key("stack").begin_array();
   const int last = last_present(modules) > keep_up_to ? last_present(modules) : keep_up_to;

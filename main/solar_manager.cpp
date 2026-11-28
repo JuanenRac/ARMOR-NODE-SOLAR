@@ -432,6 +432,7 @@ void port_task(void* argument) {
   solar::Poller& poller = *poller_owner;
   poller.set_optional(cfg.pv2, cfg.parallel);
   poller.set_identity(true);
+  poller.set_extended(true);
   poller.set_capture(capture_sink(slot.index + 1));
   std::uint8_t buffer[256];
   std::uint64_t last_fill_ms = 0, last_raw_total = 0;
@@ -532,6 +533,7 @@ void group_task(void* argument) {
     member.poller = std::make_unique<solar::Poller>(kind, slot.node_id, cfg.name, config::effective_poll_s(cfg), cfg.modules, cfg.dialect, cfg.cells_per_cycle);
     member.poller->set_optional(cfg.pv2, cfg.parallel);
     member.poller->set_identity(true);
+    member.poller->set_extended(true);
     member.poller->set_capture(capture_sink(index + 1));
     members.push_back(std::move(member));
   }

@@ -509,6 +509,106 @@ inline bool parse_qet(const std::string& text, double& watt_hours) {
   return true;
 }
 
+// ---- the energy counters, the flags, the defaults, the current lists and the battery as the inverter sees it (all questions that only read) --------------------------------
+// The commands and the layouts are those of the public MIT-licensed catalogue of jblance/mpp-solar; none has been tried on a real inverter, and many units do not know all of them.
+
+// What the energy counters are called in the message, in the order of Extended::energy_wh.
+inline constexpr std::array<const char*, 7> kEnergyNames{"pv_today_wh", "pv_month_wh", "pv_year_wh", "load_today_wh", "load_month_wh", "load_year_wh", "load_total_wh"};
+
+struct Bms {
+  bool connected = false, force_charge = false, stop_discharge = false, stop_charge = false;
+  int soc_percent = 0;
+  double bulk_v = 0, float_v = 0, cutoff_v = 0, max_charge_a = 0, max_discharge_a = 0;
+};
+
+struct Extended {
+  std::string day;                                  // the inverter's own date (QT), "20261128": the counters of the day, month and year are those of this date
+  std::array<double, 7> energy_wh{-1, -1, -1, -1, -1, -1, -1};   // -1: not told
+  bool has_flags = false, has_defaults = false, has_bms = false;
+  std::vector<const char*> on, off;                 // the flags that are switched on and off (QFLAG)
+  Ratings defaults;                                 // QDI: only the members a default has
+  std::vector<int> charge_options, ac_charge_options;   // QMCHGCR and QMUCHGCR: the currents the unit accepts, in amperes
+  Bms bms;                                          // QBMS
+};
+
+// QT answers "20210726122606": the date is the first eight digits. A date that cannot be one is refused.
+inline bool parse_qt(const std::string& text, std::string& day) {
+  if (text.size() != 14) return false;
+  for (const char c : text) if (c < '0' || c > '9') return false;
+  const int year = std::stoi(text.substr(0, 4)), month = std::stoi(text.substr(4, 2)), date = std::stoi(text.substr(6, 2));
+  if (year < 2000 || year > 2099 || month < 1 || month > 12 || date < 1 || date > 31) return false;
+  day = text.substr(0, 8);
+  return true;
+}
+
+// QFLAG answers "EakxyDbjuvz": the letters after E are on, those after D are off.
+inline bool parse_qflag(const std::string& text, std::vector<const char*>& on, std::vector<const char*>& off) {
+  if (text.size() < 2 || text.size() > 32 || text.front() != 'E' || text.find('D') == std::string::npos) return false;
+  struct Flag { char letter; const char* name; };
+  static constexpr Flag kFlags[] = {{'a', "buzzer"}, {'b', "overload_bypass"}, {'d', "feed_to_grid"}, {'j', "power_saving"}, {'k', "lcd_return_default"}, {'u', "overload_restart"},
+                                    {'v', "temperature_restart"}, {'x', "lcd_backlight"}, {'y', "source_interrupt_alarm"}, {'z', "fault_record"}};
+  std::vector<const char*> yes, no;
+  bool enabled = true;
+  std::uint32_t seen = 0;
+  for (std::size_t i = 1; i < text.size(); ++i) {
+    const char c = text[i];
+    if (c == 'D') { enabled = false; continue; }
+    if (c < 'a' || c > 'z') return false;
+    if (seen & (1u << (c - 'a'))) return false;
+    seen |= 1u << (c - 'a');
+    for (const Flag& flag : kFlags) if (flag.letter == c) (enabled ? yes : no).push_back(flag.name);
+  }
+  on = yes;
+  off = no;
+  return true;
+}
+
+// QMCHGCR and QMUCHGCR answer a list of currents: "010 020 030 ...".
+inline bool parse_current_list(const std::string& text, std::vector<int>& out) {
+  const std::vector<std::string> f = split_fields(text);
+  if (f.empty() || f.size() > 32) return false;
+  std::vector<int> values;
+  for (const std::string& field : f) {
+    double v = 0;
+    if (!detail::number(field, v) || v < 0 || v > 2000) return false;
+    values.push_back(static_cast<int>(v));
+  }
+  out = values;
+  return true;
+}
+
+// QDI answers the settings the unit leaves the factory with: output voltage and frequency, AC charge current, under, float, bulk and recharge voltages, charge current,
+// input range, output priority, charger priority, battery type, and flags that QFLAG already tells.
+inline bool parse_qdi(const std::string& text, Ratings& out) {
+  const std::vector<std::string> f = split_fields(text);
+  if (f.size() < 12) return false;
+  double v[12];
+  for (std::size_t i = 0; i < 12; ++i) if (!detail::number(f[i], v[i]) || v[i] < 0 || v[i] > 2000) return false;
+  Ratings r;
+  r.out_rating_v = v[0]; r.out_rating_hz = v[1]; r.max_ac_charge_a = v[2]; r.battery_under_v = v[3]; r.battery_float_v = v[4]; r.battery_bulk_v = v[5];
+  r.battery_recharge_v = v[6]; r.max_charge_a = v[7];
+  r.input_range = static_cast<int>(v[8]); r.output_priority = static_cast<int>(v[9]); r.charger_priority = static_cast<int>(v[10]); r.battery_type = static_cast<int>(v[11]);
+  out = r;
+  return true;
+}
+
+// QBMS answers what the inverter hears from its lithium battery: "0 100 0 0 1 532 532 450 0000 0030" (connected is 0, the voltages are tenths of a volt).
+inline bool parse_qbms(const std::string& text, Bms& out) {
+  const std::vector<std::string> f = split_fields(text);
+  if (f.size() < 10) return false;
+  double v[10];
+  for (std::size_t i = 0; i < 10; ++i) if (!detail::number(f[i], v[i]) || v[i] < 0 || v[i] > 100000) return false;
+  if (v[0] > 1 || v[1] > 100 || v[2] > 1 || v[3] > 1 || v[4] > 1) return false;
+  Bms b;
+  b.connected = v[0] == 0;
+  b.soc_percent = static_cast<int>(v[1]);
+  b.force_charge = v[2] == 1; b.stop_discharge = v[3] == 1; b.stop_charge = v[4] == 1;
+  b.bulk_v = v[5] / 10.0; b.float_v = v[6] / 10.0; b.cutoff_v = v[7] / 10.0;
+  b.max_charge_a = v[8]; b.max_discharge_a = v[9];
+  out = b;
+  return true;
+}
+
 // The names the ratings' numbers stand for (empty for a number that is not one of them).
 inline const char* battery_type_name(int v) { return v == 0 ? "agm" : v == 1 ? "flooded" : v == 2 ? "user" : ""; }
 inline const char* input_range_name(int v) { return v == 0 ? "appliance" : v == 1 ? "ups" : ""; }

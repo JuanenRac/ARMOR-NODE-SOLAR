@@ -41,8 +41,13 @@ class ModbusDriver final : public Driver {
     error_ = "";
     at_ = 0;
     got_main_ = false;
+    probing_ = guard_ && map_ == ModbusMap::kSmg2 && !layout_known_ && layout_silences_ < kLayoutTries;
     return request();
   }
+  void set_layout_guard(bool wanted) override { guard_ = wanted; }
+  // The unit says (register 184) a layout whose registers 201..234 mean something else: its figures are not read. The question is asked again every cycle, so a change is seen.
+  bool layout_unsupported() const override { return unsupported_; }
+  int layout() const { return layout_; }
 
   Rx feed(std::uint8_t byte, std::vector<std::uint8_t>& next) override {
     // the first byte of a reply is the slave's address: anything before it is noise
@@ -57,19 +62,22 @@ class ModbusDriver final : public Driver {
     length_ = 0;
     const std::uint16_t crc = crc16_modbus(frame_.data(), whole - 2);
     if (frame_[whole - 2] != static_cast<std::uint8_t>(crc) || frame_[whole - 1] != static_cast<std::uint8_t>(crc >> 8)) return bad("crc");
-    if (refusal) return skip(next, "nak");
+    if (refusal) return probing_ ? no_layout(next) : skip(next, "nak");
+    if (probing_) return take_layout(next);
     decode(frame_.data() + 3);
     return advance(next);
   }
 
-  Rx timeout(std::vector<std::uint8_t>& next) override { length_ = 0; return skip(next, "timeout"); }
+  Rx timeout(std::vector<std::uint8_t>& next) override { length_ = 0; return probing_ ? no_layout(next) : skip(next, "timeout"); }
 
  private:
   struct Block { std::uint16_t first, count; bool essential; const char* name; };
   static constexpr std::size_t kMaxRegisters = 40;
 
   std::size_t blocks() const { return map_ == ModbusMap::kSrneMppt ? 2 : 3; }
+  static constexpr int kLayoutTries = 2;   // an older unit has no register 184: after two refusals or silences it is not asked again
   Block block() const {
+    if (probing_) return {184, 1, false, "register 184 (register map)"};
     static constexpr Block kSmg2[3] = {{201, 34, true, "registers 201..234"}, {100, 2, false, "faults 100..101"}, {108, 2, false, "warnings 108..109"}};
     static constexpr Block kSrneHybrid[3] = {{0x0100, 15, true, "registers 0x0100..0x010E"}, {0x0210, 18, true, "registers 0x0210..0x0221"}, {0x0204, 4, false, "fault codes 0x0204..0x0207"}};
     static constexpr Block kSrneMppt[2] = {{0x0100, 10, true, "registers 0x0100..0x0109"}, {0x010B, 3, false, "state and faults 0x010B..0x010D"}};
@@ -83,6 +91,24 @@ class ModbusDriver final : public Driver {
   Rx advance(std::vector<std::uint8_t>& next) {
     if (block().essential) got_main_ = true;
     if (++at_ >= blocks()) return got_main_ ? Rx::kDone : bad("format");
+    next = request();
+    return Rx::kNext;
+  }
+  // No answer to register 184: the unit is read as it always was.
+  Rx no_layout(std::vector<std::uint8_t>& next) {
+    ++layout_silences_;
+    unsupported_ = false;
+    probing_ = false;
+    next = request();
+    return Rx::kNext;
+  }
+  // The vendor's 2024 document gives the layouts 3 to 10 another register map; 0, 1 (and any other word) are the map read here.
+  Rx take_layout(std::vector<std::uint8_t>& next) {
+    layout_ = detail::be16(frame_.data() + 3);
+    unsupported_ = layout_ >= 3 && layout_ <= 10;
+    if (unsupported_) return bad("layout");
+    layout_known_ = true;
+    probing_ = false;
     next = request();
     return Rx::kNext;
   }
@@ -185,6 +211,8 @@ class ModbusDriver final : public Driver {
   std::uint8_t address_;
   std::size_t at_ = 0, length_ = 0;
   bool got_main_ = false;
+  bool guard_ = false, probing_ = false, layout_known_ = false, unsupported_ = false;
+  int layout_ = -1, layout_silences_ = 0;
   std::array<std::uint8_t, 5 + 2 * kMaxRegisters> frame_{};
 };
 

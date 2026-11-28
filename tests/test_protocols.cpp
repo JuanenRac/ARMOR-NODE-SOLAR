@@ -727,6 +727,41 @@ static void test_catalogue() {
   CHECK(!config::valid_dialect(config::Kind::kVoltronic, "smg2") && !config::valid_dialect(config::Kind::kModbus, "pi30"));
 }
 
+// Register 184 of an SMG II says which register map the unit has (facts of the vendor's 2024 document, as andreas-glaser/ha-dessmonitor, MIT, records them).
+static void test_smg_register_map() {
+  Bytes next;
+  drivers::ModbusDriver other(drivers::ModbusMap::kSmg2);
+  other.set_layout_guard(true);
+  CHECK(other.begin() == drivers::modbus_read(1, 184, 1));
+  CHECK(give(other, modbus_reply({4}), next) == drivers::Rx::kBad && std::string(other.error()) == "layout" && other.layout_unsupported() && other.layout() == 4);
+  CHECK(other.begin() == drivers::modbus_read(1, 184, 1));                       // asked again: still not read
+  drivers::ModbusDriver legacy(drivers::ModbusMap::kSmg2);
+  legacy.set_layout_guard(true);
+  legacy.begin();
+  CHECK(give(legacy, modbus_reply({1}), next) == drivers::Rx::kNext && next == drivers::modbus_read(1, 201, 34) && !legacy.layout_unsupported());
+  CHECK(legacy.begin() == drivers::modbus_read(1, 201, 34));                     // known: not asked again
+  drivers::ModbusDriver old(drivers::ModbusMap::kSmg2);                          // no register 184: read as before, and after two tries not asked again
+  old.set_layout_guard(true);
+  old.begin();
+  CHECK(old.timeout(next) == drivers::Rx::kNext && next == drivers::modbus_read(1, 201, 34));
+  Bytes refusal = hex("01 83 02");
+  const std::uint16_t crc = drivers::crc16_modbus(refusal.data(), refusal.size());
+  refusal.push_back(static_cast<std::uint8_t>(crc));
+  refusal.push_back(static_cast<std::uint8_t>(crc >> 8));
+  CHECK(old.begin() == drivers::modbus_read(1, 184, 1) && give(old, refusal, next) == drivers::Rx::kNext && next == drivers::modbus_read(1, 201, 34));
+  CHECK(old.begin() == drivers::modbus_read(1, 201, 34));
+  drivers::ModbusDriver srne(drivers::ModbusMap::kSrneHybrid);
+  srne.set_layout_guard(true);
+  CHECK(srne.begin() == drivers::modbus_read(1, 0x0100, 15));
+  Poller poller(config::Kind::kModbus, "solar-1", "smg-1", 5, 0, "smg2");
+  poller.set_extended(true);
+  std::string topic, payload;
+  poller.next_tx(0);
+  const Bytes four = modbus_reply({4});
+  poller.on_rx(four.data(), four.size(), 100);
+  CHECK(poller.state(200) == "garbled" && poller.unreadable_cause(200) == "layout" && !poller.take_message(1, topic, payload) && poller.stats().last_error == "layout");
+}
+
 int main() {
   test_jbd();
   test_daly();
@@ -745,6 +780,7 @@ int main() {
   test_driver_timeouts_through_the_poller();
   test_catalogue();
   test_noise();
+  test_smg_register_map();
   std::printf("%d checks, %d failures\n", checks, failures);
   return failures == 0 ? 0 : 1;
 }
