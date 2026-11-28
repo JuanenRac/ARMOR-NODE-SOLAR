@@ -604,7 +604,7 @@ static void test_pylontech_pwrsys() {
   CHECK(s.soc_percent == 50 && s.health_percent < 0 && s.charge_voltage_v > 53 && s.charge_current_a < 0 && s.remaining_ah < 0);
 
   // every line the sheet lacks is left out of the message, and numbers no stack can have are not taken
-  json::Writer bare;
+  armor::json::Writer bare;
   bare.begin_object();
   write_system(bare, pylontech::SystemSheet{});
   bare.end_object();
