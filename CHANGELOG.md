@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The web panel shows what the stack and the inverter count:** the stack's own charge, health and recommended limits, and the panel and load energy of the day, month, year and total, each only when the equipment says it.
 - **The replies of a Pylontech battery over RS485 are decoded** (analogue values and charge limits), checked with frames captured by others from US2000, US3000 and UP2500 (MIT). Nothing is asked over RS485 yet.
 - **A Modbus unit can be described as a table of registers** (read only): the reads are planned and the answers named; one table is held to the existing SRNE driver. No port uses it yet.
 
