@@ -42,6 +42,9 @@ class Driver {
   const Out& out() const { return out_; }
   const char* error() const { return error_; }             // "", "crc", "nak", "format", "timeout"
   const char* command() const { return command_; }         // what is being asked, for the panel
+  // Equipment of a family with several register maps: ask first which one it has, and read nothing from one that is not known here.
+  virtual void set_layout_guard(bool) {}
+  virtual bool layout_unsupported() const { return false; }
 
  protected:
   Rx bad(const char* why) { error_ = why; return Rx::kBad; }

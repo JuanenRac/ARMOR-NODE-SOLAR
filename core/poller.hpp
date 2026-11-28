@@ -196,6 +196,12 @@ class Poller {
   void set_optional(bool pv2, int parallel_units) { pv2_wanted_ = pv2; parallel_ = parallel_units < 0 ? 0 : parallel_units > 10 ? 10 : parallel_units; }
   // Whether the unit is asked what it says about itself (its serial number, firmware, ratings and settings, and the energy the panels have made in all): off until the firmware turns it on.
   void set_identity(bool wanted) { identity_wanted_ = wanted; }
+  // The further readings, all of them questions that only read, off until the firmware turns them on: `pwrsys` of a Pylontech stack, the energy counters, flags, defaults,
+  // current lists and battery of a Voltronic inverter (one of those questions per cycle), and register 184 of an SMG II (which says whether its other registers mean what we read).
+  void set_extended(bool wanted) { extended_wanted_ = wanted; if (driver_) driver_->set_layout_guard(wanted); }
+  static constexpr std::uint64_t kExtendedEveryMs = 5ULL * 60ULL * 1000ULL;      // counters and the battery as the inverter sees it
+  static constexpr std::uint64_t kExtendedRarelyMs = 30ULL * 60ULL * 1000ULL;    // flags, defaults and the current lists; also how long a refused `pwrsys` is left alone
+  static constexpr int kExtendedTries = 2;
   // Where the requests this poller sends (tx = true) and the bytes it hears are copied, for the capture of the traffic (core/frame_capture.hpp); empty = nowhere. Only the polling goes through here.
   using CaptureSink = std::function<void(bool tx, const std::uint8_t* data, std::size_t length)>;
   void set_capture(CaptureSink sink) { capture_ = std::move(sink); }
@@ -231,11 +237,11 @@ class Poller {
     topic = solar::topic(node_id_, device_);
     if (topic.empty()) return false;
     if (driver_ && driver_->inverter()) { InverterExtras extras; extras.warnings_unknown = !driver_->out().warnings_known; if (const char* maker = protocol_maker(kind_)) { extras.manufacturer = maker; extras.manufacturer_deduced = true; } payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
-    else if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; extras.warnings_unknown = dialect_ == Dialect::kRevo || dialect_ == Dialect::kPi41 || dialect_ == Dialect::kPi34 || !warnings_read_; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
+    else if (kind_ == config::Kind::kVoltronic) { InverterExtras extras; if (extended_wanted_) extras.extended = &more_; extras.warnings_unknown = dialect_ == Dialect::kRevo || dialect_ == Dialect::kPi41 || dialect_ == Dialect::kPi34 || !warnings_read_; extras.has_pv2 = has_pv2_; extras.pv2 = pv2_; extras.units = units_; extras.serial = serial_; extras.firmware = firmware_; extras.has_ratings = have_ratings_; extras.ratings = ratings_; extras.has_energy = have_energy_; extras.energy_total_wh = energy_wh_; payload = inverter_json(node_id_, device_, wall_ms, mode_, status_, warnings_, &extras); }
     else {   // a Pylontech stack or an ANT-BMS (one module)
       const int present = last_present(modules_);
       if (present > highest_seen_) highest_seen_ = present;
-      payload = battery_json(node_id_, device_, wall_ms, modules_, present > 0 ? highest_seen_ : 0);   // with none there: the empty stack
+      payload = battery_json(node_id_, device_, wall_ms, modules_, present > 0 ? highest_seen_ : 0, &system_);   // with none there: the empty stack
     }
     ++stats_.readings;
     last_reading_ms_ = last_rx_ms_;
@@ -245,7 +251,7 @@ class Poller {
   // "waiting" (no cycle has finished yet), "reporting", "silent" (nothing is coming), "garbled" (bytes come, none is an answer), "listening" (a raw port that hears bytes).
   std::string state(std::uint64_t now_ms) const {
     if (kind_ == config::Kind::kRaw) return stats_.bytes_rx == 0 ? "silent" : (now_ms - last_rx_ms_ < 10000 ? "listening" : "silent");
-    if (slave_module_ > 0) return "garbled";   // it answers, but not with the table of a stack
+    if (slave_module_ > 0 || (driver_ && driver_->layout_unsupported())) return "garbled";   // it answers, but not with what can be read
     const std::uint64_t window = poll_ms_ * 3 + 8000;
     if (stats_.readings > 0 && now_ms - last_reading_ms_ <= window) return "reporting";
     if (stats_.bytes_rx == 0) return now_ms < poll_ms_ + 6000 && stats_.readings == 0 ? "waiting" : "silent";
@@ -256,6 +262,7 @@ class Poller {
   // Why a port that is "garbled" reads nothing (core/port_diag.hpp): "flat", "echo", "noise", "text", "frames"; "" while it reads, hears nothing or has not failed often enough to say.
   std::string unreadable_cause(std::uint64_t now_ms) const {
     if (slave_module_ > 0) return "slave";   // one whole sheet of one battery is enough to say
+    if (driver_ && driver_->layout_unsupported()) return "layout";   // it answers, with another register map
     if (kind_ == config::Kind::kRaw || stats_.timeouts + stats_.replies_bad < kGiveUpTries || state(now_ms) != "garbled") return "";
     const bool text = kind_ == config::Kind::kPylontech || kind_ == config::Kind::kVoltronic || kind_ == config::Kind::kVedirect;
     return portdiag::classify(raw_.tail(portdiag::kClassifiedBytes), last_tx_, text);
@@ -289,7 +296,9 @@ class Poller {
   std::uint64_t last_rx_ms() const { return last_rx_ms_; }
 
  private:
-  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kPs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kSheet, kAnt, kDriver };
+  enum class Step { kIdle, kQpigs, kQmod, kQpiws, kQpigs2, kQpgs, kQid, kQvfw, kQpiri, kQet, kGs, kPs, kMod, kFws, kPwr, kBat, kInfo, kStat, kEvent, kSoh, kSheet, kSystem, kExtended, kAnt, kDriver };
+  // The extra questions of an inverter, in the order they are asked. Those from kQed to kQlm need the date QT gives.
+  enum class More { kQflag, kQdi, kQmchgcr, kQmuchgcr, kQbms, kQt, kQed, kQem, kQey, kQld, kQlm, kQly, kQlt, kCount };
   enum class Dialect { kPi30, kRevo, kPi18, kPi41, kPi34, kPi00, kPi17 };
   // What `info`, `stat`, `data event` and `soh` said of one module. at_ms: the last full round; tried_ms and misses: the tries while something is still missing.
   struct Extras { std::string model; double full_capacity_ah = -1; int cycles = -1, health_percent = -1; std::vector<std::pair<std::string_view, long long>> counters; pylontech::Event last_event; pylontech::DataPlate plate; std::string manufacturer; int cell_count = -1, console_baud = -1; std::string board_version, main_soft_version, soft_version; double max_charge_a = -1, max_discharge_a = -1; std::vector<int> soh_counts, soh_abnormal; std::uint64_t at_ms = 0, tried_ms = 0; int misses = 0; bool valid = false; };
@@ -378,6 +387,7 @@ class Poller {
       else { step_ = Step::kQpigs; send_query("QPIGS", now_ms); }
     } else {
       step_ = Step::kPwr;
+      system_ = {};
       modules_.clear();
       module_at_ = 0;
       caught_up_ = false;
@@ -469,6 +479,7 @@ class Poller {
     if (dialect_ == Dialect::kPi00 && !take_pi00(frame, looking, crc_ok, text, now_ms)) return;
     if (step_ == Step::kQpigs2 || step_ == Step::kQpgs) { on_optional(crc_ok, text, now_ms); return; }
     if (is_identity_step()) { on_identity(crc_ok, text, now_ms); return; }
+    if (step_ == Step::kExtended) { on_extended(crc_ok, text, now_ms); return; }
     if (!crc_ok) {
       // only the REVO dialect ends a reply with the checksum: a reply that fits it (and no CRC) makes the port REVO
       std::string revo_text;
@@ -591,11 +602,57 @@ class Poller {
   // ten minutes (QPIRI), and the energy the panels have made in all every five (QET). A question that gets no good answer twice in a row is dropped, and the reading goes out either way.
   bool is_identity_step() const { return step_ == Step::kQid || step_ == Step::kQvfw || step_ == Step::kQpiri || step_ == Step::kQet; }
   void next_identity(std::uint64_t now_ms) {
-    if (!identity_wanted_ || (dialect_ != Dialect::kPi30 && dialect_ != Dialect::kPi00) || !known_) { finish(now_ms); return; }
+    if ((dialect_ != Dialect::kPi30 && dialect_ != Dialect::kPi00) || !known_) { finish(now_ms); return; }
+    if (!identity_wanted_) { next_extended(now_ms); return; }
     if (serial_.empty() && qid_tries_ < kIdentityTries) { step_ = Step::kQid; send_query("QID", now_ms); return; }
     if (firmware_.empty() && qvfw_tries_ < kIdentityTries) { step_ = Step::kQvfw; send_query("QVFW", now_ms); return; }
     if (qpiri_tries_ < kIdentityTries && (!have_ratings_ || now_ms - ratings_at_ms_ >= kRatingsEveryMs)) { step_ = Step::kQpiri; send_query("QPIRI", now_ms); return; }
     if (qet_tries_ < kIdentityTries && (!have_energy_ || now_ms - energy_at_ms_ >= kEnergyEveryMs)) { step_ = Step::kQet; send_query("QET", now_ms); return; }
+    next_extended(now_ms);
+  }
+  // One extra question per cycle, the first one that is due: the cycle grows by one exchange at most. A question that gets no good answer twice in a row is not asked again.
+  void next_extended(std::uint64_t now_ms) {
+    if (!extended_wanted_ || dialect_ != Dialect::kPi30) { finish(now_ms); return; }
+    static constexpr const char* kNames[] = {"QFLAG", "QDI", "QMCHGCR", "QMUCHGCR", "QBMS", "QT", "QED", "QEM", "QEY", "QLD", "QLM", "QLY", "QLT"};
+    static constexpr std::size_t kDatePart[] = {0, 0, 0, 0, 0, 0, 8, 6, 4, 8, 6, 4, 0};   // how much of the date goes after the command
+    for (std::size_t i = 0; i < static_cast<std::size_t>(More::kCount); ++i) {
+      Asked& a = asked_[i];
+      const std::uint64_t every = i <= static_cast<std::size_t>(More::kQmuchgcr) ? kExtendedRarelyMs : kExtendedEveryMs;
+      if (a.misses >= kExtendedTries || (a.at_ms != 0 && now_ms - a.at_ms < every)) continue;
+      if (kDatePart[i] != 0 && more_.day.empty()) continue;
+      more_at_ = i;
+      step_ = Step::kExtended;
+      send_query((kNames[i] + more_.day.substr(0, kDatePart[i])).c_str(), now_ms);
+      return;
+    }
+    finish(now_ms);
+  }
+  void extended_missed(std::uint64_t now_ms) {
+    Asked& a = asked_[more_at_];
+    ++a.misses;
+    a.at_ms = a.misses >= kExtendedTries ? now_ms : 0;   // the second try comes in the next cycle
+  }
+  void on_extended(bool crc_ok, const std::string& text, std::uint64_t now_ms) {
+    bool good = crc_ok && text != "NAK";
+    if (good) {
+      const More which = static_cast<More>(more_at_);
+      if (which == More::kQflag) { good = voltronic::parse_qflag(text, more_.on, more_.off); if (good) more_.has_flags = true; }
+      else if (which == More::kQdi) { good = voltronic::parse_qdi(text, more_.defaults); if (good) more_.has_defaults = true; }
+      else if (which == More::kQmchgcr) good = voltronic::parse_current_list(text, more_.charge_options);
+      else if (which == More::kQmuchgcr) good = voltronic::parse_current_list(text, more_.ac_charge_options);
+      else if (which == More::kQbms) { good = voltronic::parse_qbms(text, more_.bms); if (good) more_.has_bms = true; }
+      else if (which == More::kQt) {
+        std::string day;
+        good = voltronic::parse_qt(text, day);
+        if (good && day != more_.day) {   // another day: what was counted for the one before is not today's, and the counters are asked again
+          for (std::size_t i = 0; i < 6; ++i) more_.energy_wh[i] = -1;
+          for (std::size_t i = static_cast<std::size_t>(More::kQed); i <= static_cast<std::size_t>(More::kQly); ++i) asked_[i].at_ms = 0;
+          more_.day = day;
+        }
+      } else good = voltronic::parse_qet(text, more_.energy_wh[more_at_ - static_cast<std::size_t>(More::kQed)]);
+    }
+    if (good) { ++stats_.replies_ok; asked_[more_at_].misses = 0; asked_[more_at_].at_ms = now_ms == 0 ? 1 : now_ms; }
+    else extended_missed(now_ms);
     finish(now_ms);
   }
   void identity_missed() {
@@ -710,7 +767,7 @@ class Poller {
       if (m.present && m.number >= 1 && m.number <= max_modules_) break;
       ++module_at_;
     }
-    if (module_at_ >= modules_.size()) { finish(now_ms); return; }
+    if (module_at_ >= modules_.size()) { ask_system(now_ms); return; }
     const int number = modules_[module_at_].number;
     if (!(cells_wanted_ & (1u << number))) {
       // not this module's turn: it keeps the cells of its last one
@@ -727,6 +784,16 @@ class Poller {
     buffer_.clear();
     send("bat " + std::to_string(number) + "\r", now_ms, kConsoleExtraTimeoutMs);
   }
+
+  // `pwrsys`, last: the reading goes out with or without it. A battery that refuses it or does not answer twice in a row is left alone for half an hour.
+  void ask_system(std::uint64_t now_ms) {
+    if (!extended_wanted_ || (system_misses_ >= kExtendedTries && now_ms - system_tried_ms_ < kExtendedRarelyMs)) { finish(now_ms); return; }
+    step_ = Step::kSystem;
+    system_tried_ms_ = now_ms;
+    buffer_.clear();
+    send("pwrsys\r", now_ms, kConsoleExtraTimeoutMs);
+  }
+  void system_missed() { if (system_misses_ < kExtendedTries) ++system_misses_; }
 
   // Which modules' cells are asked in this cycle: all of them, or the next `cells_per_cycle_` present ones in rotation (and any that has no cells yet).
   void choose_cells_to_read() {
@@ -826,6 +893,10 @@ class Poller {
     } else if (step_ == Step::kSoh) {
       if (pylontech::parse_soh(buffer_, modules_[module_at_]) > 0) ++stats_.replies_ok;
       end_extras(now_ms);
+    } else if (step_ == Step::kSystem) {
+      if (pylontech::parse_pwrsys(buffer_, system_)) { ++stats_.replies_ok; system_misses_ = 0; }
+      else system_missed();
+      finish(now_ms);
     } else if (step_ == Step::kSheet) {
       modules_[module_at_].fault_code = pylontech::parse_system_fault(buffer_, modules_[module_at_].number);
       if (!modules_[module_at_].fault_code.empty()) ++stats_.replies_ok;
@@ -970,6 +1041,8 @@ class Poller {
     if (step_ == Step::kEvent) { ask_soh(now_ms); return; }
     if (step_ == Step::kSoh) { end_extras(now_ms); return; }
     if (step_ == Step::kSheet) { after_bat(now_ms); return; }   // no sheet: the reading goes without the code
+    if (step_ == Step::kSystem) { system_missed(); finish(now_ms); return; }
+    if (step_ == Step::kExtended) { extended_missed(now_ms); finish(now_ms); return; }
     stats_.last_error = "timeout";
     if (kind_ == config::Kind::kPylontech) { wake_ = true; slave_module_ = 0; slave_sheet_ = {}; }   // the console did not answer: the next try starts with a bare Enter
     if (kind_ == config::Kind::kVoltronic && auto_) {
@@ -1024,6 +1097,14 @@ class Poller {
   double energy_wh_ = 0;                                // QET
   std::uint64_t ratings_at_ms_ = 0, energy_at_ms_ = 0;
   bool identity_wanted_ = false;
+  struct Asked { std::uint64_t at_ms = 0; int misses = 0; };
+  bool extended_wanted_ = false;
+  voltronic::Extended more_;
+  std::array<Asked, static_cast<std::size_t>(More::kCount)> asked_{};
+  std::size_t more_at_ = 0;
+  pylontech::SystemSheet system_;                       // `pwrsys` of this cycle (valid = false: not read)
+  int system_misses_ = 0;
+  std::uint64_t system_tried_ms_ = 0;
   int qid_tries_ = 0, qvfw_tries_ = 0, qpiri_tries_ = 0, qet_tries_ = 0;
   char mode_ = 0;
   std::vector<std::string> warnings_;

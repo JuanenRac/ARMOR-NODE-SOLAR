@@ -598,6 +598,59 @@ inline std::size_t parse_soh(const std::string& text, Module& module) {
   return counts.size();
 }
 
+// `pwrsys`: what the first battery of a stack says of the whole stack (state of charge and health, charge left and learned) and the limits it recommends. -1: it did not say.
+// The layout is the one of a public MIT-licensed capture (guybw/PylontechToESPHome); it has not been seen on the owner's batteries, and no `login debug` is ever sent for it.
+struct SystemSheet {
+  bool valid = false;
+  int modules_total = -1, modules_present = -1, modules_sleep = -1, soc_percent = -1, health_percent = -1;
+  double remaining_ah = -1, full_capacity_ah = -1;
+  double charge_voltage_v = -1, discharge_voltage_v = -1, charge_current_a = -1, discharge_current_a = -1;   // the limits of the whole stack, both currents as positive amperes
+};
+
+// False (and `out` untouched) unless the answer carries its title and a state of charge: a refusal, a cut answer or another table is not taken.
+inline bool parse_pwrsys(const std::string& text, SystemSheet& out) {
+  if (text.find("Power System Information") == std::string::npos) return false;
+  SystemSheet sheet;
+  std::string stack_charge_v, stack_discharge_v;
+  const auto handle = [&](const std::string& row) {
+    const std::size_t colon = row.find(':');
+    if (colon == std::string::npos) return;
+    std::string name = row.substr(0, colon);
+    while (!name.empty() && (name.front() == ' ' || name.front() == '\t')) name.erase(name.begin());
+    while (!name.empty() && (name.back() == ' ' || name.back() == '\t')) name.pop_back();
+    const std::vector<std::string> fields = detail::tokens(row.substr(colon + 1));
+    long value = 0;
+    if (fields.empty() || !detail::integer(fields.front(), value)) return;
+    const double milli = value / 1000.0, amps = (value < 0 ? -value : value) / 1000.0;
+    const auto whole = [value](int& into, long high) { if (value >= 0 && value <= high) into = static_cast<int>(value); };
+    const auto within_into = [](double& into, double v, double high) { if (within(v, 0, high)) into = v; };
+    if (name == "Total Num") whole(sheet.modules_total, 64);
+    else if (name == "Present Num") whole(sheet.modules_present, 64);
+    else if (name == "Sleep Num") whole(sheet.modules_sleep, 64);
+    else if (name == "System SOC") whole(sheet.soc_percent, 100);
+    else if (name == "System SOH") whole(sheet.health_percent, 100);
+    else if (name == "System RC") within_into(sheet.remaining_ah, milli, 100000);
+    else if (name == "System FCC") within_into(sheet.full_capacity_ah, milli, 100000);
+    else if (name == "system Recommend chg voltage") within_into(sheet.charge_voltage_v, milli, 1000);
+    else if (name == "system Recommend dsg voltage") within_into(sheet.discharge_voltage_v, milli, 1000);
+    else if (name == "system Recommend chg current") within_into(sheet.charge_current_a, amps, 16000);
+    else if (name == "system Recommend dsg current") within_into(sheet.discharge_current_a, amps, 16000);
+    // the lines without "system" are one module's: the voltages are the stack's too (the modules are in parallel), the currents are not
+    else if (name == "Recommend chg voltage" && sheet.charge_voltage_v < 0) within_into(sheet.charge_voltage_v, milli, 1000);
+    else if (name == "Recommend dsg voltage" && sheet.discharge_voltage_v < 0) within_into(sheet.discharge_voltage_v, milli, 1000);
+  };
+  std::string line;
+  for (char ch : text) {
+    if (ch == '\n' || ch == '\r') { handle(line); line.clear(); }
+    else line += ch;
+  }
+  handle(line);
+  if (sheet.soc_percent < 0) return false;
+  sheet.valid = true;
+  out = sheet;
+  return true;
+}
+
 // A whole snapshot of a stack in one answer: the text of `getpwr` ("value#" for each field). The first line is the pack's voltage (mV), current (mA), temperature (m°C), the smallest
 // cell charge (mAH) and the four states; then one line per cell (voltage, temperature, two states); then "0#" and "1#". False when the first line is not that.
 struct PowerSnapshot {

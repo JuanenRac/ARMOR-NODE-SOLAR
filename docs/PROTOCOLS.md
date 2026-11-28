@@ -9,8 +9,8 @@ capability matrix in ARMOR-DOCS).
 | Older inverters that take questions without CRC (`pi00`) | RS232, 2400 baud 8N1 | `QPIGS`, `QMOD`, `QPIWS`, `QID`, `QVFW`, `QET` sent as text and `CR`; the answers in the PI30 or the PI00 arrangement, with or without CRC | Every setting command, on purpose; the ratings of the PI00 arrangement (`QPIRI`); the energy by year, month, day and hour |
 | InfiniSolar 5 kW, LV 6K, WP, TWIN (`pi17`) | RS232, 2400 baud 8N1 | `GS`, `PS`, `MOD`, `WS`, asked without CRC; the answers' CRC and length are checked | Settings; ratings, energy and fault history; the three-phase values beyond phase R and the totals |
 | PI16 hybrids (`pi00`) | RS232, 2400 baud 8N1 | `QPIGS` with its dashes, `QMOD`, `QPIWS` | `QPIFS`, `QPIBI`, ratings and settings |
-| Voltronic / MPP Solar inverters (Axpert, PIP, InfiniSolar and clones) | RS232, 2400 baud 8N1 | `QPIGS` (status), `QMOD` (mode), `QPIWS` (warnings and faults), `QPIRI` (ratings and settings), the CRC and the frames | Every setting command (`PCP`, `POP`, `PBT`...) on purpose; `QPIGS2` and parallel-system commands; `QVFW`, `QID` |
-| Pylontech US2000, US3000, US5000 (and the C versions) | Console RS232 115200 8N1 | The table of `pwr`: every module's voltage, current, temperatures, cell range, state of charge and states | The detail of one module (`pwr 1`, the cell voltages), `bat`, `info`, the event log |
+| Voltronic / MPP Solar inverters (Axpert, PIP, InfiniSolar and clones) | RS232, 2400 baud 8N1 | `QPIGS` (status), `QMOD` (mode), `QPIWS` (warnings and faults), `QPIGS2` and `QPGS<n>` (second PV input, parallel units), `QPIRI`, `QID`, `QVFW`, `QET`, and one further question per cycle: `QFLAG`, `QDI`, `QMCHGCR`, `QMUCHGCR`, `QBMS`, `QT`, `QED`, `QEM`, `QEY`, `QLD`, `QLM`, `QLY`, `QLT` | Every setting command (`PCP`, `POP`, `PBT`...) on purpose |
+| Pylontech US2000, US3000, US5000 (and the C versions) | Console RS232 115200 8N1 | The table of `pwr`: every module's voltage, current, temperatures, cell range, state of charge and states; `bat` (cells), `info`, `stat`, `soh`, the newest `data event`, the sheet `pwr <n>` of a faulty module and `pwrsys` (the stack's totals and recommended limits) | The meaning of the numbers in the event and protection fields; the whole event log |
 | Pylontech, RS485 | RS485, 9600 or 115200 | The frame: start, version, address, command, the length and its check, the checksum | The meaning of `INFO`, which differs between protocol versions: not decoded until a capture exists |
 | ANT-BMS (home-made batteries) | 3.3 V TTL UART, 19200 baud 8N1 | The status frame of both protocols (old and new): the cells, sensors, state of charge, current, capacities, MOSFET and balancer states, checked with frames captured on four real models | Every write command (on purpose), the settings registers, the device information, the Bluetooth link |
 
@@ -26,7 +26,7 @@ by this node, except as the compatibility page says.
 | `pi18` | voltronic, pi18 | 2400 | `GS`, `MOD`, `FWS` | decoded |
 | `pi41` | voltronic, pi41 | 2400 | `QPIGS`, `QMOD`, `QPIWS` | partial: first phase, warnings not named |
 | `pi34` | voltronic, pi34 | 2400 | `QPIGS` | partial: a charge controller, no AC side |
-| `modbus-smg2` | modbus, smg2 | 9600 | registers 201-234, 100-101, 108-109 | decoded |
+| `modbus-smg2` | modbus, smg2 | 9600 | register 184 (which register map), then 201-234, 100-101, 108-109 | decoded; a unit whose register 184 says 3 to 10 is not read |
 | `modbus-srne-hybrid` | modbus, srne-hybrid | 9600 | registers 0x0100-0x010E, 0x0210-0x0221 | partial: needs a capture |
 | `modbus-srne-mppt` | modbus, srne-mppt | 9600 | registers 0x0100-0x010D | partial |
 | `vedirect-mppt`, `vedirect-monitor` | vedirect, mppt or monitor | 19200 | nothing: it listens | decoded (text mode) |
@@ -170,10 +170,11 @@ read and configure it); the node uses the cable, which is the more stable of the
 
 ## Honest limits
 
-- The Pylontech console has a `pwrsys` command (a summary of the whole system) whose output could not be found in any public description, so it is **not read**: a port that asked for it would be guessing its format. The panel's *Ask the battery* (see NODE_FIRMWARE.md) shows what it answers on a real battery, and with that answer at hand it is a small parser to add.
+- `pwrsys` is read from the layout of a public MIT-licensed capture (guybw/PylontechToESPHome) and has not been seen on a real battery of this project: an answer without its title and a state of charge is ignored, and a battery that refuses it twice is left alone for half an hour. That capture was taken after a `login debug`, which this node never sends. The panel's *Ask the battery* (see NODE_FIRMWARE.md) shows what a battery really answers.
+- The energy counters and the further questions of a Voltronic inverter follow the public MIT-licensed catalogue of jblance/mpp-solar (units and the date suffix included) and are not confirmed on a real unit; a question that is refused twice is not asked again until the node restarts.
 - The meaning of the numbers in the protection and event fields of the console (`0x2`, `0x4`) is not decoded: only the mnemonics beside them are shown. The newest entry of the event log is asked by the count of `Data Items`; that this is its index is an assumption to check on a real battery.
 
-- The exact text of the console differs between firmware versions: the columns are found by the header's names, but a row that lacks a column the reading needs (voltage, current, temperatures, cell extremes, the four states, the charge) is refused rather than guessed. The `pwrsys` command of the newer firmwares (the stack's own totals) is not read.
+- The exact text of the console differs between firmware versions: the columns are found by the header's names, but a row that lacks a column the reading needs (voltage, current, temperatures, cell extremes, the four states, the charge) is refused rather than guessed.
 - The scaling of the RS485 analogue values differs between versions of Pylontech's document; the frame is built and checked here, the values are not read.
 - Nothing has been read from a real device by this project: the ANT-BMS frames in the tests were captured by other people on their own units; the first thing to do with a real one is to capture its replies and add them to the tests.
 - Writing to a BMS or to an inverter (their settings, the MOSFET switches, the charge priorities) is not implemented and will not be until it has been studied with the real equipment and tried in isolation: a wrong value can disconnect a battery under load or change how an inverter feeds the house, and an ANT-BMS asks for a password to accept a write.

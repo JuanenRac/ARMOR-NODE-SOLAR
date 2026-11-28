@@ -456,7 +456,7 @@ class Probe {
     out += "  steps with an answer: " + std::to_string(p.answers) + "; with unexplained bytes: " + std::to_string(p.unknown) + "; with only an echo: " + std::to_string(p.echoes) + "\n";
     for (const Found& f : p.found) out += std::string("  ANSWERED ") + f.query + " at " + std::to_string(f.baud) + " " + format_name(f.format) + (f.inverted ? " inverted" : " normal") + " (" + f.protocol + ")\n";
     for (const Found& f : p.noise) out += std::string("  bytes at ") + std::to_string(f.baud) + " " + format_name(f.format) + (f.inverted ? " inverted" : " normal") + " after " + f.query + "\n";
-    if (p.answers == 0 && p.unknown == 0 && p.echoes == 0) out += "  NOT ONE BYTE in " + std::to_string(p.combinations) + " combinations\n";
+    if (p.answers == 0 && p.unknown == 0 && p.echoes == 0) out += "  NOT ONE BYTE in " + std::to_string(p.combinations) + " combinations\n  This is wiring, not a protocol: a wrong speed or protocol would still bring bytes or framing errors. Check the pins of the cable, the ground, the level converter and the equipment's port.\n";
     else if (p.answers == 0 && p.unknown == 0) out += "  only an ECHO: the node hears itself (a bridge between TX and RX) and nothing else\n";
     return out;
   }
