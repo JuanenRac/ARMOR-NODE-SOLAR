@@ -12,7 +12,9 @@
 
 #include "../core/solar_json.hpp"
 #include "../core/solar_config.hpp"
+#include "../core/modbus_table.hpp"
 #include "../core/poller.hpp"
+#include "pylontech_rs485_real.hpp"
 #include "pylontech_real.hpp"
 #include "pylontech_us2000_real.hpp"
 #include "pylontech_logs_real.hpp"
@@ -1193,7 +1195,108 @@ static void test_pylontech_impossible_figures() {
   CHECK(blank.manufacturer.empty());   // a model that tells nothing: no maker is made up
 }
 
+// The INFO of the RS485 replies, against frames captured by others (pylontech_rs485_real.hpp) and the values their library reads from them.
+static void test_pylontech_rs485_info() {
+  namespace p = armor::solar::pylontech;
+  p::Frame frame;
+  std::vector<p::AnalogModule> modules;
+
+  CHECK(p::parse_frame(rs485_real::kUs2000Three, frame) && frame.cid2 == 0);
+  CHECK(p::read_analog(frame.info, true, modules) && modules.size() == 3);
+  if (modules.size() == 3) {
+    const p::AnalogModule& first = modules[0];
+    CHECK(first.cells_mv.size() == 15 && first.cells_mv[0] == 3303 && first.cells_mv[14] == 3302);
+    CHECK(first.temperatures_dc.size() == 5 && first.temperatures_dc[0] == 230 && first.temperatures_dc[4] == 220);
+    CHECK(first.current_da == -26 && first.voltage_mv == 49545 && first.cycles == 31);
+    CHECK(first.remaining_mah == 33500 && first.total_mah == 50000);
+    CHECK(modules[2].current_da == -27 && modules[2].voltage_mv == 49504);
+  }
+
+  CHECK(p::parse_frame(rs485_real::kUs3000Four, frame));
+  CHECK(p::read_analog(frame.info, true, modules) && modules.size() == 4);
+  if (modules.size() == 4) {
+    CHECK(modules[0].current_da == 0 && modules[0].cycles == 47 && modules[0].remaining_mah == 61420 && modules[0].total_mah == 74000);
+    CHECK(modules[3].voltage_mv == 49593 && modules[3].cycles == 107 && modules[3].remaining_mah == 60680);
+  }
+
+  CHECK(p::parse_frame(rs485_real::kMixedTwo, frame));
+  CHECK(p::read_analog(frame.info, true, modules) && modules.size() == 2);
+  if (modules.size() == 2) {
+    CHECK(modules[0].total_mah == 74000 && modules[0].cycles == 564 && modules[0].current_da == -61);
+    CHECK(modules[1].total_mah == 50000 && modules[1].cycles == 658 && modules[1].remaining_mah == 24500);
+  }
+
+  CHECK(p::parse_frame(rs485_real::kUp2500One, frame));
+  CHECK(p::read_analog(frame.info, false, modules) && modules.size() == 1);
+  if (modules.size() == 1) {
+    CHECK(modules[0].cells_mv.size() == 8 && modules[0].cells_mv[0] == 3330 && modules[0].voltage_mv == 26638);
+    CHECK(modules[0].current_da == -6 && modules[0].remaining_mah == 95460 && modules[0].total_mah == 111000 && modules[0].cycles == 0);
+  }
+
+  // a text that is cut, too long or not hexadecimal gives nothing
+  CHECK(!p::read_analog(frame.info.substr(0, frame.info.size() - 2), false, modules) && modules.empty());
+  CHECK(!p::read_analog(frame.info + "00", false, modules) && modules.empty());
+  CHECK(!p::read_analog("1002GG", false, modules));
+  CHECK(!p::read_analog("", true, modules));
+
+  p::ManagementInfo management;
+  CHECK(p::parse_frame(rs485_real::kUp2500Management, frame));
+  CHECK(p::read_management(frame.info, management));
+  CHECK(management.charge_voltage_mv == 28400 && management.discharge_voltage_mv == 23200);
+  CHECK(management.charge_current_da == 555 && management.discharge_current_da == -555);
+  CHECK(management.charge_enable && management.discharge_enable && !management.charge_immediately_1 && !management.charge_immediately_2 && !management.full_charge_request);
+  CHECK(!p::read_management("026EF0", management));
+}
+
+// The table reader against the driver of the same registers: the same answer of a unit gives the same figures.
+static void test_modbus_table() {
+  namespace d = armor::solar::drivers;
+  constexpr std::size_t kFields = sizeof d::kSrneMpptTable / sizeof d::kSrneMpptTable[0];
+  const std::vector<d::TableBlock> blocks = d::plan_reads(d::kSrneMpptTable, kFields);
+  CHECK(blocks.size() == 2 && blocks[0].first == 0x0100 && blocks[0].count == 3 && blocks[1].first == 0x0107 && blocks[1].count == 3);
+  const std::vector<d::TableBlock> joined = d::plan_reads(d::kSrneMpptTable, kFields, 32, 4);
+  CHECK(joined.size() == 1 && joined[0].first == 0x0100 && joined[0].count == 10);
+  CHECK(d::plan_reads(d::kSrneMpptTable, kFields, 2, 4).size() == 4);
+  const std::vector<std::uint8_t> request = d::block_request(1, joined[0]);
+  CHECK(request.size() == 8 && request[0] == 1 && request[1] == 0x03);   // the only function it can ask for
+
+  const std::uint8_t data[20] = {0, 87, 2, 20, 0, 125, 0x19, 0x19, 0, 0, 0, 0, 0, 0, 3, 0xE8, 0, 25, 1, 244};
+  std::vector<d::TableValue> values;
+  CHECK(d::decode_block(joined[0], data, sizeof data, d::kSrneMpptTable, kFields, values) && values.size() == kFields);
+  if (values.size() == kFields) {
+    CHECK(values[0].value == 87 && std::fabs(values[1].value - 53.2) < 1e-9 && std::fabs(values[2].value - 12.5) < 1e-9);
+    CHECK(std::fabs(values[3].value - 100.0) < 1e-9 && std::fabs(values[4].value - 2.5) < 1e-9 && values[5].value == 500);
+  }
+  CHECK(!d::decode_block(joined[0], data, sizeof data - 1, d::kSrneMpptTable, kFields, values));
+
+  const d::TableField wide[] = {{10, d::RegisterType::kS32, 1, "a"}, {12, d::RegisterType::kS16, 1, "b"}};
+  const std::vector<d::TableBlock> both = d::plan_reads(wide, 2);
+  CHECK(both.size() == 1 && both[0].first == 10 && both[0].count == 3);
+  const std::uint8_t negative[6] = {0xFF, 0xFF, 0xFF, 0xFE, 0x80, 0x00};
+  values.clear();
+  CHECK(d::decode_block(both[0], negative, sizeof negative, wide, 2, values) && values.size() == 2);
+  if (values.size() == 2) CHECK(values[0].value == -2 && values[1].value == -32768);
+
+  d::ModbusDriver driver(d::ModbusMap::kSrneMppt);
+  std::vector<std::uint8_t> next = driver.begin();
+  std::vector<std::uint8_t> reply{1, 0x03, 20};
+  reply.insert(reply.end(), data, data + sizeof data);
+  const std::uint16_t crc = d::crc16_modbus(reply.data(), reply.size());
+  reply.push_back(static_cast<std::uint8_t>(crc));
+  reply.push_back(static_cast<std::uint8_t>(crc >> 8));
+  armor::solar::drivers::Rx last = armor::solar::drivers::Rx::kMore;
+  for (const std::uint8_t byte : reply) last = driver.feed(byte, next);
+  CHECK(last == armor::solar::drivers::Rx::kNext);
+  std::vector<std::uint8_t> ignored;
+  last = driver.timeout(ignored);   // the second block is optional: without it the first one stands
+  CHECK(last == armor::solar::drivers::Rx::kDone);
+  CHECK(driver.out().status.battery_percent == 87 && std::fabs(driver.out().status.battery_v - 53.2) < 1e-9 && std::fabs(driver.out().status.battery_charge_a - 12.5) < 1e-9);
+  CHECK(std::fabs(driver.out().status.pv_v - 100.0) < 1e-9 && std::fabs(driver.out().status.pv_a - 2.5) < 1e-9 && driver.out().status.pv_w == 500);
+}
+
 int main() {
+  test_pylontech_rs485_info();
+  test_modbus_table();
   test_pylontech_cells_not_read();
   test_pylontech_impossible_figures();
   test_voltronic_commands();
